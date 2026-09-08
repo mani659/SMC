@@ -1,0 +1,115 @@
+# ============================================================
+# SMC Project .gitignore
+# ============================================================
+
+# --- Excluded project directories (per project policy) ---
+
+# Visual knowledge base: ~11MB of PNG chart reference material
+02_KNOWLEDGE_BASE/
+
+# Historical archives: old reports, logs, MQL5 history, superseded docs
+ARCHIVE/
+
+# Research bulk data: large per-trade / extraction CSVs and result dumps
+# (methodology & validation .md records remain tracked; big data artifacts do not)
+06_RESEARCH/experiments/*.csv
+06_RESEARCH/validation/*.csv
+06_RESEARCH/**/*.parquet
+06_RESEARCH/**/*.feather
+06_RESEARCH/**/*.h5
+06_RESEARCH/**/*.hdf5
+
+# Raw market data (canonical dataset and any data dumps)
+*.csv.gz
+*.zip
+*.7z
+*.tar
+*.tar.gz
+data/
+datasets/
+**/m1_clean.csv
+**/*.parquet
+**/*.feather
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# --- Testing / tooling caches ---
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+
+# --- Editors / IDEs ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.sublime-workspace
+.sublime-project
+
+# --- OS junk ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Logs & runtime artifacts ---
+*.log
+logs/
+*.out
+*.pid
+
+# --- MT5 / broker artifacts ---
+*.mqh.bak
+*.ex5
+tester_cache/
+MQL5/Profiles/
+*.hstory
+*.hcc
+
+# --- Jupyter ---
+.ipynb_checkpoints/
+
+# --- TradingView / chart exports ---
+*.twz
+
+# --- Local secrets / credentials (never commit) ---
+*.env
+credentials*.json
+secrets*.json
+*.key
+*.pem
+
+# --- Codebuff / agent workspace metadata ---
+.freebuff/

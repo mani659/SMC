@@ -1,0 +1,1077 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SMC Master Flowchart — Revision 5: Modular Multi-Model Confluence</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: #0a0a0f;
+            color: #e2e8f0;
+            min-height: 100vh;
+        }
+        .header {
+            background: linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #1e1b4b 100%);
+            padding: 32px 40px;
+            border-bottom: 2px solid #4f46e5;
+        }
+        .header h1 {
+            font-size: 28px;
+            font-weight: 800;
+            color: #a5b4fc;
+            margin-bottom: 8px;
+        }
+        .header .subtitle {
+            font-size: 14px;
+            color: #818cf8;
+            line-height: 1.6;
+        }
+        .header .badge-row {
+            display: flex;
+            gap: 12px;
+            margin-top: 12px;
+            flex-wrap: wrap;
+        }
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .badge-current {
+            background: rgba(16,185,129,0.15);
+            color: #10b981;
+            border: 1px solid rgba(16,185,129,0.3);
+        }
+        .badge-locked {
+            background: rgba(245,158,11,0.15);
+            color: #f59e0b;
+            border: 1px solid rgba(245,158,11,0.3);
+        }
+        .badge-modular {
+            background: rgba(139,92,246,0.15);
+            color: #a78bfa;
+            border: 1px solid rgba(139,92,246,0.3);
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 32px 24px;
+        }
+        .pipeline {
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+            position: relative;
+        }
+        .pipeline::before {
+            content: '';
+            position: absolute;
+            left: 50%;
+            top: 0;
+            bottom: 0;
+            width: 3px;
+            background: linear-gradient(to bottom, #4f46e5, #7c3aed, #a855f7, #ec4899, #f59e0b, #10b981);
+            transform: translateX(-50%);
+            z-index: 0;
+        }
+        .stage {
+            position: relative;
+            z-index: 1;
+            margin-bottom: 24px;
+        }
+        .stage-card {
+            background: #111118;
+            border: 1px solid #1e293b;
+            border-radius: 16px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+        .stage-card:hover {
+            border-color: #4f46e5;
+            box-shadow: 0 0 30px rgba(79,70,229,0.1);
+        }
+        .stage-header {
+            padding: 20px 24px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            cursor: pointer;
+            user-select: none;
+        }
+        .stage-header:hover { background: rgba(255,255,255,0.02); }
+        .stage-number {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            font-weight: 800;
+            flex-shrink: 0;
+        }
+        .stage-title {
+            font-size: 18px;
+            font-weight: 700;
+            flex: 1;
+        }
+        .stage-subtitle {
+            font-size: 13px;
+            color: #94a3b8;
+            margin-top: 2px;
+        }
+        .expand-icon {
+            font-size: 20px;
+            color: #64748b;
+            transition: transform 0.3s ease;
+        }
+        .stage-card.open .expand-icon { transform: rotate(180deg); }
+        .stage-body {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.5s ease;
+        }
+        .stage-card.open .stage-body { max-height: 3000px; }
+        .stage-content {
+            padding: 0 24px 24px 24px;
+            border-top: 1px solid #1e293b;
+        }
+        /* Stage colors */
+        .s0 .stage-number { background: rgba(79,70,229,0.2); color: #818cf8; }
+        .s0 .stage-header { border-left: 4px solid #4f46e5; }
+        .s0b .stage-number { background: rgba(99,102,241,0.2); color: #818cf8; }
+        .s0b .stage-header { border-left: 4px solid #6366f1; }
+        .s0c .stage-number { background: rgba(139,92,246,0.2); color: #a78bfa; }
+        .s0c .stage-header { border-left: 4px solid #8b5cf6; }
+        .s1 .stage-number { background: rgba(168,85,247,0.2); color: #c084fc; }
+        .s1 .stage-header { border-left: 4px solid #a855f7; }
+        .s2 .stage-number { background: rgba(236,72,153,0.2); color: #f472b6; }
+        .s2 .stage-header { border-left: 4px solid #ec4899; }
+        .s3 .stage-number { background: rgba(245,158,11,0.2); color: #fbbf24; }
+        .s3 .stage-header { border-left: 4px solid #f59e0b; }
+        .s4 .stage-number { background: rgba(239,68,68,0.2); color: #f87171; }
+        .s4 .stage-header { border-left: 4px solid #ef4444; }
+        .s5 .stage-number { background: rgba(16,185,129,0.2); color: #34d399; }
+        .s5 .stage-header { border-left: 4px solid #10b981; }
+        /* Model grid */
+        .model-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 12px;
+            margin-top: 16px;
+        }
+        .model-card {
+            background: #0d0d14;
+            border: 1px solid #1e293b;
+            border-radius: 12px;
+            padding: 16px;
+            transition: all 0.3s ease;
+        }
+        .model-card:hover {
+            border-color: #6366f1;
+            transform: translateY(-2px);
+        }
+        .model-tag {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        .model-name {
+            font-size: 15px;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+        .model-desc {
+            font-size: 12px;
+            color: #94a3b8;
+            line-height: 1.5;
+        }
+        .model-entry {
+            margin-top: 8px;
+            padding: 8px 12px;
+            background: rgba(16,185,129,0.08);
+            border-radius: 8px;
+            font-size: 12px;
+            color: #34d399;
+        }
+        .model-entry strong { color: #6ee7b7; }
+        /* Pillar cards */
+        .pillar-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 12px;
+            margin-top: 16px;
+        }
+        @media (max-width: 1000px) { .pillar-grid { grid-template-columns: repeat(2, 1fr); } }
+        .pillar-card {
+            background: #0d0d14;
+            border: 1px solid #1e293b;
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+        }
+        .pillar-card:hover { border-color: #ec4899; }
+        .pillar-num {
+            font-size: 24px;
+            font-weight: 800;
+            color: #f472b6;
+            margin-bottom: 4px;
+        }
+        .pillar-name {
+            font-size: 13px;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+        .pillar-detail {
+            font-size: 11px;
+            color: #94a3b8;
+            line-height: 1.4;
+        }
+        .pillar-pass {
+            margin-top: 8px;
+            font-size: 11px;
+            color: #34d399;
+            font-weight: 600;
+        }
+        .pillar-fail {
+            margin-top: 8px;
+            font-size: 11px;
+            color: #f87171;
+            font-weight: 600;
+        }
+        /* Trigger cards */
+        .trigger-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-top: 16px;
+        }
+        @media (max-width: 900px) { .trigger-grid { grid-template-columns: repeat(2, 1fr); } }
+        .trigger-card {
+            background: #0d0d14;
+            border: 1px solid #1e293b;
+            border-radius: 12px;
+            padding: 16px;
+        }
+        .trigger-card:hover { border-color: #f59e0b; }
+        .trigger-letter {
+            display: inline-block;
+            width: 28px;
+            height: 28px;
+            border-radius: 8px;
+            background: rgba(245,158,11,0.15);
+            color: #fbbf24;
+            text-align: center;
+            line-height: 28px;
+            font-weight: 800;
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+        .trigger-name {
+            font-size: 14px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+        .trigger-desc {
+            font-size: 12px;
+            color: #94a3b8;
+            line-height: 1.4;
+        }
+        .trigger-frozen {
+            margin-top: 8px;
+            padding: 4px 8px;
+            background: rgba(245,158,11,0.08);
+            border-radius: 6px;
+            font-size: 11px;
+            color: #fbbf24;
+        }
+        /* Confluence scoring */
+        .confluence-box {
+            background: linear-gradient(135deg, rgba(139,92,246,0.1), rgba(168,85,247,0.1));
+            border: 1px solid rgba(139,92,246,0.3);
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 16px;
+        }
+        .confluence-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #a78bfa;
+            margin-bottom: 12px;
+        }
+        .confluence-levels {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        .confluence-level {
+            flex: 1;
+            min-width: 200px;
+            padding: 12px 16px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        .cl-1 { background: rgba(79,70,229,0.15); border: 1px solid rgba(79,70,229,0.3); }
+        .cl-2 { background: rgba(139,92,246,0.15); border: 1px solid rgba(139,92,246,0.3); }
+        .cl-3 { background: rgba(168,85,247,0.15); border: 1px solid rgba(168,85,247,0.3); }
+        .cl-score { font-size: 20px; font-weight: 800; }
+        .cl-label { font-size: 12px; color: #94a3b8; margin-top: 2px; }
+        /* Info tables */
+        .info-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 16px;
+            font-size: 13px;
+        }
+        .info-table th {
+            text-align: left;
+            padding: 10px 12px;
+            background: #0d0d14;
+            border: 1px solid #1e293b;
+            color: #a5b4fc;
+            font-weight: 700;
+        }
+        .info-table td {
+            padding: 10px 12px;
+            border: 1px solid #1e293b;
+            color: #cbd5e1;
+        }
+        .info-table tr:hover td { background: rgba(255,255,255,0.02); }
+        /* Notes */
+        .note-box {
+            padding: 12px 16px;
+            border-radius: 10px;
+            margin-top: 12px;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+        .note-warn {
+            background: rgba(245,158,11,0.08);
+            border: 1px solid rgba(245,158,11,0.2);
+            color: #fbbf24;
+        }
+        .note-info {
+            background: rgba(59,130,246,0.08);
+            border: 1px solid rgba(59,130,246,0.2);
+            color: #60a5fa;
+        }
+        .note-success {
+            background: rgba(16,185,129,0.08);
+            border: 1px solid rgba(16,185,129,0.2);
+            color: #34d399;
+        }
+        /* Connector arrows */
+        .connector {
+            text-align: center;
+            padding: 8px 0;
+            font-size: 14px;
+            color: #4f46e5;
+            font-weight: 700;
+            letter-spacing: 2px;
+        }
+        /* Section divider */
+        .section-divider {
+            text-align: center;
+            padding: 24px 0 16px;
+            font-size: 14px;
+            font-weight: 700;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+        }
+        /* Demand/Supply definition */
+        .def-card {
+            background: #0d0d14;
+            border: 1px solid #1e293b;
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 12px;
+        }
+        .def-title {
+            font-size: 15px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        .def-text {
+            font-size: 13px;
+            color: #94a3b8;
+            line-height: 1.6;
+        }
+        .def-highlight {
+            color: #fbbf24;
+            font-weight: 600;
+        }
+        /* Management cards */
+        .mgmt-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 12px;
+            margin-top: 16px;
+        }
+        .mgmt-card {
+            background: #0d0d14;
+            border: 1px solid #1e293b;
+            border-radius: 12px;
+            padding: 16px;
+        }
+        .mgmt-card:hover { border-color: #10b981; }
+        .mgmt-icon {
+            font-size: 24px;
+            margin-bottom: 8px;
+        }
+        .mgmt-name {
+            font-size: 14px;
+            font-weight: 700;
+            color: #34d399;
+            margin-bottom: 4px;
+        }
+        .mgmt-desc {
+            font-size: 12px;
+            color: #94a3b8;
+            line-height: 1.4;
+        }
+        .proven-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            background: rgba(16,185,129,0.15);
+            color: #10b981;
+            font-size: 10px;
+            font-weight: 700;
+            margin-top: 6px;
+        }
+        /* Frozen thresholds table */
+        .thresholds-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 16px;
+            font-size: 13px;
+        }
+        .thresholds-table th {
+            text-align: left;
+            padding: 10px 12px;
+            background: #0d0d14;
+            border: 1px solid #1e293b;
+            color: #fbbf24;
+            font-weight: 700;
+        }
+        .thresholds-table td {
+            padding: 10px 12px;
+            border: 1px solid #1e293b;
+            color: #cbd5e1;
+        }
+        .footer {
+            text-align: center;
+            padding: 32px;
+            color: #475569;
+            font-size: 12px;
+            border-top: 1px solid #1e293b;
+            margin-top: 32px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1>📊 SMC Master Flowchart — Revision 5</h1>
+    <div class="subtitle">
+        Modular Multi-Model Confluence System &bull; 8 Equal POI Tags &bull; Formal Demand/Supply Zones &bull; All Decisions Frozen
+    </div>
+    <div class="badge-row">
+        <span class="badge badge-current">CURRENT — Revision 5</span>
+        <span class="badge badge-locked">ALL DECISIONS FROZEN</span>
+        <span class="badge badge-modular">MODULAR CONFLUENCE</span>
+    </div>
+</div>
+
+<div class="container">
+
+<!-- ═══════════════ STAGE 0: LIQUIDITY SWEEP ═══════════════ -->
+<div class="pipeline">
+
+<div class="stage s0">
+    <div class="stage-card open" onclick="toggleStage(this)">
+        <div class="stage-header">
+            <div class="stage-number">0A</div>
+            <div>
+                <div class="stage-title">Stage 0A: Structural Liquidity Levels &amp; Sweep Detection</div>
+                <div class="stage-subtitle">Scan for master structural liquidity pools • POI &amp; Zone fallback sweeps • Stop-loss hunting edge</div>
+            </div>
+            <div class="expand-icon">▼</div>
+        </div>
+        <div class="stage-body">
+            <div class="stage-content">
+                <div class="note-box note-info">
+                    <strong>SWEEP RULE</strong> = Wick pierces a defined structural level + candle body closes back inside. Tracks direction: BSL (Buy-Side Liquidity) or SSL (Sell-Side Liquidity).
+                </div>
+                <table class="info-table">
+                    <thead>
+                        <tr><th>Level Type</th><th>Structural Definition</th><th>Timeframe</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td><strong>Session Highs/Lows</strong></td><td>Asia (00:00–07:00), London (07:00–13:00), NY (13:00–20:00 UTC)</td><td>Session TF</td></tr>
+                        <tr><td><strong>PDH/PDL &amp; PWH/PWL</strong></td><td>Previous Day / Previous Week High &amp; Low</td><td>Daily / Weekly</td></tr>
+                        <tr><td><strong>EQH/EQL (Top &amp; Bottom)</strong></td><td>Equal Highs (BSL) / Equal Lows (SSL) — double/triple tops/bottoms (<strong>&le; 4.5 pips</strong> tolerance)</td><td>Detection TF</td></tr>
+                        <tr><td><strong>Structural Swing H/L</strong></td><td><strong>Strictly structural swings</strong> validated by Base Candle Gate (minor internal noise discarded)</td><td>Detection TF</td></tr>
+                        <tr><td><strong>POI Sweeps (OB &amp; FVG)</strong></td><td>Wick sweep through POI Order Block or FVG boundary = Liquidity Sweep</td><td>POI TF</td></tr>
+                        <tr><td><strong>Demand &amp; Supply Boundary Sweeps</strong></td><td>Fallback sweep when price offers no in-between entry inside zone body</td><td>D1 / H4 / H1</td></tr>
+                        <tr><td><strong>Order Block Boundary Sweeps</strong></td><td>Fallback sweep when price passes through OB body without internal mitigation entry</td><td>Detection TF</td></tr>
+                    </tbody>
+                </table>
+                <div class="note-box note-info" style="margin-top:12px; border-left: 4px solid #10b981;">
+                    <strong>SMART MONEY STOP-LOSS HUNTING PRINCIPLE:</strong><br>
+                    Smart money first hunts retailer stop losses clustered at EQH/EQL, OB edges, and Demand/Supply boundaries. Once the market has <em>"eaten all retailers"</em>, smart money delivers its real move. Because retail stops are eaten, the market will <strong>NOT return to re-hunt previous sweep levels</strong>, giving post-sweep entries supreme structural protection.
+                </div>
+                <div class="note-box note-info" style="margin-top:12px; border-left: 4px solid #60a5fa;">
+                    <strong>VISUAL REFERENCES</strong> (Knowledge Base, expert charts 2026-09-05):<br>
+                    <code>liquidity_sweep_eq_high_swing_low_h1.png</code> (EQH top + swing-low bottom) &bull;
+                    <code>liquidity_sweep_equal_highs_h1.png</code> (EQH trap) &bull;
+                    <code>liquidity_sweep_swing_highs_h1.png</code> (successive swing highs) &bull;
+                    <code>liquidity_sweep_major_high_h1.png</code> (major high) &bull;
+                    <code>liquidity_sweep_high_and_low_range_h1.png</code> (range top+bottom) &bull;
+                    <code>liquidity_sweep_structural_swing_low_m15.png</code> (M15 structural low)
+                </div>
+                <div class="note-box note-warn" style="margin-top:12px;">
+                    ✗ No sweep &rarr; No event (return to data stream)<br>
+                    ✓ Sweep confirmed &rarr; Track direction (BSL/SSL) &rarr; Proceed to Displacement Check
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="connector">▼</div>
+
+<!-- ═══════════════ STAGE 0b: DISPLACEMENT ═══════════════ -->
+<div class="stage s0b">
+    <div class="stage-card" onclick="toggleStage(this)">
+        <div class="stage-header">
+            <div class="stage-number">0b</div>
+            <div>
+                <div class="stage-title">Displacement Check</div>
+                <div class="stage-subtitle">FROZEN: Minimum 1× ATR + BOS + FVG required</div>
+            </div>
+            <div class="expand-icon">▼</div>
+        </div>
+        <div class="stage-body">
+            <div class="stage-content">
+                <div class="model-grid" style="grid-template-columns: repeat(3, 1fr);">
+                    <div class="model-card">
+                        <div class="model-tag" style="background:rgba(79,70,229,0.2);color:#818cf8;">REQUIREMENT 1</div>
+                        <div class="model-name">BOS Confirmed</div>
+                        <div class="model-desc">Candle body closes beyond prior swing high/low</div>
+                    </div>
+                    <div class="model-card">
+                        <div class="model-tag" style="background:rgba(99,102,241,0.2);color:#818cf8;">REQUIREMENT 2</div>
+                        <div class="model-name">FVG Created</div>
+                        <div class="model-desc">3-candle imbalance gap present at displacement origin</div>
+                    </div>
+                    <div class="model-card">
+                        <div class="model-tag" style="background:rgba(129,140,248,0.2);color:#818cf8;">REQUIREMENT 3</div>
+                        <div class="model-name">Displacement ≥ 1× ATR</div>
+                        <div class="model-desc">Move magnitude exceeds frozen minimum threshold</div>
+                    </div>
+                </div>
+                <div class="note-box note-warn" style="margin-top:12px;">
+                    ✗ No BOS or no FVG or displacement &lt; 0.5× ATR → No event<br>
+                    ✓ All confirmed → Proceed to Swing Validation Gate
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="connector">▼</div>
+
+<!-- ═══════════════ STAGE 0c: SWING VALIDATION ═══════════════ -->
+<div class="stage s0c">
+    <div class="stage-card" onclick="toggleStage(this)">
+        <div class="stage-header">
+            <div class="stage-number">0c</div>
+            <div>
+                <div class="stage-title">Swing Validation Gate</div>
+                <div class="stage-subtitle">Expert — Base Candle Rule. Two-bar reversal alone does NOT confirm.</div>
+            </div>
+            <div class="expand-icon">▼</div>
+        </div>
+        <div class="stage-body">
+            <div class="stage-content">
+                <div class="model-grid" style="grid-template-columns: 1fr 1fr;">
+                    <div class="def-card">
+                        <div class="def-title" style="color:#a78bfa;">Base Candle Definition</div>
+                        <div class="def-text">
+                            <strong>Bullish trend:</strong> Base Candle = candle whose <span class="def-highlight">HIGH</span> = swing high<br>
+                            <strong>Bearish trend:</strong> Base Candle = candle whose <span class="def-highlight">LOW</span> = swing low<br>
+                            <strong>Bearish exception:</strong> If next candle's wick creates lower low but current candle is bearish, the bearish candle is still the Base Candle.
+                        </div>
+                    </div>
+                    <div class="def-card">
+                        <div class="def-title" style="color:#a78bfa;">Swing Validity Decision Gate</div>
+                        <div class="def-text">
+                            <strong>1.</strong> Did price break Base Candle's OPPOSITE extreme?<br>
+                            &nbsp;&nbsp;&nbsp;✗ NO → <span style="color:#f87171;">SWING = INVALID</span><br>
+                            &nbsp;&nbsp;&nbsp;✓ YES → Continue<br><br>
+                            <strong>2.</strong> Did candle CLOSE beyond that extreme?<br>
+                            &nbsp;&nbsp;&nbsp;✗ Wick only → <span style="color:#f87171;">SWING = INVALID</span><br>
+                            &nbsp;&nbsp;&nbsp;✓ Body close → <span style="color:#34d399;">SWING = VALID → Proceed</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="note-box note-warn" style="margin-top:12px;">
+                    ⚠️ Two-bar reversal alone does NOT confirm swing validity. Base Candle extreme MUST be broken and closed beyond.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="connector">▼</div>
+
+<!-- ═══════════════ STAGE 1: POI CLASSIFICATION ═══════════════ -->
+<div class="stage s1">
+    <div class="stage-card open" onclick="toggleStage(this)">
+        <div class="stage-header">
+            <div class="stage-number">1</div>
+            <div>
+                <div class="stage-title">POI Model Classification — Modular Multi-Model System</div>
+                <div class="stage-subtitle">ALL 8 MODELS ARE EQUAL TAGS — No hard ranking. Multiple tags = higher quality.</div>
+            </div>
+            <div class="expand-icon">▼</div>
+        </div>
+        <div class="stage-body">
+            <div class="stage-content">
+                <div class="confluence-box">
+                    <div class="confluence-title">🎯 Modular Confluence Scoring</div>
+                    <div class="confluence-levels">
+                        <div class="confluence-level cl-1">
+                            <div class="cl-score" style="color:#818cf8;">1 Tag</div>
+                            <div class="cl-label">Base Quality — Tradeable</div>
+                        </div>
+                        <div class="confluence-level cl-2">
+                            <div class="cl-score" style="color:#a78bfa;">2 Tags</div>
+                            <div class="cl-label">Elevated Quality — Preferred</div>
+                        </div>
+                        <div class="confluence-level cl-3">
+                            <div class="cl-score" style="color:#c084fc;">3+ Tags</div>
+                            <div class="cl-label">Highest Quality — Institutional-Grade</div>
+                        </div>
+                    </div>
+                    <div class="note-box note-success" style="margin-top:12px;">
+                        No model is suppressed — all tags recorded. Model 8 can combine with ANY of M1–M7.
+                    </div>
+                </div>
+
+                <div class="model-grid">
+                    <!-- M3 CHOCH -->
+                    <div class="model-card">
+                        <div class="model-tag" style="background:rgba(168,85,247,0.2);color:#c084fc;">M3</div>
+                        <div class="model-name">CHOCH Retest</div>
+                        <div class="model-desc">
+                            <strong>Rule 1 (Standard):</strong> Body close breaks LAST SWING — Highest strength<br>
+                            <strong>Rule 2 (Inside Body):</strong> Body close breaks INTERMEDIATE — Medium strength<br>
+                            <strong>Rule 3 (Inside Wick):</strong> Wick only — Lowest strength, KEPT
+                        </div>
+                        <div class="model-entry"><strong>ENTRY:</strong> At broken structural level (NOT origin OB)</div>
+                    </div>
+
+                    <!-- M5 Extreme Equal Highs -->
+                    <div class="model-card">
+                        <div class="model-tag" style="background:rgba(16,185,129,0.2);color:#34d399;">M5</div>
+                        <div class="model-name">Extreme Equal Highs</div>
+                        <div class="model-desc">
+                            Equal Highs/Lows formed → Broken below → Zone unmitigated<br>
+                            <strong>CONTINUATION</strong> setup (not reversal)
+                        </div>
+                        <div class="model-entry"><strong>ENTRY:</strong> At broken equal level. Distinguished from M7 (reactive shelf).</div>
+                    </div>
+
+                    <!-- M4 Quasimodo -->
+                    <div class="model-card">
+                        <div class="model-tag" style="background:rgba(59,130,246,0.2);color:#60a5fa;">M4</div>
+                        <div class="model-name">Quasimodo (QML)</div>
+                        <div class="model-desc">
+                            Left Shoulder → Head (sweep) → Neckline break → LS level untested
+                        </div>
+                        <div class="model-entry"><strong>ENTRY:</strong> Full wick range [left_shoulder_low, left_shoulder_high]</div>
+                    </div>
+
+                    <!-- M6 Neckline -->
+                    <div class="model-card">
+                        <div class="model-tag" style="background:rgba(245,158,11,0.2);color:#fbbf24;">M6</div>
+                        <div class="model-name">Double Top/Bottom Neckline</div>
+                        <div class="model-desc">
+                            Double pattern formed → Neckline broken → Not retested
+                        </div>
+                        <div class="model-entry"><strong>ENTRY:</strong> At broken neckline retest level</div>
+                    </div>
+
+                    <!-- M7 Equal Resistance -->
+                    <div class="model-card">
+                        <div class="model-tag" style="background:rgba(239,68,68,0.2);color:#f87171;">M7</div>
+                        <div class="model-name">Equal Resistance Shelf</div>
+                        <div class="model-desc">
+                            Sharp drop → bounce creates resistance → broken → Not retested<br>
+                            <strong>REACTIVE</strong> shelf (vs M5 proactive)
+                        </div>
+                        <div class="model-entry"><strong>ENTRY:</strong> At broken resistance shelf level</div>
+                    </div>
+
+                    <!-- M2 Breaker -->
+                    <div class="model-card">
+                        <div class="model-tag" style="background:rgba(236,72,153,0.2);color:#f472b6;">M2</div>
+                        <div class="model-name">RBS/SBR Breaker Flip</div>
+                        <div class="model-desc">
+                            Swing level broken → Not retested from opposite side
+                        </div>
+                        <div class="model-entry"><strong>ENTRY:</strong> At flipped support/resistance level</div>
+                    </div>
+
+                    <!-- M1 Origin -->
+                    <div class="model-card">
+                        <div class="model-tag" style="background:rgba(100,116,139,0.2);color:#94a3b8;">M1</div>
+                        <div class="model-name">Origin Demand/Supply Base</div>
+                        <div class="model-desc">
+                            Fresh swing low/high with BOS away → Deep retracement pending
+                        </div>
+                        <div class="model-entry"><strong>ENTRY:</strong> At origin base level (OB/FVG zone ±0.5× ATR)</div>
+                    </div>
+
+                    <!-- M8 HTF Demand/Supply -->
+                    <div class="model-card" style="border-color: rgba(139,92,246,0.4); background: linear-gradient(135deg, #0d0d14, rgba(139,92,246,0.05));">
+                        <div class="model-tag" style="background:rgba(139,92,246,0.25);color:#a78bfa;">M8 — FULL PEER</div>
+                        <div class="model-name">HTF Demand/Supply (D1/H4)</div>
+                        <div class="model-desc">
+                            <strong>Demand Zone:</strong> Single last <span style="color:#f87171;">bearish candle</span> before bullish impulse<br>
+                            <strong>Supply Zone:</strong> Single last <span style="color:#34d399;">bullish candle</span> before bearish impulse<br>
+                            Zone = full body + wicks of that single opposing candle<br>
+                            Also: OB, FVG zones on D1/H4
+                        </div>
+                        <div class="model-entry"><strong>ENTRY:</strong> M5 approach → M1 trigger (Ending Diag preferred). SL: 2–5 pips. RR: 1:5+.</div>
+                    </div>
+                </div>
+
+                <div class="def-card" style="margin-top: 16px; border-color: rgba(139,92,246,0.3);">
+                    <div class="def-title" style="color:#a78bfa;">📋 Formal Demand & Supply Zone Definition (Expert — Frozen)</div>
+                    <div class="def-text">
+                        <strong>Demand Zone:</strong> The <span class="def-highlight">single last bearish candle</span> that appears just before a strong bullish impulsive move. Zone drawn from <span class="def-highlight">high to low</span> of that single opposing candle (full body + wicks). <strong>NOT the bullish candles</strong> — the demand zone is the last opposing candle before the impulse.<br><br>
+                        <strong>Supply Zone:</strong> The <span class="def-highlight">single last bullish candle</span> that appears just before a strong bearish impulsive move. Zone drawn from <span class="def-highlight">high to low</span> of that single opposing candle (full body + wicks). <strong>NOT the bearish candles</strong> — the supply zone is the last opposing candle before the impulse.<br><br>
+                        <strong>Freshness:</strong> 1-touch only (same as all models). <strong>Demand Evidence:</strong> 650 pip and 2400 pip moves from Daily demand zones. <strong>Supply Evidence:</strong> H4 single zones, multiple zones at different levels, and retracement examples.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="connector">▼</div>
+
+<!-- ═══════════════ STAGE 2: VALIDATION ═══════════════ -->
+<div class="stage s2">
+    <div class="stage-card" onclick="toggleStage(this)">
+        <div class="stage-header">
+            <div class="stage-number">2</div>
+            <div>
+                <div class="stage-title">POI Validation Pipeline — 5 Pillars (All Frozen)</div>
+                <div class="stage-subtitle">All pillars must pass (except Inducement = soft gate)</div>
+            </div>
+            <div class="expand-icon">▼</div>
+        </div>
+        <div class="stage-body">
+            <div class="stage-content">
+                <div class="pillar-grid">
+                    <div class="pillar-card">
+                        <div class="pillar-num">1</div>
+                        <div class="pillar-name">Zone Refinement</div>
+                        <div class="pillar-detail">Unmitigated OB or FVG within ±0.5× ATR of POI level</div>
+                        <div class="pillar-pass">✓ PASS: OB/FVG present</div>
+                        <div class="pillar-fail">✗ FAIL: Naked Level</div>
+                    </div>
+                    <div class="pillar-card">
+                        <div class="pillar-num">2</div>
+                        <div class="pillar-name">Displacement</div>
+                        <div class="pillar-detail">BOS + FVG + displacement &gt; 1× ATR from origin</div>
+                        <div class="pillar-pass">✓ PASS: Strong sponsorship</div>
+                        <div class="pillar-fail">✗ FAIL: Weak Sponsorship</div>
+                    </div>
+                    <div class="pillar-card">
+                        <div class="pillar-num">3</div>
+                        <div class="pillar-name">Premium / Discount</div>
+                        <div class="pillar-detail">Buys &lt; 45% (Discount). Sells &gt; 55% (Premium).<br>Coupled to detection TF.</div>
+                        <div class="pillar-pass">✓ PASS: Correct zone</div>
+                        <div class="pillar-fail">✗ FAIL: Equilibrium (45–55%)</div>
+                    </div>
+                    <div class="pillar-card">
+                        <div class="pillar-num">4</div>
+                        <div class="pillar-name">Freshness</div>
+                        <div class="pillar-detail">Strict 1-touch only. STATE_FRESH → STATE_TESTED. No second-touch trades.</div>
+                        <div class="pillar-pass">✓ PASS: STATE_FRESH</div>
+                        <div class="pillar-fail">✗ FAIL: Depleted Volume</div>
+                    </div>
+                    <div class="pillar-card">
+                        <div class="pillar-num">5</div>
+                        <div class="pillar-name">Inducement</div>
+                        <div class="pillar-detail">EQH/EQL, trendline, or minor swing in front of POI. Soft gate only.</div>
+                        <div class="pillar-pass">✓ SCORE 100%</div>
+                        <div class="pillar-pass" style="color:#fbbf24;">✗ SCORE 70% (still tradeable)</div>
+                    </div>
+                </div>
+                <div class="note-box note-success" style="margin-top:12px;">
+                    ★ All 5 pillars must pass (except Inducement = soft gate)<br>
+                    ★ POI marked ACTIVE with confluence score and timestamp
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="connector">▼</div>
+
+<!-- ═══════════════ STAGE 3: TRIGGER ROUTING ═══════════════ -->
+<div class="stage s3">
+    <div class="stage-card" onclick="toggleStage(this)">
+        <div class="stage-header">
+            <div class="stage-number">3</div>
+            <div>
+                <div class="stage-title">Trigger Routing — Chronological First-Valid Wins</div>
+                <div class="stage-subtitle">Drop to M1/M5. First valid trigger (chronological) fires — FROZEN.</div>
+            </div>
+            <div class="expand-icon">▼</div>
+        </div>
+        <div class="stage-body">
+            <div class="stage-content">
+                <div class="trigger-grid">
+                    <div class="trigger-card">
+                        <div class="trigger-letter">A</div>
+                        <div class="trigger-name">CHOCH Reversal</div>
+                        <div class="trigger-desc">Local swing → CHOCH confirmed (body close) → Limit at broken level</div>
+                        <div class="trigger-frozen">SL: Above/below sweep extreme</div>
+                    </div>
+                    <div class="trigger-card">
+                        <div class="trigger-letter">B</div>
+                        <div class="trigger-name">Leading Diagonal</div>
+                        <div class="trigger-desc">5-wave impulse out of POI → Fib 50–61.8% zone</div>
+                        <div class="trigger-frozen">⚠️ Subjective — wave counting. Expiry: 30 bars after Wave 5.</div>
+                    </div>
+                    <div class="trigger-card">
+                        <div class="trigger-letter">C</div>
+                        <div class="trigger-name">Ending Diagonal</div>
+                        <div class="trigger-desc">5-wave diagonal into POI → Wave 5 trendline sweep</div>
+                        <div class="trigger-frozen">★ PREFERRED for Model 8. SL: Ultra-tight. Expiry: sweep candle + 3 bars.</div>
+                    </div>
+                    <div class="trigger-card">
+                        <div class="trigger-letter">D</div>
+                        <div class="trigger-name">Two-Bar Reversal</div>
+                        <div class="trigger-desc">Engulfing in POI + low volume absorption</div>
+                        <div class="trigger-frozen">FROZEN: Limit at 50% of engulfing body (NOT market)</div>
+                    </div>
+                    <div class="trigger-card">
+                        <div class="trigger-letter">E</div>
+                        <div class="trigger-name">RSI Divergence</div>
+                        <div class="trigger-desc">Double Top/Bottom at POI + RSI(14) divergence</div>
+                        <div class="trigger-frozen">Limit at neckline/2nd peak</div>
+                    </div>
+                    <div class="trigger-card">
+                        <div class="trigger-letter">F</div>
+                        <div class="trigger-name">BOS + OB Continuation</div>
+                        <div class="trigger-desc">BOS confirms trend → OB at origin → Retrace to OB</div>
+                        <div class="trigger-frozen">Limit at OB edge/50% midpoint</div>
+                    </div>
+                </div>
+                <div class="note-box note-warn" style="margin-top:12px;">
+                    ★ If no trigger fires within expiry window → POI → STATE_TESTED<br>
+                    ★ If trigger fires → Proceed to Execution Engine
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="connector">▼</div>
+
+<!-- ═══════════════ STAGE 4: EXECUTION ═══════════════ -->
+<div class="stage s4">
+    <div class="stage-card" onclick="toggleStage(this)">
+        <div class="stage-header">
+            <div class="stage-number">4</div>
+            <div>
+                <div class="stage-title">Execution Engine — Frozen Risk Controls</div>
+                <div class="stage-subtitle">News check → Lot sizing → Limit order → PureRunner management</div>
+            </div>
+            <div class="expand-icon">▼</div>
+        </div>
+        <div class="stage-body">
+            <div class="stage-content">
+                <div class="model-grid" style="grid-template-columns: repeat(3, 1fr);">
+                    <div class="def-card">
+                        <div class="def-title" style="color:#f87171;">🚨 News Check (FROZEN)</div>
+                        <div class="def-text">
+                            High-impact news (CPI/NFP/FOMC) within 15 minutes?<br>
+                            <strong style="color:#f87171;">YES → CANCEL all pending orders</strong><br>
+                            NO → Continue to lot sizing
+                        </div>
+                    </div>
+                    <div class="def-card">
+                        <div class="def-title" style="color:#fbbf24;">📐 Lot Sizing (FROZEN)</div>
+                        <div class="def-text">
+                            Lots = (Equity × Risk%) / (SL Distance × Tick Value)<br>
+                            <strong>Risk% = 0.5%–1.0%</strong> per trade<br>
+                            Dynamic equity-based sizing
+                        </div>
+                    </div>
+                    <div class="def-card">
+                        <div class="def-title" style="color:#60a5fa;">📋 Order Placement (FROZEN)</div>
+                        <div class="def-text">
+                            Limit order with physical SL + TP on broker server<br>
+                            SL at structural level ± buffer (0.3× ATR)<br>
+                            TP at structural target or 4× ATR cap
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="connector">▼</div>
+
+<!-- ═══════════════ STAGE 5: TRADE MANAGEMENT ═══════════════ -->
+<div class="stage s5">
+    <div class="stage-card" onclick="toggleStage(this)">
+        <div class="stage-header">
+            <div class="stage-number">5</div>
+            <div>
+                <div class="stage-title">Trade Management — Proven Components</div>
+                <div class="stage-subtitle">All components validated by historical data and statistical analysis</div>
+            </div>
+            <div class="expand-icon">▼</div>
+        </div>
+        <div class="stage-body">
+            <div class="stage-content">
+                <div class="mgmt-grid">
+                    <div class="mgmt-card">
+                        <div class="mgmt-icon">🚀</div>
+                        <div class="mgmt-name">PureRunner Mode</div>
+                        <div class="mgmt-desc">No early partials. SL → BE at 1.0× ATR. 100% runs to structural TP.</div>
+                        <span class="proven-badge">PROVEN</span>
+                    </div>
+                    <div class="mgmt-card">
+                        <div class="mgmt-icon">⚡</div>
+                        <div class="mgmt-name">FVG Invalidation</div>
+                        <div class="mgmt-desc">If candle closes beyond FVG boundary → HARD EXIT immediately.</div>
+                        <span class="proven-badge">PROVEN</span>
+                    </div>
+                    <div class="mgmt-card">
+                        <div class="mgmt-icon">🛑</div>
+                        <div class="mgmt-name">Circuit Breaker</div>
+                        <div class="mgmt-desc">3 consecutive losses → 4h trading pause. Z-score validated (-2.27).</div>
+                        <span class="proven-badge">PROVEN</span>
+                    </div>
+                    <div class="mgmt-card">
+                        <div class="mgmt-icon">🔒</div>
+                        <div class="mgmt-name">Same-Level Guard</div>
+                        <div class="mgmt-desc">Failed sweep level → 4-bar cooldown on re-entry at same zone.</div>
+                        <span class="proven-badge">PROVEN</span>
+                    </div>
+                    <div class="mgmt-card">
+                        <div class="mgmt-icon">📅</div>
+                        <div class="mgmt-name">Friday EOD Close</div>
+                        <div class="mgmt-desc">Force-close all positions at 20:00 UTC Friday. Prevents weekend gaps.</div>
+                        <span class="proven-badge">PROVEN</span>
+                    </div>
+                    <div class="mgmt-card">
+                        <div class="mgmt-icon">📊</div>
+                        <div class="mgmt-name">Forensic CSV Logger</div>
+                        <div class="mgmt-desc">6-column diagnostic logger for post-trade analysis and regime detection.</div>
+                        <span class="proven-badge">PROVEN</span>
+                    </div>
+                </div>
+                <div class="note-box note-success" style="margin-top:12px;">
+                    ★ Trade closes (SL, TP, or manual exit) → Log result<br>
+                    ★ Update freshness states for all POIs<br>
+                    ★ Return to Stage 0 data stream
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+</div><!-- end pipeline -->
+
+<!-- ═══════════════ FROZEN THRESHOLDS ═══════════════ -->
+<div class="section-divider" style="margin-top:48px;">📋 Frozen Thresholds Summary</div>
+
+<table class="thresholds-table">
+    <thead>
+        <tr><th>Parameter</th><th>Frozen Value</th><th>Applied At</th></tr>
+    </thead>
+    <tbody>
+        <tr><td>EQH/EQL Tolerance</td><td>≤ 4.5 pips on XAUUSD</td><td>Stage 0A (Structural Sweep Detection)</td></tr>
+        <tr><td>Structural Swing Gate</td><td>Base Candle Opposite Close</td><td>Stage 0A / Stage 0c (Swing Gate)</td></tr>
+        <tr><td>POI Sweeps (OB &amp; FVG)</td><td>Wick pierce + body close inside</td><td>Stage 0A &amp; Stage 1/2</td></tr>
+        <tr><td>D&amp;S / OB Fallback Sweep</td><td>Sweep of zone extreme if no in-between entry</td><td>Stage 0A &amp; Stage 1 (M1/M8)</td></tr>
+        <tr><td>Smart Money Protection</td><td>Zero return to swept liquidity</td><td>Stage 0A &amp; Stage 4/5 (Execution)</td></tr>
+        <tr><td>Displacement Minimum</td><td>1× ATR</td><td>Stage 0b (Displacement Check)</td></tr>
+        <tr><td>Zone Refinement</td><td>±0.5× ATR</td><td>Stage 2 (Pillar 1)</td></tr>
+        <tr><td>Premium Threshold (Buys)</td><td>&lt; 45% of dealing range</td><td>Stage 2 (Pillar 3)</td></tr>
+        <tr><td>Discount Threshold (Sells)</td><td>&gt; 55% of dealing range</td><td>Stage 2 (Pillar 3)</td></tr>
+        <tr><td>Equilibrium Exclusion</td><td>45%–55% = REJECT</td><td>Stage 2 (Pillar 3)</td></tr>
+        <tr><td>Freshness</td><td>Strict 1-touch only</td><td>Stage 2 (Pillar 4)</td></tr>
+        <tr><td>Inducement Score</td><td>100% with, 70% without</td><td>Stage 2 (Pillar 5)</td></tr>
+        <tr><td>News Cancellation</td><td>15min before CPI/NFP/FOMC</td><td>Stage 4 (News Check)</td></tr>
+        <tr><td>Unfilled Order Expiry</td><td>M5=12 bars (1h), M1=30 bars (30min) → STATE_TESTED</td><td>Stage 3 (Trigger Expiry)</td></tr>
+        <tr><td>CHOCH Entry</td><td>Broken structural level (not OB)</td><td>Stage 1 (Model 3)</td></tr>
+        <tr><td>Two-Bar Entry</td><td>Limit at 50% engulfing body</td><td>Stage 3 (Trigger D)</td></tr>
+        <tr><td>Trigger Selection</td><td>Chronological first-valid</td><td>Stage 3 (Trigger Routing)</td></tr>
+        <tr><td>Dealing Range Coupling</td><td>Same TF as POI detection</td><td>Stage 2 (Pillar 3)</td></tr>
+        <tr><td>QML Left Shoulder</td><td>Full wick range [low, high]</td><td>Stage 1 (Model 4)</td></tr>
+    </tbody>
+</table>
+
+<!-- ═══════════════ DETECTION TIMEFRAME ═══════════════ -->
+<div class="section-divider" style="margin-top:48px;">🕐 Detection Timeframe Architecture</div>
+
+<table class="info-table">
+    <thead>
+        <tr><th>Timeframe</th><th>Role</th><th>Models Detected</th></tr>
+    </thead>
+    <tbody>
+        <tr><td><strong>Daily</strong></td><td>Macro context</td><td>Models 1, 3, 4 (major reversals) + Model 8 POI scan</td></tr>
+        <tr><td><strong>H4</strong></td><td>Primary workhorse</td><td>Models 1, 3, 5 (medium-term) + Model 8 POI scan</td></tr>
+        <tr><td><strong>H1</strong></td><td>All models</td><td>All 8 models (most events, balances granularity)</td></tr>
+        <tr><td><strong>M30</strong></td><td>Intraday</td><td>Models 2, 5, 6, 7 (faster detection, more noise)</td></tr>
+        <tr><td><strong>M5</strong></td><td>Approach monitor</td><td>Model 8 approach phase (no POI detection)</td></tr>
+        <tr><td><strong>M1</strong></td><td>Execution trigger</td><td>Model 8 entry trigger + all LTF triggers</td></tr>
+    </tbody>
+</table>
+
+</div><!-- end container -->
+
+<div class="footer">
+    SMC Master Flowchart — Revision 5 &bull; All decisions frozen per LOCKED_DECISIONS.md &bull; Supersedes v4
+</div>
+
+<script>
+function toggleStage(el) {
+    el.classList.toggle('open');
+}
+// Open Stage 1 and Stage 5 by default for key visibility
+document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.stage-card').forEach(card => {
+        if (!card.classList.contains('open')) {
+            // Keep closed cards closed
+        }
+    });
+});
+</script>
+
+</body>
+</html>

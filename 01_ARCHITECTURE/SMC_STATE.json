@@ -1,0 +1,71 @@
+{
+  "project": "SMC",
+  "canonical_dataset": {
+    "instrument": "XAUUSD",
+    "timeframe": "M1",
+    "source": "m1_clean.csv",
+    "bars": 1768123,
+    "start": "2021-04-12 11:00:00",
+    "end": "2026-04-10 20:59:00",
+    "timezone": "UTC"
+  },
+  "milestones": {
+    "SMC-R1": {
+      "status": "COMPLETE",
+      "decision": "FRAMEWORK COMPLETE"
+    },
+    "SMC-R2": {
+      "status": "COMPLETE",
+      "decision": "EXTRACTION VALID"
+    },
+    "SMC-R3": {
+      "status": "COMPLETE",
+      "decision": "METHODOLOGY FROZEN"
+    },
+    "SMC-R4": {
+      "status": "COMPLETE",
+      "decision": "POSITIVE EXPECTANCY",
+      "gross_bps": 1.01
+    },
+    "SMC-R5": {
+      "status": "COMPLETE",
+      "decision": "M4 METHODOLOGY FROZEN"
+    },
+    "SMC-R6": {
+      "status": "COMPLETE",
+      "decision": "M4 FAILED"
+    },
+    "SMC-R7": {
+      "status": "COMPLETE",
+      "decision": "BOS+OB CLOSED"
+    },
+    "SMC-R8": {
+      "status": "COMPLETE",
+      "decision": "CHOCH METHODOLOGY FROZEN"
+    },
+    "SMC-R9": {
+      "status": "COMPLETE",
+      "decision": "M3 FAILED",
+      "gross_bps": 0.89,
+      "net_bps": -17.03,
+      "events": 7483
+    },
+    "SMC-R9-CR": {
+      "status": "COMPLETE",
+      "decision": "SMC M1 CYCLE CLOSED"
+    },
+    "SMC-R10": {
+      "status": "COMPLETE",
+      "decision": "QUALIFICATION FRAMEWORK"
+    },
+    "SMC-R11": {
+      "status": "COMPLETE",
+      "decision": "RARE-EVENT MODULE FRAMEWORK"
+    }
+  },
+  "qualification_hierarchy": "Level 1 (Scientific) -> Level 2 (Economic/M3) -> Level 3 (Validated/M4) -> Level 4 (Deployment)",
+  "minimum_threshold": "E[R_net] > 0",
+  "next_milestone": "Control Session - review R11 before any new hypothesis",
+  "authorization": "SMC-R11 COMPLETE. Rare-event and module governance framework established.",
+  "smc_programme_status": "SMC M1 cycle CLOSED. Qualification framework (R10) and rare-event module framework (R11) established. Both BOS+OB and CHOCH at Level 2 FAIL. No validated modules. Framework governs future research."
+}

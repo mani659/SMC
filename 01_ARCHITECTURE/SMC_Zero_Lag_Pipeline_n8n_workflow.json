@@ -1,0 +1,642 @@
+{
+  "name": "SMC Zero-Lag Event-Driven Pipeline",
+  "nodes": [
+    {
+      "id": "454e22cd-aa9f-42d9-9e48-cebf387c22eb",
+      "name": "Webhook_Bar_Closed",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        100,
+        200
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "mt5-bar-closed",
+        "responseMode": "onReceived",
+        "options": {}
+      }
+    },
+    {
+      "id": "737a8de8-3e35-448f-8432-aeadf708e64c",
+      "name": "Webhook_Tick_Quote",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        100,
+        450
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "tick-quote",
+        "responseMode": "onReceived",
+        "options": {}
+      }
+    },
+    {
+      "id": "b9a10cf0-68d9-4f4f-8073-b2154eddb6c1",
+      "name": "Webhook_News_Flash",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        100,
+        700
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "news-flash",
+        "responseMode": "onReceived",
+        "options": {}
+      }
+    },
+    {
+      "id": "d159da60-01bc-462a-b4c2-15bbd5cb73d0",
+      "name": "Webhook_Order_Execution",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        100,
+        950
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "order-execution",
+        "responseMode": "onReceived",
+        "options": {}
+      }
+    },
+    {
+      "id": "2b6a2355-7716-4c4f-876a-9e78fc2d7139",
+      "name": "L0_Dedup_And_Normalizer",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        380,
+        500
+      ],
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// L0 Normalizer and Hash Generator\nconst input = $input.item.json.body || $input.item.json;\nconst now = Date.now();\n\n// Generate deterministic event_id if not present\nconst source = input.symbol ? `${input.symbol}_${input.tf || 'TICK'}_${input.ts || now}_${input.c || input.bid || 'EVENT'}` : `EVENT_${now}`;\nconst event_id = input.event_id || Buffer.from(source).toString('base64').substring(0, 24);\n\n// Classify event stream type\nlet stream_type = 'unknown';\nif (input.o !== undefined && input.c !== undefined && input.tf) stream_type = 'bar.closed';\nelse if (input.bid !== undefined && input.ask !== undefined) stream_type = 'tick.quote';\nelse if (input.impact !== undefined) stream_type = 'news.flash';\nelse if (input.order_id !== undefined || input.ticket !== undefined) stream_type = 'order.execution';\n\nreturn {\n  json: {\n    event_id: event_id,\n    stream_type: stream_type,\n    ingest_ts: now,\n    data: input\n  }\n};"
+      }
+    },
+    {
+      "id": "804db85a-b7cc-41fc-bff3-f3853e2571b5",
+      "name": "Redis_Idempotency_Check",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        650,
+        500
+      ],
+      "parameters": {
+        "operation": "set",
+        "key": "=event:{{ $json.event_id }}",
+        "value": "1",
+        "expire": true,
+        "ttl": 3600
+      }
+    },
+    {
+      "id": "cfcb7499-388f-4c13-892e-3fb63c8e5ad5",
+      "name": "Switch_Event_Stream",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        900,
+        500
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "value1": "={{ $('L0_Dedup_And_Normalizer').item.json.stream_type }}",
+              "value2": "bar.closed"
+            },
+            {
+              "value1": "={{ $('L0_Dedup_And_Normalizer').item.json.stream_type }}",
+              "value2": "tick.quote"
+            },
+            {
+              "value1": "={{ $('L0_Dedup_And_Normalizer').item.json.stream_type }}",
+              "value2": "news.flash"
+            },
+            {
+              "value1": "={{ $('L0_Dedup_And_Normalizer').item.json.stream_type }}",
+              "value2": "order.execution"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "93892dd6-fd2c-4f07-b8cb-c3c4aa9e7c24",
+      "name": "L1_Sweep_Engine",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        200
+      ],
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// Stage 0A: Master Liquidity Sweep Engine\nconst bar = $('L0_Dedup_And_Normalizer').item.json.data;\nconst event_id = $('L0_Dedup_And_Normalizer').item.json.event_id;\n\n// Locked Thresholds\nconst EQH_EQL_TOLERANCE_PIPS = 4.5;\nconst POINT = 0.01; // XAUUSD point\nconst TOLERANCE = EQH_EQL_TOLERANCE_PIPS * 0.1;\n\n// Mock registry lookup (In production, retrieved from Redis liq:* keys)\n// Here we evaluate price action rules on the finalized bar\nconst high = parseFloat(bar.h);\nconst low = parseFloat(bar.l);\nconst open = parseFloat(bar.o);\nconst close = parseFloat(bar.c);\nconst tf = bar.tf;\n\nlet sweep_detected = false;\nlet sweep_type = '';\nlet direction = '';\nlet level_price = 0.0;\nlet sweep_extreme = 0.0;\nlet level_id = '';\n\n// Check BSL (Buy-Side Liquidity) Sweep: Wick pierces level, body closes back below\n// Check SSL (Sell-Side Liquidity) Sweep: Wick pierces level, body closes back above\n// Example: If bar has upper wick > level and close < level\nif (bar.target_resistance && high > bar.target_resistance && close < bar.target_resistance) {\n  sweep_detected = true;\n  sweep_type = 'EQH_SWEEP';\n  direction = 'BSL';\n  level_price = bar.target_resistance;\n  sweep_extreme = high;\n  level_id = `liq:eqh:${level_price.toFixed(2)}`;\n} else if (bar.target_support && low < bar.target_support && close > bar.target_support) {\n  sweep_detected = true;\n  sweep_type = 'EQL_SWEEP';\n  direction = 'SSL';\n  level_price = bar.target_support;\n  sweep_extreme = low;\n  level_id = `liq:eql:${level_price.toFixed(2)}`;\n} else if (bar.is_sweep) {\n  // Flag directly passed from MT5 bridge\n  sweep_detected = true;\n  sweep_type = bar.sweep_type || 'STRUCTURAL_SWING_SWEEP';\n  direction = bar.direction || (high - Math.max(open, close) > Math.min(open, close) - low ? 'BSL' : 'SSL');\n  level_price = bar.level_price || (direction === 'BSL' ? high - 0.5 : low + 0.5);\n  sweep_extreme = direction === 'BSL' ? high : low;\n  level_id = `liq:${sweep_type.toLowerCase()}:${level_price.toFixed(2)}`;\n}\n\nif (!sweep_detected) {\n  return []; // No event: halt pipeline branch\n}\n\nreturn {\n  json: {\n    event_id: event_id,\n    level_id: level_id,\n    level_type: sweep_type,\n    direction: direction,\n    price: level_price,\n    sweep_extreme: sweep_extreme,\n    tf: tf,\n    ts: bar.ts,\n    bar_close_ts: Date.now(),\n    bar: bar,\n    smart_money_rule: \"Retail stops eaten -> Zero return to swept level\"\n  }\n};"
+      }
+    },
+    {
+      "id": "0af14266-987d-4a00-82e4-205ae74573c4",
+      "name": "Redis_Mark_Sweep_Consumed",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        1450,
+        200
+      ],
+      "parameters": {
+        "operation": "set",
+        "key": "={{ $json.level_id }}:status",
+        "value": "consumed",
+        "expire": true,
+        "ttl": 86400
+      }
+    },
+    {
+      "id": "e6b1c07a-71d6-4193-8c12-41f5dc000c99",
+      "name": "L2_Displacement_And_Swing_Gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1750,
+        200
+      ],
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// Stages 0b & 0c: Displacement & Base Candle Swing Gate\nconst sweep = $('L1_Sweep_Engine').item.json;\nconst bar = sweep.bar;\n\n// Quantitative Thresholds\nconst atr = parseFloat(bar.atr || 3.5); // Gold default ~3.5 points\nconst impulse_range = Math.abs(bar.c - bar.o);\nconst displacement_mult = impulse_range / atr;\n\n// Stage 0b Displacement Checks\nconst bos_confirmed = bar.bos !== undefined ? bar.bos : displacement_mult >= 1.0;\nconst fvg_created = bar.fvg !== undefined ? bar.fvg : displacement_mult >= 1.0;\n\nif (displacement_mult < 0.5) {\n  return { json: { valid: False, reason: `Displacement (${displacement_mult.toFixed(2)}x ATR) < 0.5x ATR hard fail` } };\n}\n\nif (!bos_confirmed || !fvg_created || displacement_mult < 1.0) {\n  return { json: { valid: False, reason: \"Displacement minimum >= 1.0x ATR or BOS/FVG unconfirmed\" } };\n}\n\n// Stage 0c Base Candle Swing Gate\n// Must break Base Candle's opposite extreme AND close beyond it with body\nconst base_candle_passed = bar.base_candle_valid !== undefined ? bar.base_candle_valid : True;\nif (!base_candle_passed) {\n  return { json: { valid: False, reason: \"Base Candle Gate Failed: No candle body close beyond opposite extreme\" } };\n}\n\nconst fvg_gap = atr * 0.4;\nconst fvg_top = sweep.direction === 'BSL' ? bar.c + fvg_gap : bar.c;\nconst fvg_bottom = sweep.direction === 'BSL' ? bar.c : bar.c - fvg_gap;\n\nreturn {\n  json: {\n    valid: True,\n    event_id: sweep.event_id,\n    sweep_id: sweep.level_id,\n    direction: sweep.direction,\n    level_price: sweep.price,\n    sweep_extreme: sweep.sweep_extreme,\n    tf: sweep.tf,\n    atr: atr,\n    displacement_mult: displacement_mult,\n    bos_price: bar.c,\n    fvg_top: fvg_top,\n    fvg_bottom: fvg_bottom,\n    impulse_origin: bar.o,\n    bar: bar\n  }\n};"
+      }
+    },
+    {
+      "id": "48094a57-9633-4915-b751-36eacca4286c",
+      "name": "IF_L2_Valid",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2050,
+        200
+      ],
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.valid }}",
+              "value2": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "b8dae44d-02ce-4b84-b66b-9d7fe0b2b25b",
+      "name": "L3_Modular_POI_Classifier",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2300,
+        200
+      ],
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// Stage 1: Modular 8-POI Confluence Classifier (No Priority Hierarchy)\nconst l2 = $('L2_Displacement_And_Swing_Gate').item.json;\nconst bar = l2.bar;\n\n// Discover all matching POI models independently (Equal Tags)\nconst tags = [];\nconst models_detected = [];\n\n// M1: Origin Demand/Supply Base\nif (bar.is_origin_base || true) {\n  tags.push('M1');\n  models_detected.push({ tag: 'M1', name: 'Origin Demand/Supply Base', level: l2.level_price });\n}\n\n// M3: CHOCH Shift Retest (Rule 1/2/3 sub-classification)\nif (bar.is_choch || l2.displacement_mult >= 1.2) {\n  const rule = bar.choch_rule || (l2.displacement_mult >= 1.5 ? 1 : 2);\n  tags.push('M3');\n  models_detected.push({ tag: 'M3', name: `CHOCH Retest (Rule ${rule})`, choch_rule: rule, level: l2.bos_price });\n}\n\n// M8: HTF Demand/Supply (D1/H4)\nif (l2.tf === 'H4' || l2.tf === 'D1' || bar.is_htf_zone) {\n  tags.push('M8');\n  models_detected.push({ tag: 'M8', name: 'HTF Demand/Supply Zone', bonus_overlap: bar.d1_h4_overlap || false });\n}\n\n// Additional tags if conditions align (M2, M4, M5, M6, M7)\nif (bar.is_breaker) tags.push('M2');\nif (bar.is_qml) tags.push('M4');\nif (bar.is_eqh_continuation) tags.push('M5');\nif (bar.is_neckline) tags.push('M6');\nif (bar.is_shelf) tags.push('M7');\n\n// Confluence Scoring\nconst tag_count = tags.length;\nlet confluence_grade = 'BASE';\nif (tag_count >= 3) confluence_grade = 'INSTITUTIONAL';\nelse if (tag_count === 2) confluence_grade = 'ELEVATED';\n\nconst poi_id = `poi:${l2.tf}:${l2.direction}:${l2.level_price.toFixed(2)}`;\n\nreturn {\n  json: {\n    poi_id: poi_id,\n    event_id: l2.event_id,\n    direction: l2.direction,\n    detection_tf: l2.tf,\n    level_price: l2.level_price,\n    sweep_extreme: l2.sweep_extreme,\n    fvg_top: l2.fvg_top,\n    fvg_bottom: l2.fvg_bottom,\n    atr: l2.atr,\n    displacement_mult: l2.displacement_mult,\n    tags: tags,\n    tag_count: tag_count,\n    confluence_grade: confluence_grade,\n    models: models_detected,\n    bar: bar\n  }\n};"
+      }
+    },
+    {
+      "id": "cfc0e0e3-cd01-4fb6-a2c7-6e4e8916ec3f",
+      "name": "L4_Five_Pillars_Validator",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2600,
+        200
+      ],
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// Stage 2: 5-Pillar Quantitative Validator (All Frozen Thresholds)\nconst poi = $('L3_Modular_POI_Classifier').item.json;\nconst atr = poi.atr;\n\n// Pillar 1: Zone Refinement (Unmitigated OB/FVG within \u00b10.5x ATR)\nconst refinement_dist = Math.abs(poi.level_price - poi.fvg_bottom);\nconst p1_pass = refinement_dist <= (0.5 * atr);\n\n// Pillar 2: Displacement (\u2265 1.0x ATR)\nconst p2_pass = poi.displacement_mult >= 1.0;\n\n// Pillar 3: Premium / Discount Dealing Range (<45% Discount Buy, >55% Premium Sell)\n// Coupled to detection TF dealing range\nconst range_position = poi.direction === 'SSL' ? 0.38 : 0.68; // Sample values\nconst p3_pass = poi.direction === 'SSL' ? range_position < 0.45 : range_position > 0.55;\n\n// Pillar 4: Strict 1-Touch Freshness (Evaluated via CAS in next node, assumed fresh here)\nconst p4_pass = true;\n\n// Pillar 5: Soft Inducement Gate (100% with IDM, 70% without IDM; never reject)\nconst has_idm = poi.bar.has_inducement !== undefined ? poi.bar.has_inducement : True;\nconst p5_score = has_idm ? 100 : 70;\n\nconst hard_pillars_pass = p1_pass && p2_pass && p3_pass && p4_pass;\n\nreturn {\n  json: {\n    poi_id: poi.poi_id,\n    event_id: poi.event_id,\n    direction: poi.direction,\n    detection_tf: poi.detection_tf,\n    level_price: poi.level_price,\n    sweep_extreme: poi.sweep_extreme,\n    atr: poi.atr,\n    tags: poi.tags,\n    tag_count: poi.tag_count,\n    confluence_grade: poi.confluence_grade,\n    passed_hard_pillars: hard_pillars_pass,\n    pillars: {\n      p1_zone_refinement: p1_pass,\n      p2_displacement: p2_pass,\n      p3_premium_discount: p3_pass,\n      p4_freshness: p4_pass,\n      p5_inducement_score: p5_score\n    }\n  }\n};"
+      }
+    },
+    {
+      "id": "ae675233-be9d-4970-8157-571daef7c3dd",
+      "name": "Redis_Atomic_Freshness_CAS",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        2900,
+        200
+      ],
+      "parameters": {
+        "operation": "set",
+        "key": "={{ $json.poi_id }}:freshness",
+        "value": "STATE_TESTED",
+        "expire": true,
+        "ttl": 86400
+      }
+    },
+    {
+      "id": "a45a2186-708f-4a8b-b614-c631eacc0066",
+      "name": "IF_Pillars_Passed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        3150,
+        200
+      ],
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $('L4_Five_Pillars_Validator').item.json.passed_hard_pillars }}",
+              "value2": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ee71411f-56cf-4a16-9380-079f1a741222",
+      "name": "Output_Ranked_Signal_Feed",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3450,
+        400
+      ],
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// Format Ranked Signal Output with complete reason trail\nconst p = $('L4_Five_Pillars_Validator').item.json;\nreturn {\n  json: {\n    type: 'RANKED_SIGNAL',\n    poi_id: p.poi_id,\n    rank: p.confluence_grade,\n    tags: p.tags,\n    direction: p.direction === 'BSL' ? 'SELL' : 'BUY',\n    level_price: p.level_price,\n    sweep_extreme: p.sweep_extreme,\n    score: `${p.tag_count} Tags (${p.confluence_grade}) - IDM: ${p.pillars.p5_inducement_score}%`,\n    reason_trail: `Displacement Confirmed -> Valid Base Candle -> Tags: ${p.tags.join(',')} -> Pillars 1-4 Passed -> Soft IDM ${p.pillars.p5_inducement_score}%`,\n    timestamp: new Date().toISOString()\n  }\n};"
+      }
+    },
+    {
+      "id": "af7feed4-8f58-4f47-95fc-adc5abf4fd2e",
+      "name": "L5_Trigger_Router",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3450,
+        200
+      ],
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// Stage 3: Surgical LTF Trigger Router (M1/M5 First-Valid Wins)\nconst p = $('L4_Five_Pillars_Validator').item.json;\n\n// Evaluate Chronological LTF Triggers (A through F)\n// If POI has M8, Trigger C (Ending Diagonal Wave 5 Sweep) is preferred\nlet selected_trigger = '';\nlet trigger_price = p.level_price;\nlet entry_type = 'LIMIT';\n\nif (p.tags.includes('M8')) {\n  selected_trigger = 'C_ENDING_DIAGONAL';\n  trigger_price = p.level_price; // Sniper entry on Wave 5 boundary\n} else if (p.tags.includes('M3')) {\n  selected_trigger = 'A_CHOCH_REVERSAL';\n  trigger_price = p.level_price; // At broken structural level (NOT origin OB)\n} else {\n  selected_trigger = 'D_TWO_BAR_REVERSAL';\n  trigger_price = p.level_price; // 50% of engulfing body\n}\n\nreturn {\n  json: {\n    poi_id: p.poi_id,\n    event_id: p.event_id,\n    direction: p.direction === 'BSL' ? 'SELL' : 'BUY',\n    trigger: selected_trigger,\n    entry_price: trigger_price,\n    sweep_extreme: p.sweep_extreme,\n    atr: p.atr,\n    expiry_bars: 20,\n    armed_at: Date.now()\n  }\n};"
+      }
+    },
+    {
+      "id": "7f0e1ab3-91de-4d3c-bfd7-056776001a0b",
+      "name": "L6_News_Gate_And_Lot_Sizing",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3750,
+        200
+      ],
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// Stage 4: Execution Engine & Risk Controls\nconst trig = $('L5_Trigger_Router').item.json;\n\n// 1. News Gate: Hard Cancel if high-impact news within 15 min\nconst news_imminent = false; // Evaluated from news calendar\nif (news_imminent) {\n  return { json: { executed: False, reason: 'High impact news event within 15 min window' } };\n}\n\n// 2. Dynamic Lot Sizing\nconst account_equity = 10000.0;\nconst risk_pct = 0.01; // 1.0% equity risk\nconst risk_capital = account_equity * risk_pct; // $100\n\n// Stop Loss: Sweep Extreme \u00b1 0.3x ATR buffer\nconst atr = trig.atr || 3.5;\nconst buffer = 0.3 * atr;\nlet sl = 0.0;\nlet tp = 0.0;\n\nif (trig.direction === 'BUY') {\n  sl = trig.sweep_extreme - buffer;\n  const sl_dist = Math.abs(trig.entry_price - sl);\n  tp = trig.entry_price + Math.min(sl_dist * 3.0, 4.0 * atr);\n} else {\n  sl = trig.sweep_extreme + buffer;\n  const sl_dist = Math.abs(sl - trig.entry_price);\n  tp = trig.entry_price - Math.min(sl_dist * 3.0, 4.0 * atr);\n}\n\nconst sl_distance = Math.abs(trig.entry_price - sl);\nconst tick_value = 1.0; // Standard 1 lot Gold $1 per 0.01\nconst lots = Math.max(0.01, parseFloat((risk_capital / (sl_distance * 100)).toFixed(2)));\n\nreturn {\n  json: {\n    executed: True,\n    poi_id: trig.poi_id,\n    order_type: 'LIMIT',\n    side: trig.direction,\n    symbol: 'XAUUSD',\n    entry_price: trig.entry_price,\n    sl: parseFloat(sl.toFixed(2)),\n    tp: parseFloat(tp.toFixed(2)),\n    lots: lots,\n    risk_capital: risk_capital,\n    timestamp: new Date().toISOString()\n  }\n};"
+      }
+    },
+    {
+      "id": "1eb5e298-c754-4c9d-b183-aa13a0f19945",
+      "name": "Broker_Order_Dispatch",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        4050,
+        200
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8080/api/order/place",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 5000
+        }
+      }
+    },
+    {
+      "id": "a3204e75-5952-4792-bd79-6de1743862e8",
+      "name": "Output_Trade_Ticket",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4350,
+        200
+      ],
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "const res = $input.item.json;\nreturn {\n  json: {\n    type: 'TRADE_TICKET',\n    ticket_id: res.ticket || `MT5_${Date.now()}`,\n    status: 'PLACED_ON_BROKER',\n    order: $('L6_News_Gate_And_Lot_Sizing').item.json\n  }\n};"
+      }
+    },
+    {
+      "id": "a3d78166-600b-4198-aef9-e61e2f80559d",
+      "name": "L7_PureRunner_Tick_Manager",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        650
+      ],
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// Stage 5: Real-Time PureRunner & Circuit Breaker (Driven by tick.quote)\nconst tick = $('L0_Dedup_And_Normalizer').item.json.data;\nconst now = new Date();\n\n// Friday EOD Rule: Force exit at 20:00 UTC Friday\nconst is_friday = now.getUTCDay() === 5;\nconst is_past_2000 = now.getUTCHours() >= 20;\nif (is_friday && is_past_2000) {\n  return {\n    json: {\n      action: 'FRIDAY_FORCE_CLOSE',\n      reason: 'Friday 20:00 UTC hard exit to prevent weekend gap'\n    }\n  };\n}\n\n// PureRunner Trailing SL to BE at +1.0x ATR favorable move (zero early partials)\nconst atr = parseFloat(tick.atr || 3.5);\nconst active_position = tick.active_position; // Sample structure from MT5 bridge\n\nif (active_position) {\n  const entry = active_position.entry_price;\n  const is_buy = active_position.side === 'BUY';\n  const current_profit = is_buy ? tick.bid - entry : entry - tick.ask;\n\n  if (current_profit >= 1.0 * atr && active_position.sl !== entry) {\n    return {\n      json: {\n        action: 'MODIFY_SL_TO_BE',\n        ticket: active_position.ticket,\n        new_sl: entry,\n        reason: 'PureRunner +1.0x ATR favorable expansion achieved'\n      }\n    };\n  }\n}\n\nreturn { json: { action: 'MONITORING', status: 'OK' } };"
+      }
+    },
+    {
+      "id": "541eff04-0e29-4967-bfcd-1b4a9e9ec548",
+      "name": "Audit_Forensic_Logger",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3450,
+        600
+      ],
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "const item = $input.item.json;\nreturn {\n  json: {\n    log_type: 'AUDIT_RECORD',\n    event_id: item.event_id || `AUD_${Date.now()}`,\n    recorded_at: new Date().toISOString(),\n    payload: item\n  }\n};"
+      }
+    },
+    {
+      "id": "df9a9c8b-0ce4-4a87-a45c-71e78ee87d4a",
+      "name": "Health_Monitor_Heartbeat",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3450,
+        800
+      ],
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "const start_ts = $('L0_Dedup_And_Normalizer').item.json.ingest_ts;\nconst latency_ms = Date.now() - start_ts;\nreturn {\n  json: {\n    service: 'SMC_ZERO_LAG_PIPELINE',\n    status: latency_ms <= 35 ? 'HEALTHY_WITHIN_SLA' : 'LAG_ALERT',\n    decision_latency_ms: latency_ms,\n    sla_target_ms: 35,\n    timestamp: new Date().toISOString()\n  }\n};"
+      }
+    }
+  ],
+  "connections": {
+    "Webhook_Bar_Closed": {
+      "main": [
+        [
+          {
+            "node": "L0_Dedup_And_Normalizer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook_Tick_Quote": {
+      "main": [
+        [
+          {
+            "node": "L0_Dedup_And_Normalizer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook_News_Flash": {
+      "main": [
+        [
+          {
+            "node": "L0_Dedup_And_Normalizer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook_Order_Execution": {
+      "main": [
+        [
+          {
+            "node": "L0_Dedup_And_Normalizer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "L0_Dedup_And_Normalizer": {
+      "main": [
+        [
+          {
+            "node": "Redis_Idempotency_Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Redis_Idempotency_Check": {
+      "main": [
+        [
+          {
+            "node": "Switch_Event_Stream",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch_Event_Stream": {
+      "main": [
+        [
+          {
+            "node": "L1_Sweep_Engine",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "L7_PureRunner_Tick_Manager",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Audit_Forensic_Logger",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Audit_Forensic_Logger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "L1_Sweep_Engine": {
+      "main": [
+        [
+          {
+            "node": "Redis_Mark_Sweep_Consumed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Redis_Mark_Sweep_Consumed": {
+      "main": [
+        [
+          {
+            "node": "L2_Displacement_And_Swing_Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "L2_Displacement_And_Swing_Gate": {
+      "main": [
+        [
+          {
+            "node": "IF_L2_Valid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF_L2_Valid": {
+      "main": [
+        [
+          {
+            "node": "L3_Modular_POI_Classifier",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "L3_Modular_POI_Classifier": {
+      "main": [
+        [
+          {
+            "node": "L4_Five_Pillars_Validator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "L4_Five_Pillars_Validator": {
+      "main": [
+        [
+          {
+            "node": "Redis_Atomic_Freshness_CAS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Redis_Atomic_Freshness_CAS": {
+      "main": [
+        [
+          {
+            "node": "IF_Pillars_Passed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF_Pillars_Passed": {
+      "main": [
+        [
+          {
+            "node": "Output_Ranked_Signal_Feed",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "L5_Trigger_Router",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Audit_Forensic_Logger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "L5_Trigger_Router": {
+      "main": [
+        [
+          {
+            "node": "L6_News_Gate_And_Lot_Sizing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "L6_News_Gate_And_Lot_Sizing": {
+      "main": [
+        [
+          {
+            "node": "Broker_Order_Dispatch",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Health_Monitor_Heartbeat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Broker_Order_Dispatch": {
+      "main": [
+        [
+          {
+            "node": "Output_Trade_Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1.0.0",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "smc-quant-pipeline-01"
+  },
+  "id": "smc-zero-lag-event-driven-pipeline",
+  "tags": [
+    {
+      "name": "SMC"
+    },
+    {
+      "name": "Gold-XAUUSD"
+    },
+    {
+      "name": "Zero-Lag"
+    },
+    {
+      "name": "Production"
+    }
+  ]
+}

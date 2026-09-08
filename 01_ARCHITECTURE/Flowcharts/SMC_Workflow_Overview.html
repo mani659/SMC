@@ -1,0 +1,1635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SMC Master Architecture & Zero-Lag Workflow Blueprint (Locked Decisions)</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+  :root {
+    --bg-canvas: #090a10;
+    --bg-sidebar: #0f111a;
+    --bg-card: #151824;
+    --bg-card-hover: #1c2032;
+    --border: #222738;
+    --border-highlight: #4f46e5;
+    --text-main: #f1f5f9;
+    --text-muted: #94a3b8;
+    --text-dim: #475569;
+    
+    /* n8n Inspired Level Colors */
+    --c-l0: #f97316; /* Ingest / Trigger */
+    --c-l1: #a855f7; /* Liquidity / Sweeps */
+    --c-l2: #06b6d4; /* Displacement & Swing */
+    --c-l3: #3b82f6; /* POI Models M1-M8 */
+    --c-l4: #ec4899; /* 5 Pillars Validation */
+    --c-l5: #eab308; /* Trigger Routing */
+    --c-l6: #10b981; /* Execution Engine */
+    --c-l7: #14b8a6; /* PureRunner Management */
+    --c-infra: #64748b; /* Redis & Bus */
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: var(--bg-canvas);
+    color: var(--text-main);
+    min-height: 100vh;
+    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Grid Background */
+  .grid-bg {
+    background-size: 28px 28px;
+    background-image: 
+      radial-gradient(circle, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  }
+
+  /* Top Navbar */
+  header {
+    background: rgba(15, 17, 26, 0.9);
+    backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--border);
+    padding: 18px 32px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .brand-logo {
+    width: 38px;
+    height: 38px;
+    background: linear-gradient(135deg, #f97316, #ec4899, #6366f1);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 20px;
+    color: #fff;
+    box-shadow: 0 4px 15px rgba(236,72,153,0.3);
+  }
+  .brand-text h1 {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+    background: linear-gradient(to right, #f8fafc, #94a3b8);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .brand-text p {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .nav-badges {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+  .badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-family: 'JetBrains Mono', monospace;
+    border: 1px solid transparent;
+  }
+  .badge-frozen { background: rgba(239, 68, 68, 0.15); color: #fca5a5; border-color: rgba(239, 68, 68, 0.3); }
+  .badge-arch { background: rgba(99, 102, 241, 0.15); color: #c7d2fe; border-color: rgba(99, 102, 241, 0.3); }
+  .badge-latency { background: rgba(16, 185, 129, 0.15); color: #6ee7b7; border-color: rgba(16, 185, 129, 0.3); }
+
+  /* Filter Bar */
+  .filter-bar {
+    background: #0d0f17;
+    border-bottom: 1px solid var(--border);
+    padding: 12px 32px;
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    align-items: center;
+  }
+  .filter-btn {
+    background: #151824;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .filter-btn:hover {
+    color: #fff;
+    border-color: #475569;
+  }
+  .filter-btn.active {
+    background: #23283c;
+    color: #fff;
+    border-color: #6366f1;
+    box-shadow: 0 0 12px rgba(99, 102, 241, 0.25);
+  }
+  .filter-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+
+  /* Main Container */
+  .workspace {
+    display: flex;
+    flex: 1;
+    position: relative;
+  }
+
+  .canvas-container {
+    flex: 1;
+    padding: 40px;
+    overflow-y: auto;
+    max-height: calc(100vh - 125px);
+  }
+
+  /* Node Level Blocks */
+  .level-section {
+    margin-bottom: 48px;
+    position: relative;
+  }
+  .level-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+  .level-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 6px;
+    color: #fff;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .level-title {
+    font-size: 17px;
+    font-weight: 700;
+    color: #f8fafc;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .level-desc {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-left: auto;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* Flow Grid */
+  .node-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 16px;
+  }
+
+  /* n8n Node Card */
+  .n8n-node {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px;
+    position: relative;
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+  .n8n-node:hover {
+    transform: translateY(-3px);
+    border-color: #4f46e5;
+    background: var(--bg-card-hover);
+    box-shadow: 0 10px 30px rgba(79, 70, 229, 0.15);
+  }
+  .n8n-node.selected {
+    border-color: #6366f1;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.4), 0 12px 32px rgba(0,0,0,0.5);
+    background: #191e30;
+  }
+
+  /* Node Header */
+  .node-top {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .node-icon-box {
+    width: 38px;
+    height: 38px;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  }
+  .node-name-block {
+    flex: 1;
+  }
+  .node-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: #f1f5f9;
+    line-height: 1.3;
+  }
+  .node-category {
+    font-size: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 2px;
+  }
+
+  .node-rule {
+    font-size: 11px;
+    color: #cbd5e1;
+    background: rgba(0,0,0,0.25);
+    padding: 8px 10px;
+    border-radius: 6px;
+    border-left: 2px solid #6366f1;
+    margin-bottom: 12px;
+    line-height: 1.4;
+  }
+
+  .node-meta-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    padding-top: 10px;
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .node-status {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+  }
+
+  /* Connectors (Visual Pipe Between Levels) */
+  .connector-pipe {
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    margin: -16px 0 16px;
+  }
+  .pipe-line {
+    width: 2px;
+    height: 100%;
+    background: linear-gradient(to bottom, #334155, #6366f1);
+  }
+  .pipe-badge {
+    position: absolute;
+    background: #0f172a;
+    border: 1px solid #475569;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 9px;
+    font-family: 'JetBrains Mono', monospace;
+    color: #cbd5e1;
+  }
+
+  /* Slide-out Inspector Drawer */
+  .inspector {
+    width: 440px;
+    background: var(--bg-sidebar);
+    border-left: 1px solid var(--border);
+    padding: 24px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .inspector.hidden {
+    display: none;
+  }
+  .inspector-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 14px;
+  }
+  .inspector-title {
+    font-size: 16px;
+    font-weight: 700;
+  }
+  .close-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 18px;
+    cursor: pointer;
+  }
+  .close-btn:hover { color: #fff; }
+
+  .param-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+  }
+  .param-card h4 {
+    font-size: 12px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 10px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .param-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  .param-table td {
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .param-table td:first-child {
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .param-table td:last-child {
+    text-align: right;
+    font-weight: 600;
+    color: #e2e8f0;
+  }
+  .code-block {
+    background: #090a10;
+    border: 1px solid #1e2436;
+    border-radius: 6px;
+    padding: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: #38bdf8;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    line-height: 1.5;
+  }
+
+  /* Evidence Chart Box */
+  .chart-evidence {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .chart-link {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: #a78bfa;
+    text-decoration: none;
+    padding: 6px 8px;
+    background: rgba(167, 139, 250, 0.08);
+    border-radius: 6px;
+    border: 1px solid rgba(167, 139, 250, 0.2);
+  }
+  .chart-link:hover {
+    background: rgba(167, 139, 250, 0.18);
+  }
+</style>
+</head>
+<body class="grid-bg">
+
+<!-- Top Header -->
+<header>
+  <div class="brand">
+    <div class="brand-logo">⚡</div>
+    <div class="brand-text">
+      <h1>SMC MASTER ARCHITECTURE & ZERO-LAG PIPELINE</h1>
+      <p>LOCKED SPECIFICATION · REVISION 5 (2026-09-05) · L0–L7 ORCHESTRATION ENGINE</p>
+    </div>
+  </div>
+  <div class="nav-badges">
+    <span class="badge badge-frozen">🔒 FROZEN DECISIONS (SMC §1–22)</span>
+    <span class="badge badge-arch">⚡ EVENT PUSH (ZERO POLLING)</span>
+    <span class="badge badge-latency">⏱️ PIPELINE ≤35ms | ACK ≤100ms</span>
+  </div>
+</header>
+
+<!-- Filter Navigation -->
+<div class="filter-bar">
+  <button class="filter-btn active" onclick="filterLevel('all')">All Nodes</button>
+  <button class="filter-btn" onclick="filterLevel('L0')"><span class="filter-dot" style="background:var(--c-l0)"></span>L0 Ingest</button>
+  <button class="filter-btn" onclick="filterLevel('L1')"><span class="filter-dot" style="background:var(--c-l1)"></span>L1 Liquidity (0A)</button>
+  <button class="filter-btn" onclick="filterLevel('L2')"><span class="filter-dot" style="background:var(--c-l2)"></span>L2 Displacement &amp; Swing (0b/0c)</button>
+  <button class="filter-btn" onclick="filterLevel('L3')"><span class="filter-dot" style="background:var(--c-l3)"></span>L3 POI Classification (M1–M8)</button>
+  <button class="filter-btn" onclick="filterLevel('L4')"><span class="filter-dot" style="background:var(--c-l4)"></span>L4 5-Pillar Validation</button>
+  <button class="filter-btn" onclick="filterLevel('L5')"><span class="filter-dot" style="background:var(--c-l5)"></span>L5 Trigger Routing (A–F)</button>
+  <button class="filter-btn" onclick="filterLevel('L6')"><span class="filter-dot" style="background:var(--c-l6)"></span>L6 Execution Engine</button>
+  <button class="filter-btn" onclick="filterLevel('L7')"><span class="filter-dot" style="background:var(--c-l7)"></span>L7 PureRunner Management</button>
+  <button class="filter-btn" onclick="filterLevel('INFRA')"><span class="filter-dot" style="background:var(--c-infra)"></span>State &amp; Bus Infra</button>
+</div>
+
+<!-- Main Canvas -->
+<div class="workspace">
+  <div class="canvas-container">
+
+    <!-- ═══ LEVEL 0: DATA INGESTION ═══ -->
+    <div class="level-section" data-level="L0">
+      <div class="level-header">
+        <span class="level-tag" style="background:var(--c-l0)">LEVEL L0</span>
+        <div class="level-title">Data Ingestion &amp; Event Demultiplexer</div>
+        <div class="level-desc">Two-Stream Routing: Bar-Close vs Real-Time Ticks</div>
+      </div>
+      <div class="node-grid">
+        <div class="n8n-node" onclick="inspectNode('L0_BAR')" style="border-top: 3px solid var(--c-l0)">
+          <div class="node-top">
+            <div class="node-icon-box" style="background:rgba(249,115,22,0.15);color:var(--c-l0)">📊</div>
+            <div class="node-name-block">
+              <div class="node-name">bar.closed Stream</div>
+              <div class="node-category" style="color:var(--c-l0)">Event Source · Finalized Bar</div>
+            </div>
+          </div>
+          <div class="node-rule">Drives L1 (sweeps), L2 (displacement), L3 (classification), L4 (pillars), L5 (triggers). No intra-bar evaluation.</div>
+          <div class="node-meta-row">
+            <span>D1, H4, H1, M30, M5, M1</span>
+            <span class="node-status"><span class="status-dot" style="background:#10b981"></span>Pushed Instant</span>
+          </div>
+        </div>
+
+        <div class="n8n-node" onclick="inspectNode('L0_TICK')" style="border-top: 3px solid var(--c-l0)">
+          <div class="node-top">
+            <div class="node-icon-box" style="background:rgba(249,115,22,0.15);color:var(--c-l0)">⚡</div>
+            <div class="node-name-block">
+              <div class="node-name">tick.quote Stream</div>
+              <div class="node-category" style="color:var(--c-l0)">Fast Path · Zero Latency</div>
+            </div>
+          </div>
+          <div class="node-rule">Drives <strong>ONLY L7 (Trade Management)</strong>. Real-time PureRunner SL→BE at +1.0× ATR. Never waits for bar close.</div>
+          <div class="node-meta-row">
+            <span>≤ 5 ms Tick Reaction</span>
+            <span class="node-status"><span class="status-dot" style="background:#10b981"></span>Direct to L7</span>
+          </div>
+        </div>
+
+        <div class="n8n-node" onclick="inspectNode('L0_NEWS')" style="border-top: 3px solid var(--c-l0)">
+          <div class="node-top">
+            <div class="node-icon-box" style="background:rgba(249,115,22,0.15);color:var(--c-l0)">📰</div>
+            <div class="node-name-block">
+              <div class="node-name">news.flash Stream</div>
+              <div class="node-category" style="color:var(--c-l0)">Macro Calendar Ingest</div>
+            </div>
+          </div>
+          <div class="node-rule">Pushes US CPI, NFP, FOMC alerts ≥30 min ahead. Drives L6 15-minute hard-cancel order protocol.</div>
+          <div class="node-meta-row">
+            <span>CPI / NFP / FOMC</span>
+            <span class="node-status"><span class="status-dot" style="background:#ef4444"></span>High Impact</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="connector-pipe"><div class="pipe-line"></div><span class="pipe-badge">bar.closed → Partitioned by {symbol}</span></div>
+
+    <!-- ═══ LEVEL 1: LIQUIDITY SWEEPS (STAGE 0A) ═══ -->
+    <div class="level-section" data-level="L1">
+      <div class="level-header">
+        <span class="level-tag" style="background:var(--c-l1)">LEVEL L1</span>
+        <div class="level-title">Stage 0A — Structural Liquidity Pools &amp; Institutional Sweep Engine</div>
+        <div class="level-desc">Locked §2 Master Classification · Smart Money Stop-Loss Hunting</div>
+      </div>
+      <div class="node-grid">
+        <div class="n8n-node" onclick="inspectNode('L1_EQH')" style="border-top: 3px solid var(--c-l1)">
+          <div class="node-top">
+            <div class="node-icon-box" style="background:rgba(168,85,247,0.15);color:var(--c-l1)">🎯</div>
+            <div class="node-name-block">
+              <div class="node-name">EQH / EQL Dual Pools</div>
+              <div class="node-category" style="color:var(--c-l1)">Stage 0A · Master Pool</div>
+            </div>
+          </div>
+          <div class="node-rule">Equal Highs (BSL) &amp; Equal Lows (SSL) tracked top &amp; bottom. <strong>Tolerance ≤ 4.5 pips</strong> on XAUUSD.</div>
+          <div class="node-meta-row">
+            <span>BSL &amp; SSL Clusters</span>
+            <span class="node-status"><span class="status-dot" style="background:#a855f7"></span>Tolerance 4.5p</span>
+          </div>
+        </div>
+
+        <div class="n8n-node" onclick="inspectNode('L1_SWINGS')" style="border-top: 3px solid var(--c-l1)">
+          <div class="node-top">
+            <div class="node-icon-box" style="background:rgba(168,85,247,0.15);color:var(--c-l1)">🌊</div>
+            <div class="node-name-block">
+              <div class="node-name">Structural Swing Sweeps</div>
+              <div class="node-category" style="color:var(--c-l1)">Stage 0A · Base Candle Confirmed</div>
+            </div>
+          </div>
+          <div class="node-rule">Strictly structural swings. Minor noise discarded. Wick pierces extreme + body closes inside level.</div>
+          <div class="node-meta-row">
+            <span>Session H/L · PDH/PDL · PWH</span>
+            <span class="node-status"><span class="status-dot" style="background:#a855f7"></span>Major Extremes</span>
+          </div>
+        </div>
+
+        <div class="n8n-node" onclick="inspectNode('L1_POI_SWEEP')" style="border-top: 3px solid var(--c-l1)">
+          <div class="node-top">
+            <div class="node-icon-box" style="background:rgba(168,85,247,0.15);color:var(--c-l1)">🧲</div>
+            <div class="node-name-block">
+              <div class="node-name">POI Boundary Fallback Sweeps</div>
+              <div class="node-category" style="color:var(--c-l1)">Stage 0A · Demand/Supply/OB</div>
+            </div>
+          </div>
+          <div class="node-rule">When no in-between entry occurs inside D/S or OB zone, engine monitors extreme boundary wick sweep.</div>
+          <div class="node-meta-row">
+            <span>D1 / H4 / H1 Extremes</span>
+            <span class="node-status"><span class="status-dot" style="background:#a855f7"></span>Zero-Return Edge</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="connector-pipe"><div class="pipe-line"></div><span class="pipe-badge">liquidity.sweep → payload carries sweep_extreme (Head)</span></div>
+
+    <!-- ═══ LEVEL 2: DISPLACEMENT & SWING VALIDATION (STAGES 0b/0c) ═══ -->
+    <div class="level-section" data-level="L2">
+      <div class="level-header">
+        <span class="level-tag" style="background:var(--c-l2)">LEVEL L2</span>
+        <div class="level-title">Stages 0b &amp; 0c — Displacement &amp; Base Candle Swing Validation</div>
+        <div class="level-desc">Locked §3 &amp; §18–19 · Institutional Sponsorship &amp; Structural Confirmation</div>
+      </div>
+      <div class="node-grid">
+        <div class="n8n-node" onclick="inspectNode('L2_DISPL')" style="border-top: 3px solid var(--c-l2)">
+          <div class="node-top">
+            <div class="node-icon-box" style="background:rgba(6,182,212,0.15);color:var(--c-l2)">💥</div>
+            <div class="node-name-block">
+              <div class="node-name">Displacement Check (0b)</div>
+              <div class="node-category" style="color:var(--c-l2)">Stage 0b · Institutional Force</div>
+            </div>
+          </div>
+          <div class="node-rule">Must exhibit: <strong>BOS confirmed + FVG created + Displacement ≥ 1.0× ATR</strong>. Hard reject if &lt; 0.5× ATR.</div>
+          <div class="node-meta-row">
+            <span>BOS + FVG Imbalance</span>
+            <span class="node-status"><span class="status-dot" style="background:#06b6d4"></span>Min 1.0× ATR</span>
+          </div>
+        </div>
+
+        <div class="n8n-node" onclick="inspectNode('L2_SWING_GATE')" style="border-top: 3px solid var(--c-l2)">
+          <div class="node-top">
+            <div class="node-icon-box" style="background:rgba(6,182,212,0.15);color:var(--c-l2)">📐</div>
+            <div class="node-name-block">
+              <div class="node-name">Base Candle Swing Gate (0c)</div>
+              <div class="node-category" style="color:var(--c-l2)">Stage 0c · Mandatory Structural Law</div>
+            </div>
+          </div>
+          <div class="node-rule">Identify Base Candle at extreme. Mandatory <strong>break + body close beyond opposite extreme</strong>. Wick-only = INVALID.</div>
+          <div class="node-meta-row">
+            <span>Expert Visual Reference</span>
+            <span class="node-status"><span class="status-dot" style="background:#06b6d4"></span>Body Close Only</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="connector-pipe"><div class="pipe-line"></div><span class="pipe-badge">displacement.confirmed → payload carries bos_price &amp; fvg_top/bottom</span></div>
+
+    <!-- ═══ LEVEL 3: POI MODEL CLASSIFICATION (STAGES 1/1b) ═══ -->
+    <div class="level-section" data-level="L3">
+      <div class="level-header">
+        <span class="level-tag" style="background:var(--c-l3)">LEVEL L3</span>
+        <div class="level-title">Stages 1 &amp; 1b — Modular Multi-Model Confluence &amp; CHOCH Classification</div>
+        <div class="level-desc">Locked §1 &amp; §17 · All 8 Models Equal Tags · No Suppression Hierarchy</div>
+      </div>
+      <div class="node-grid">
+        <div class="n8n-node" onclick="inspectNode('L3_MODELS')" style="border-top: 3px solid var(--c-l3)">
+          <div class="node-top">
+            <div class="node-icon-box" style="background:rgba(59,130,246,0.15);color:var(--c-l3)">🏷️</div>
+            <div class="node-name-block">
+              <div class="node-name">8 Modular Model Tags</div>
+              <div class="node-category" style="color:var(--c-l3)">Stage 1 · Equal Confluence Tags</div>
+            </div>
+          </div>
+          <div class="node-rule">Labels level with all matching tags: M1 Origin Base, M2 Breaker, M3 CHOCH, M4 QML, M5 Extreme EQH, M6 Neckline, M7 Shelf, M8 HTF D/S.</div>
+          <div class="node-meta-row">
+            <span>1 tag = Base | 2 = High | 3+ = Inst.</span>
+            <span class="node-status"><span class="status-dot" style="background:#3b82f6"></span>Multi-Tag Active</span>
+          </div>
+        </div>
+
+        <div class="n8n-node" onclick="inspectNode('L3_CHOCH')" style="border-top: 3px solid var(--c-l3)">
+          <div class="node-top">
+            <div class="node-icon-box" style="background:rgba(59,130,246,0.15);color:var(--c-l3)">🔄</div>
+            <div class="node-name-block">
+              <div class="node-name">CHOCH Type Classifier (1b)</div>
+              <div class="node-category" style="color:var(--c-l3)">Stage 1b · Rule 1 / 2 / 3 Sub-Variants</div>
+            </div>
+          </div>
+          <div class="node-rule">Rule 1: Standard (body close breaks last swing). Rule 2: Inside body close. Rule 3: Inside wick-only (KEPT at lowest strength).</div>
+          <div class="node-meta-row">
+            <span>Entry @ Broken Level (Not OB)</span>
+            <span class="node-status"><span class="status-dot" style="background:#3b82f6"></span>Sub-Classified</span>
+          </div>
+        </div>
+
+        <div class="n8n-node" onclick="inspectNode('L3_M8')" style="border-top: 3px solid var(--c-l3)">
+          <div class="node-top">
+            <div class="node-icon-box" style="background:rgba(59,130,246,0.15);color:var(--c-l3)">🏛️</div>
+            <div class="node-name-block">
+              <div class="node-name">Model 8 HTF Demand/Supply</div>
+              <div class="node-category" style="color:var(--c-l3)">Stage 1 · Full Peer Model</div>
+            </div>
+          </div>
+          <div class="node-rule">D1/H4 zone → M5 approach → M1 sniper trigger (Ending Diagonal preferred). +10% bonus if D1+H4 overlap. RR 1:5+.</div>
+          <div class="node-meta-row">
+            <span>SL: 2–5 pips on M1</span>
+            <span class="node-status"><span class="status-dot" style="background:#3b82f6"></span>Peer Model</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="connector-pipe"><div class="pipe-line"></div><span class="pipe-badge">poi.classified → Partitioned by {symbol, poi_id}</span></div>
+
+    <!-- ═══ LEVEL 4: 5-PILLAR VALIDATION (STAGE 2) ═══ -->
+    <div class="level-section" data-level="L4">
+      <div class="level-header">
+        <span class="level-tag" style="background:var(--c-l4)">LEVEL L4</span>
+        <div class="level-title">Stage 2 — 5-Pillar POI Validation Pipeline</div>
+        <div class="level-desc">Locked §5, 6, 7, 13 · 4 Hard Gates + 1 Soft Scoring Gate</div>
+      </div>
+      <div class="node-grid">
+        <div class="n8n-node" onclick="inspectNode('L4_P1')" style="border-top: 3px solid var(--c-l4)">
+          <div class="node-top">
+            <div class="node-icon-box" style="background:rgba(236,72,153,0.15);color:var(--c-l4)">🎯</div>
+            <div class="node-name-block">
+              <div class="node-name">Pillar 1: Zone Refinement</div>
+              <div class="node-category" style="color:var(--c-l4)">Hard Gate · Adaptive ATR</div>
+            </div>
+          </div>
+          <div class="node-rule">Unmitigated OB or FVG must exist within <strong>±0.5× ATR</strong> of POI level. If none: REJECT (Naked Level).</div>
+          <div class="node-meta-row">
+            <span>±0.5× ATR Adaptive</span>
+            <span class="node-status"><span class="status-dot" style="background:#ef4444"></span>Hard Gate</span>
+          </div>
+        </div>
+
+        <div class="n8n-node" onclick="inspectNode('L4_P3')" style="border-top: 3px solid var(--c-l4)">
+          <div class="node-top">
+            <div class="node-icon-box" style="background:rgba(236,72,153,0.15);color:var(--c-l4)">⚖️</div>
+            <div class="node-name-block">
+              <div class="node-name">Pillar 3: Premium / Discount</div>
+              <div class="node-category" style="color:var(--c-l4)">Hard Gate · Coupled Timeframe</div>
+            </div>
+          </div>
+          <div class="node-rule">Coupled to POI TF. <strong>Buys &lt; 45% (Discount)</strong>, <strong>Sells &gt; 55% (Premium)</strong>. 45%–55% equilibrium trap = REJECT.</div>
+          <div class="node-meta-row">
+            <span>&lt;45% Buy | &gt;55% Sell</span>
+            <span class="node-status"><span class="status-dot" style="background:#ef4444"></span>Hard Gate</span>
+          </div>
+        </div>
+
+        <div class="n8n-node" onclick="inspectNode('L4_P4')" style="border-top: 3px solid var(--c-l4)">
+          <div class="node-top">
+            <div class="node-icon-box" style="background:rgba(236,72,153,0.15);color:var(--c-l4)">🔒</div>
+            <div class="node-name-block">
+              <div class="node-name">Pillar 4: Strict 1-Touch Freshness</div>
+              <div class="node-category" style="color:var(--c-l4)">Hard Gate · Redis CAS Lua</div>
+            </div>
+          </div>
+          <div class="node-rule">Strict 1-touch only. No second touch trades. Atomic CAS: FRESH → TESTED (deactivated forever).</div>
+          <div class="node-meta-row">
+            <span>Atomic Lua CAS Script</span>
+            <span class="node-status"><span class="status-dot" style="background:#ef4444"></span>Hard Gate</span>
+          </div>
+        </div>
+
+        <div class="n8n-node" onclick="inspectNode('L4_P5')" style="border-top: 3px solid var(--c-l4)">
+          <div class="node-top">
+            <div class="node-icon-box" style="background:rgba(236,72,153,0.15);color:var(--c-l4)">🌟</div>
+            <div class="node-name-block">
+              <div class="node-name">Pillar 5: Inducement Scoring</div>
+              <div class="node-category" style="color:var(--c-l4)">Soft Gate · Never Hard Reject</div>
+            </div>
+          </div>
+          <div class="node-rule">Checks EQH/EQL or trendline in front of POI. With inducement: <strong>100% score</strong>. Without: <strong>70% score</strong>.</div>
+          <div class="node-meta-row">
+            <span>100% or 70% Quality Rank</span>
+            <span class="node-status"><span class="status-dot" style="background:#10b981"></span>Soft Scoring</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="connector-pipe"><div class="pipe-line"></div><span class="pipe-badge">poi.validated → Drops to M1/M5 Execution Timeframe</span></div>
+
+    <!-- ═══ LEVEL 5: TRIGGER ROUTING (STAGE 3) ═══ -->
+    <div class="level-section" data-level="L5">
+      <div class="level-header">
+        <span class="level-tag" style="background:var(--c-l5)">LEVEL L5</span>
+        <div class="level-title">Stage 3 — Chronological Trigger Routing &amp; Compatibility Matrix</div>
+        <div class="level-desc">Locked §12 &amp; §15 · First Valid Trigger Wins · 6 Sniper Triggers</div>
+      </div>
+      <div class="node-grid">
+        <div class="n8n-node" onclick="inspectNode('L5_ROUTER')" style="border-top: 3px solid var(--c-l5)">
+          <div class="node-top">
+            <div class="node-icon-box" style="background:rgba(234,179,8,0.15);color:var(--c-l5)">⏱️</div>
+            <div class="node-name-block">
+              <div class="node-name">Chronological Selection Router</div>
+              <div class="node-category" style="color:var(--c-l5)">Stage 3 · Deterministic Timing</div>
+            </div>
+          </div>
+          <div class="node-rule">First valid trigger to complete in time fires the order. No priority override. Expiry (A:20 M5 bars, B:30 bars after Wave5, C:sweep+3 bars, D:next bar, E:15 bars, F:first touch) → STATE_TESTED.</div>
+          <div class="node-meta-row">
+            <span>Arrival Order Guaranteed</span>
+            <span class="node-status"><span class="status-dot" style="background:#eab308"></span>First-Valid Wins</span>
+          </div>
+        </div>
+
+        <div class="n8n-node" onclick="inspectNode('L5_TRIG_A')" style="border-top: 3px solid var(--c-l5)">
+          <div class="node-top">
+            <div class="node-icon-box" style="background:rgba(234,179,8,0.15);color:var(--c-l5)">⚡</div>
+            <div class="node-name-block">
+              <div class="node-name">Trigger A: M1/M5 CHOCH Reversal</div>
+              <div class="node-category" style="color:var(--c-l5)">Universal Trigger · Body Close</div>
+            </div>
+          </div>
+          <div class="node-rule">Candle body close breaks structural level. Entry limit placed at <strong>broken structural level</strong> (not origin OB).</div>
+          <div class="node-meta-row">
+            <span>SL: Sweep Extreme (Head)</span>
+            <span class="node-status"><span class="status-dot" style="background:#eab308"></span>Expiry 20 Bars</span>
+          </div>
+        </div>
+
+        <div class="n8n-node" onclick="inspectNode('L5_TRIG_D')" style="border-top: 3px solid var(--c-l5)">
+          <div class="node-top">
+            <div class="node-icon-box" style="background:rgba(234,179,8,0.15);color:var(--c-l5)">📊</div>
+            <div class="node-name-block">
+              <div class="node-name">Trigger D: Two-Bar Engulfing 50%</div>
+              <div class="node-category" style="color:var(--c-l5)">Volume Exhaustion Reversal</div>
+            </div>
+          </div>
+          <div class="node-rule">Engulfing inside POI + Vol(Bar2) &lt; Vol(Bar1). Limit order at <strong>50% of engulfing body</strong> (never market order).</div>
+          <div class="node-meta-row">
+            <span>50% Body Midpoint Limit</span>
+            <span class="node-status"><span class="status-dot" style="background:#eab308"></span>Deterministic</span>
+          </div>
+        </div>
+
+        <div class="n8n-node" onclick="inspectNode('L5_TRIG_C')" style="border-top: 3px solid var(--c-l5)">
+          <div class="node-top">
+            <div class="node-icon-box" style="background:rgba(234,179,8,0.15);color:var(--c-l5)">📐</div>
+            <div class="node-name-block">
+              <div class="node-name">Trigger C: Ending Diagonal</div>
+              <div class="node-category" style="color:var(--c-l5)">Wave 5 Throw-Under (M8 Primary)</div>
+            </div>
+          </div>
+          <div class="node-rule">5-wave contraction into POI + Wave 5 throw-under. Primary trigger for Model 8. Ultra-tight SL (2–5 pips).</div>
+          <div class="node-meta-row">
+            <span>Preferred for Model 8</span>
+            <span class="node-status"><span class="status-dot" style="background:#eab308"></span>High RR (1:5+)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="connector-pipe"><div class="pipe-line"></div><span class="pipe-badge">trigger.fired → payload carries exact entry_price &amp; sweep_extreme</span></div>
+
+    <!-- ═══ LEVEL 6: EXECUTION ENGINE (STAGE 4) ═══ -->
+    <div class="level-section" data-level="L6">
+      <div class="level-header">
+        <span class="level-tag" style="background:var(--c-l6)">LEVEL L6</span>
+        <div class="level-title">Stage 4 — Risk Engine &amp; Broker Dispatch</div>
+        <div class="level-desc">Locked §10, 11 &amp; Quant Sizing · Latency Budget ≤ 100 ms Broker ACK</div>
+      </div>
+      <div class="node-grid">
+        <div class="n8n-node" onclick="inspectNode('L6_NEWS')" style="border-top: 3px solid var(--c-l6)">
+          <div class="node-top">
+            <div class="node-icon-box" style="background:rgba(16,185,129,0.15);color:var(--c-l6)">🛡️</div>
+            <div class="node-name-block">
+              <div class="node-name">15-Minute News Protocol</div>
+              <div class="node-category" style="color:var(--c-l6)">Stage 4 · Hard Cancel Guard</div>
+            </div>
+          </div>
+          <div class="node-rule">Hard cancel all pending limits 15 min before CPI/NFP/FOMC. Re-arm after news dust settles (~30 min).</div>
+          <div class="node-meta-row">
+            <span>CPI · NFP · FOMC</span>
+            <span class="node-status"><span class="status-dot" style="background:#ef4444"></span>Zero Slippage Risk</span>
+          </div>
+        </div>
+
+        <div class="n8n-node" onclick="inspectNode('L6_SIZING')" style="border-top: 3px solid var(--c-l6)">
+          <div class="node-top">
+            <div class="node-icon-box" style="background:rgba(16,185,129,0.15);color:var(--c-l6)">🧮</div>
+            <div class="node-name-block">
+              <div class="node-name">Dynamic Risk &amp; SL Sizing</div>
+              <div class="node-category" style="color:var(--c-l6)">Quant Fractional Sizing</div>
+            </div>
+          </div>
+          <div class="node-rule">SL = <strong>sweep_extreme ± 0.3× ATR buffer</strong>. Lots = (Equity × Risk%) / (SL_dist × Tick_val). Zero secondary DB queries.</div>
+          <div class="node-meta-row">
+            <span>Risk: 0.5%–1.0%</span>
+            <span class="node-status"><span class="status-dot" style="background:#10b981"></span>SL @ Sweep Head</span>
+          </div>
+        </div>
+
+        <div class="n8n-node" onclick="inspectNode('L6_ORDER')" style="border-top: 3px solid var(--c-l6)">
+          <div class="node-top">
+            <div class="node-icon-box" style="background:rgba(16,185,129,0.15);color:var(--c-l6)">🚀</div>
+            <div class="node-name-block">
+              <div class="node-name">MT5 Order Dispatch</div>
+              <div class="node-category" style="color:var(--c-l6)">Broker OrderSend Execution</div>
+            </div>
+          </div>
+          <div class="node-rule">Sends limit order with physical SL + structural TP on broker server. Internal pipeline ≤35ms, Broker ACK ≤100ms.</div>
+          <div class="node-meta-row">
+            <span>order.placed → order.filled</span>
+            <span class="node-status"><span class="status-dot" style="background:#10b981"></span>Physical SL/TP</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="connector-pipe"><div class="pipe-line"></div><span class="pipe-badge">order.execution → Active Position Ticket Registered</span></div>
+
+    <!-- ═══ LEVEL 7: TRADE MANAGEMENT (STAGE 5) ═══ -->
+    <div class="level-section" data-level="L7">
+      <div class="level-header">
+        <span class="level-tag" style="background:var(--c-l7)">LEVEL L7</span>
+        <div class="level-title">Stage 5 — PureRunner Exit Engine &amp; Circuit Breakers</div>
+        <div class="level-desc">Locked Decisions · Real-Time Tick Driven · Proven Edge Architecture</div>
+      </div>
+      <div class="node-grid">
+        <div class="n8n-node" onclick="inspectNode('L7_PURERUNNER')" style="border-top: 3px solid var(--c-l7)">
+          <div class="node-top">
+            <div class="node-icon-box" style="background:rgba(20,184,166,0.15);color:var(--c-l7)">🏃</div>
+            <div class="node-name-block">
+              <div class="node-name">PureRunner Real-Time Manager</div>
+              <div class="node-category" style="color:var(--c-l7)">Tick Driven (L0 tick.quote)</div>
+            </div>
+          </div>
+          <div class="node-rule">0 early partials. Move <strong>SL to BE at +1.0× ATR</strong> favorable excursion. 100% position runs to structural TP.</div>
+          <div class="node-meta-row">
+            <span>SL → BE @ 1.0× ATR</span>
+            <span class="node-status"><span class="status-dot" style="background:#14b8a6"></span>Tick-Accurate</span>
+          </div>
+        </div>
+
+        <div class="n8n-node" onclick="inspectNode('L7_FVG_EXIT')" style="border-top: 3px solid var(--c-l7)">
+          <div class="node-top">
+            <div class="node-icon-box" style="background:rgba(20,184,166,0.15);color:var(--c-l7)">✂️</div>
+            <div class="node-name-block">
+              <div class="node-name">FVG Invalidation Hard Exit</div>
+              <div class="node-category" style="color:var(--c-l7)">Dynamic Invalidation</div>
+            </div>
+          </div>
+          <div class="node-rule">If a candle body closes beyond the active FVG boundary, immediately HARD EXIT trade (structural premise broken).</div>
+          <div class="node-meta-row">
+            <span>Loss Mitigation</span>
+            <span class="node-status"><span class="status-dot" style="background:#ef4444"></span>Instant Exit</span>
+          </div>
+        </div>
+
+        <div class="n8n-node" onclick="inspectNode('L7_GUARDS')" style="border-top: 3px solid var(--c-l7)">
+          <div class="node-top">
+            <div class="node-icon-box" style="background:rgba(20,184,166,0.15);color:var(--c-l7)">🛡️</div>
+            <div class="node-name-block">
+              <div class="node-name">Circuit Breakers &amp; Guards</div>
+              <div class="node-category" style="color:var(--c-l7)">Systemic Risk Controls</div>
+            </div>
+          </div>
+          <div class="node-rule">3 consecutive losses → 4h pause. Failed sweep level → 4-bar cooldown. Friday 20:00 UTC force close.</div>
+          <div class="node-meta-row">
+            <span>3-Loss / 4h · 4-Bar Cooldown</span>
+            <span class="node-status"><span class="status-dot" style="background:#ef4444"></span>Risk Lock</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ STATE STORE & TELEMETRY INFRASTRUCTURE ═══ -->
+    <div class="level-section" data-level="INFRA">
+      <div class="level-header">
+        <span class="level-tag" style="background:var(--c-infra)">INFRASTRUCTURE</span>
+        <div class="level-title">Redis State Store, Two-Tier Event Bus &amp; Diagnostic Telemetry</div>
+        <div class="level-desc">Two-Tier Partitioning · Atomic CAS Lua · Telemetry Sinks</div>
+      </div>
+      <div class="node-grid">
+        <div class="n8n-node" onclick="inspectNode('INFRA_BUS')" style="border-top: 3px solid var(--c-infra)">
+          <div class="node-top">
+            <div class="node-icon-box" style="background:rgba(100,116,139,0.15);color:var(--c-infra)">🚌</div>
+            <div class="node-name-block">
+              <div class="node-name">Two-Tier Event Bus</div>
+              <div class="node-category" style="color:var(--c-infra)">Redis Streams / NATS</div>
+            </div>
+          </div>
+          <div class="node-rule">Tier 1: <code>{symbol}</code> for bar feed (chronological order). Tier 2: <code>{symbol, poi_id}</code> for post-discovery L4–L7. Eliminates deadlock.</div>
+          <div class="node-meta-row">
+            <span>Deterministic Partitioning</span>
+            <span class="node-status"><span class="status-dot" style="background:#10b981"></span>No Race Condition</span>
+          </div>
+        </div>
+
+        <div class="n8n-node" onclick="inspectNode('INFRA_REDIS')" style="border-top: 3px solid var(--c-infra)">
+          <div class="node-top">
+            <div class="node-icon-box" style="background:rgba(100,116,139,0.15);color:var(--c-infra)">💾</div>
+            <div class="node-name-block">
+              <div class="node-name">Redis CAS Lua State Store</div>
+              <div class="node-category" style="color:var(--c-infra)">Single Source of Truth</div>
+            </div>
+          </div>
+          <div class="node-rule">Atomic Lua CAS for strict 1-touch freshness: <code>STATE_FRESH → STATE_TESTED</code>. Same-level cooldown &amp; circuit breaker tracking.</div>
+          <div class="node-meta-row">
+            <span>Atomic State Mutations</span>
+            <span class="node-status"><span class="status-dot" style="background:#10b981"></span>In-Memory Sub-ms</span>
+          </div>
+        </div>
+
+        <div class="n8n-node" onclick="inspectNode('INFRA_SINKS')" style="border-top: 3px solid var(--c-infra)">
+          <div class="node-top">
+            <div class="node-icon-box" style="background:rgba(100,116,139,0.15);color:var(--c-infra)">📤</div>
+            <div class="node-name-block">
+              <div class="node-name">Outputs: Signals &amp; Forensic CSVs</div>
+              <div class="node-category" style="color:var(--c-infra)">Audit Trail &amp; ML Telemetry</div>
+            </div>
+          </div>
+          <div class="node-rule">Ranked signal feed (3+ tags first), live trade tickets, DIAG forensic CSV (25+ cols), and ML feature vector logs.</div>
+          <div class="node-meta-row">
+            <span>Full Decision Replay</span>
+            <span class="node-status"><span class="status-dot" style="background:#10b981"></span>Auditable</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /canvas-container -->
+
+  <!-- Slide-out Inspector Panel -->
+  <div class="inspector" id="nodeInspector">
+    <div class="inspector-header">
+      <div class="inspector-title" id="inspTitle">Node Parameters</div>
+      <button class="close-btn" onclick="closeInspector()">✕</button>
+    </div>
+    
+    <div class="param-card">
+      <h4>Specification Mapping</h4>
+      <table class="param-table" id="inspTable">
+        <!-- Injected via JS -->
+      </table>
+    </div>
+
+    <div class="param-card">
+      <h4>Contract / Payload Preview</h4>
+      <div class="code-block" id="inspCode">
+        // Select any node to inspect payload
+      </div>
+    </div>
+
+    <div class="param-card" id="inspEvidenceBox" style="display:none;">
+      <h4>Visual Proofs &amp; References</h4>
+      <div class="chart-evidence" id="inspEvidenceList">
+        <!-- Injected via JS -->
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const nodeDatabase = {
+  'L0_BAR': {
+    title: 'L0 — bar.closed Event Stream',
+    level: 'Level L0 (Data Ingestion)',
+    spec: 'SMC_WORKFLOW_ORCHESTRATION.md §3',
+    rows: [
+      ['Stream Type', 'bar.closed (finalized bar only)'],
+      ['Timeframes', 'D1, H4, H1, M30, M5, M1'],
+      ['Latency Target', 'Instant upon bar close (< 10 ms)'],
+      ['Consumers', 'L1, L2, L3, L4, L5'],
+      ['Guarantees', 'Time-ordered, zero intra-bar noise']
+    ],
+    code: `{
+  "event_id": "evt_bar_xau_h1_1725537600",
+  "symbol": "XAUUSD",
+  "tf": "H1",
+  "ts": 1725537600,
+  "o": 2510.50,
+  "h": 2518.20,
+  "l": 2508.10,
+  "c": 2516.80,
+  "vol": 8420,
+  "atr": 4.65
+}`
+  },
+  'L0_TICK': {
+    title: 'L0 — tick.quote Real-Time Stream',
+    level: 'Level L0 (Data Ingestion)',
+    spec: 'SMC_WORKFLOW_ORCHESTRATION.md §3 & Audit Defect 3',
+    rows: [
+      ['Stream Type', 'tick.quote (every tick arrival)'],
+      ['Target Level', 'Drives ONLY L7 (Trade Management)'],
+      ['Reaction Time', '≤ 5 ms real-time SL→BE execution'],
+      ['Rationale', 'Intra-bar trailing; never waits for bar close']
+    ],
+    code: `{
+  "event_id": "evt_tick_xau_1725537602150",
+  "symbol": "XAUUSD",
+  "ts": 1725537602150,
+  "bid": 2516.75,
+  "ask": 2516.95,
+  "atr": 4.65
+}`
+  },
+  'L0_NEWS': {
+    title: 'L0 — news.flash Stream',
+    level: 'Level L0 (Data Ingestion)',
+    spec: 'LOCKED_DECISIONS.md §11',
+    rows: [
+      ['Tracked Events', 'US CPI, NFP, FOMC'],
+      ['Alert Window', '≥ 30 min before release'],
+      ['Enforced Action', 'Hard cancel all limits 15 min prior'],
+      ['Post-News Delay', '~30 min cooldown before re-arm']
+    ],
+    code: `{
+  "event_id": "evt_news_cpi_1725541200",
+  "name": "US CPI YoY",
+  "impact": "HIGH",
+  "ts_scheduled": 1725541200
+}`
+  },
+  'L1_EQH': {
+    title: 'L1 — EQH / EQL Structural Liquidity Pools',
+    level: 'Level L1 (Stage 0A Liquidity)',
+    spec: 'LOCKED_DECISIONS.md §2.2 & §2.6',
+    rows: [
+      ['Pool Types', 'Equal Highs (BSL) & Equal Lows (SSL)'],
+      ['Tolerance (XAUUSD)', '≤ 4.5 pips (FROZEN)'],
+      ['Directional Mode', 'Dual pool tracking (Top & Bottom)'],
+      ['Edge Law', 'Retail stops eaten → zero return to swept level']
+    ],
+    code: `{
+  "event_id": "evt_swp_eqh_2518",
+  "level_id": "lvl_eqh_xau_h1_2518",
+  "level_type": "EQH_TOP_POOL",
+  "direction": "BSL",
+  "price": 2518.20,
+  "sweep_extreme": 2519.85,
+  "tf": "H1",
+  "bar_close_ts": 1725537600
+}`,
+    evidence: [
+      ['liquidity_sweep_equal_highs_h1.png', 'Equal High sweep above resistance shelf'],
+      ['liquidity_sweep_eq_high_swing_low_h1.png', 'EQH sweep at top + consecutive swing low sweeps']
+    ]
+  },
+  'L1_SWINGS': {
+    title: 'L1 — Structural Swing Sweeps',
+    level: 'Level L1 (Stage 0A Liquidity)',
+    spec: 'LOCKED_DECISIONS.md §2.3 & §2.7',
+    rows: [
+      ['Condition', 'Strictly structural swings (Base Candle confirmed)'],
+      ['Noise Filter', 'Minor intermediate fractals discarded'],
+      ['Rule', 'Wick pierces level + candle body closes inside'],
+      ['Status', 'Level marked consumed in Redis state store']
+    ],
+    code: `{
+  "event_id": "evt_swp_swing_h1_2508",
+  "level_id": "lvl_sw_low_2508",
+  "level_type": "STRUCTURAL_SWING_LOW",
+  "direction": "SSL",
+  "price": 2508.10,
+  "sweep_extreme": 2506.40,
+  "tf": "H1",
+  "bar_close_ts": 1725537600
+}`,
+    evidence: [
+      ['liquidity_sweep_swing_highs_h1.png', 'Successive structural swing high sweeps'],
+      ['liquidity_sweep_structural_swing_low_m15.png', 'Structural swing low sweep on M15']
+    ]
+  },
+  'L1_POI_SWEEP': {
+    title: 'L1 — POI Boundary Fallback Sweeps',
+    level: 'Level L1 (Stage 0A Liquidity)',
+    spec: 'LOCKED_DECISIONS.md §2.4–2.6',
+    rows: [
+      ['Trigger Condition', 'No in-between entry inside D/S or OB zone'],
+      ['Mechanism', 'Shift focus to boundary wick sweep of extreme'],
+      ['Validation', 'Wick pierces zone extreme + body closes inside'],
+      ['Protection', 'High structural edge; retail stops exhausted']
+    ],
+    code: `{
+  "event_id": "evt_swp_ds_boundary",
+  "level_id": "lvl_h4_demand_2505",
+  "level_type": "DEMAND_BOUNDARY_SWEEP",
+  "direction": "SSL",
+  "price": 2505.00,
+  "sweep_extreme": 2503.20,
+  "tf": "H4",
+  "bar_close_ts": 1725537600
+}`,
+    evidence: [
+      ['liquidity_sweep_major_high_h1.png', 'Major structural high sweep rejection'],
+      ['liquidity_sweep_high_and_low_range_h1.png', 'Top & bottom sweeps in range']
+    ]
+  },
+  'L2_DISPL': {
+    title: 'L2 — Stage 0b Displacement Check',
+    level: 'Level L2 (Displacement & Swings)',
+    spec: 'LOCKED_DECISIONS.md §3',
+    rows: [
+      ['Minimum Displacement', '≥ 1.0× ATR (FROZEN)'],
+      ['Hard Fail', 'Displacement < 0.5× ATR → Reject'],
+      ['Preferred Target', 'Displacement > 1.5× ATR'],
+      ['Required Imbalance', 'BOS confirmed + 3-candle FVG gap']
+    ],
+    code: `{
+  "event_id": "evt_displ_conf_981",
+  "sweep_id": "evt_swp_eqh_2518",
+  "atr_mult": 1.42,
+  "bos_price": 2512.30,
+  "fvg_top": 2516.10,
+  "fvg_bottom": 2514.20,
+  "impulse_origin": 2519.85,
+  "bos": true,
+  "fvg": true
+}`
+  },
+  'L2_SWING_GATE': {
+    title: 'L2 — Stage 0c Base Candle Swing Validity Gate',
+    level: 'Level L2 (Displacement & Swings)',
+    spec: 'LOCKED_DECISIONS.md §18 & §19',
+    rows: [
+      ['Base Candle Bullish', 'Candle whose HIGH = swing high'],
+      ['Base Candle Bearish', 'Candle whose LOW = swing low (or bearish base + wick low)'],
+      ['Validation Law', 'Must break opposite extreme with CANDLE BODY CLOSE'],
+      ['Wick-Only Piercing', 'INVALID SWING → No POI allowed to form']
+    ],
+    code: `{
+  "base_candle_idx": 42,
+  "base_candle_high": 2519.85,
+  "base_candle_low": 2516.50,
+  "opposite_extreme_broken": true,
+  "break_confirmation": "BODY_CLOSE_CONFIRMED",
+  "swing_status": "VALID"
+}`
+  },
+  'L3_MODELS': {
+    title: 'L3 — Stage 1 Modular Multi-Model Confluence',
+    level: 'Level L3 (POI Classification)',
+    spec: 'LOCKED_DECISIONS.md §1 & §4',
+    rows: [
+      ['Architecture', 'Modular equal tags (NO suppression hierarchy)'],
+      ['Confluence 1 Tag', 'Base Quality (Tradeable)'],
+      ['Confluence 2 Tags', 'Elevated Quality (Preferred)'],
+      ['Confluence 3+ Tags', 'Institutional-Grade Confluence'],
+      ['Detection Timeframes', 'Daily (Macro), H4 (Workhorse), H1 (All), M30 (Intraday)']
+    ],
+    code: `{
+  "event_id": "evt_poi_cls_441",
+  "poi_id": "poi_xau_h1_2515",
+  "tags": ["M1", "M3", "M8"],
+  "choch_rule": 1,
+  "level_hi": 2516.10,
+  "level_lo": 2514.20,
+  "detection_tf": "H1",
+  "confluence_score": 3
+}`
+  },
+  'L3_CHOCH': {
+    title: 'L3 — Stage 1b CHOCH Type Classifier',
+    level: 'Level L3 (POI Classification)',
+    spec: 'LOCKED_DECISIONS.md §9 & §17',
+    rows: [
+      ['Rule 1 Standard', 'Body close breaks LAST SWING (Strength: Highest)'],
+      ['Rule 2 Inside Body', 'Body close breaks INTERMEDIATE level (Strength: Medium)'],
+      ['Rule 3 Inside Wick', 'Wick only (Strength: Lowest — KEPT for tick test)'],
+      ['Entry Placement', 'At broken structural level (NOT origin OB)']
+    ],
+    code: `{
+  "choch_variant": "RULE_1_STANDARD",
+  "broken_level": 2513.50,
+  "confirmation_type": "BODY_CLOSE",
+  "sl_anchor": 2519.85,
+  "entry_level": 2513.50
+}`
+  },
+  'L3_M8': {
+    title: 'L3 — Model 8 HTF Demand/Supply (D1/H4)',
+    level: 'Level L3 (POI Classification)',
+    spec: 'LOCKED_DECISIONS.md §1 & §15',
+    rows: [
+      ['Zone Source', 'Last opposing candle before impulse on D1/H4'],
+      ['Execution Flow', 'D1/H4 POI → M5 approach → M1 sniper trigger'],
+      ['Preferred Trigger', 'Ending Diagonal (Wave 5 throw-under)'],
+      ['Risk/Reward', 'SL: 2–5 pips on M1 | RR: 1:5+ (+10% overlap bonus)']
+    ],
+    code: `{
+  "model": "M8_HTF_DEMAND_SUPPLY",
+  "htf_source": ["D1", "H4"],
+  "overlap_bonus": true,
+  "ltf_approach_tf": "M5",
+  "sniper_tf": "M1",
+  "preferred_trigger": "TRIGGER_C_ENDING_DIAGONAL"
+}`
+  },
+  'L4_P1': {
+    title: 'L4 — Pillar 1: Zone Refinement',
+    level: 'Level L4 (5-Pillar Validation)',
+    spec: 'LOCKED_DECISIONS.md §13',
+    rows: [
+      ['Tolerance', '±0.5× ATR (Adaptive, not fixed points)'],
+      ['Requirement', 'Unmitigated OB or FVG must align with POI'],
+      ['Gate Type', 'HARD REJECT (if naked level)']
+    ],
+    code: `{
+  "pillar": "P1_ZONE_REFINEMENT",
+  "atr": 4.65,
+  "tolerance_range": [-2.32, 2.32],
+  "aligned_ob_fvg": "fvg_h1_2515",
+  "status": "PASS"
+}`
+  },
+  'L4_P3': {
+    title: 'L4 — Pillar 3: Premium / Discount',
+    level: 'Level L4 (5-Pillar Validation)',
+    spec: 'LOCKED_DECISIONS.md §6',
+    rows: [
+      ['Dealing Range Coupling', 'Coupled to POI detection TF (H1 POI → H1 Range)'],
+      ['Bullish Requirement', '< 45% (Discount Zone)'],
+      ['Bearish Requirement', '> 55% (Premium Zone)'],
+      ['Consolidation Trap', '45%–55% Equilibrium = HARD REJECT']
+    ],
+    code: `{
+  "pillar": "P3_PREMIUM_DISCOUNT",
+  "range_high": 2525.00,
+  "range_low": 2500.00,
+  "poi_position": 0.62,
+  "trade_type": "SELL",
+  "status": "PASS (>0.55)"
+}`
+  },
+  'L4_P4': {
+    title: 'L4 — Pillar 4: Strict 1-Touch Freshness',
+    level: 'Level L4 (5-Pillar Validation)',
+    spec: 'LOCKED_DECISIONS.md §5 & CAS Lua Script',
+    rows: [
+      ['Rule', 'Strict 1-touch only (Never take second touch)'],
+      ['State Sequence', 'STATE_FRESH → STATE_TESTED (deactivated forever)'],
+      ['Atomic Implementation', 'Redis Lua CAS script prevents race conditions']
+    ],
+    code: `-- Redis Lua CAS Script for Strict 1-Touch
+local state = redis.call('HGET', KEYS[1], 'state')
+if state == 'FRESH' then
+  redis.call('HSET', KEYS[1], 'state', 'TESTED')
+  return 1  -- Success: First touch acquired
+else
+  return 0  -- Rejected: Already tested or violated
+end`
+  },
+  'L4_P5': {
+    title: 'L4 — Pillar 5: Inducement Scoring',
+    level: 'Level L4 (5-Pillar Validation)',
+    spec: 'LOCKED_DECISIONS.md §7',
+    rows: [
+      ['Gate Type', 'SOFT SCORE ONLY (Never hard reject)'],
+      ['With Inducement', '100% Quality Score'],
+      ['Without Inducement', '70% Quality Score (Tradeable, ranked lower)'],
+      ['Inducement Types', 'EQH/EQL, trendline, minor swing in front of POI']
+    ],
+    code: `{
+  "pillar": "P5_INDUCEMENT",
+  "inducement_detected": true,
+  "inducement_type": "EQH_SHELF_FRONT",
+  "assigned_score": 1.0,
+  "gate_result": "PASS"
+}`
+  },
+  'L5_ROUTER': {
+    title: 'L5 — Chronological Trigger Router',
+    level: 'Level L5 (Trigger Routing)',
+    spec: 'LOCKED_DECISIONS.md §12',
+    rows: [
+      ['Selection Rule', 'Chronological first-valid wins (FROZEN)'],
+      ['Execution Space', 'Drop to M1 / M5 upon POI validation'],
+      ['Expiry Condition', 'Per-trigger expiry (A:20, B:30, C:sweep+3, D:next, E:15, F:first touch) → POI marked STATE_TESTED']
+    ],
+    code: `{
+  "poi_id": "poi_xau_h1_2515",
+  "armed_triggers": ["A", "D", "E"],
+  "first_valid_trigger": "D",
+  "trigger_fired_ts": 1725538210,
+  "status": "DISPATCH_ORDER"
+}`
+  },
+  'L5_TRIG_A': {
+    title: 'L5 — Trigger A: M1/M5 CHOCH Reversal',
+    level: 'Level L5 (Trigger Routing)',
+    spec: 'LOCKED_DECISIONS.md §9',
+    rows: [
+      ['Trigger Confirmation', 'Candle body close beyond local swing'],
+      ['Entry Placement', 'At broken structural level (NOT origin OB)'],
+      ['SL Anchor', 'Structural sweep extreme (Head)'],
+      ['Expiry', '20 M5 bars']
+    ],
+    code: `{
+  "trigger": "TRIGGER_A_CHOCH",
+  "entry_price": 2513.50,
+  "sl_price": 2519.85,
+  "expiry_bars": 20
+}`
+  },
+  'L5_TRIG_D': {
+    title: 'L5 — Trigger D: Two-Bar Engulfing 50%',
+    level: 'Level L5 (Trigger Routing)',
+    spec: 'LOCKED_DECISIONS.md §10',
+    rows: [
+      ['Pattern', 'Engulfing candle inside POI zone'],
+      ['Volume Check', 'Volume(Bar2) < Volume(Bar1) (Exhaustion)'],
+      ['Order Type', 'Limit order at 50% of engulfing body (NOT market)'],
+      ['Expiry', 'Bar immediately following']
+    ],
+    code: `{
+  "trigger": "TRIGGER_D_TWO_BAR",
+  "bar1_volume": 4200,
+  "bar2_volume": 2900,
+  "bar2_high": 2517.00,
+  "bar2_low": 2514.00,
+  "entry_limit_50pct": 2515.50,
+  "status": "LIMIT_ARMED"
+}`
+  },
+  'L5_TRIG_C': {
+    title: 'L5 — Trigger C: Ending Diagonal',
+    level: 'Level L5 (Trigger Routing)',
+    spec: 'LOCKED_DECISIONS.md §15',
+    rows: [
+      ['Structure', '5-wave contracting diagonal into POI'],
+      ['Trigger Event', 'Wave 5 throw-under / trendline wick sweep'],
+      ['Role', 'PRIMARY PREFERRED trigger for Model 8 (HTF D/S)'],
+      ['Risk/Reward', 'Ultra-tight SL beyond Wave 5 wick (2–5 pips, RR 1:5+)']
+    ],
+    code: `{
+  "trigger": "TRIGGER_C_ENDING_DIAGONAL",
+  "preferred_for": "M8",
+  "wave5_sweep_level": 2503.20,
+  "entry_price": 2503.80,
+  "sl_price": 2502.90,
+  "risk_pips": 3.2,
+  "rr_ratio": 6.4
+}`
+  },
+  'L6_NEWS': {
+    title: 'L6 — 15-Minute News Protocol',
+    level: 'Level L6 (Execution Engine)',
+    spec: 'LOCKED_DECISIONS.md §11',
+    rows: [
+      ['High Impact Events', 'US CPI, NFP, FOMC'],
+      ['Action', 'Hard cancel ALL pending POI limit orders'],
+      ['Timing', '15 minutes prior to news release'],
+      ['Re-activation', '~30 minutes post-release after spread normalizes']
+    ],
+    code: `{
+  "action": "HARD_CANCEL_PENDING_ORDERS",
+  "reason": "HIGH_IMPACT_NEWS_IMMOBILIZATION",
+  "event": "US CPI",
+  "minutes_to_release": 14.8,
+  "cancelled_orders": ["ord_limit_8410", "ord_limit_8412"]
+}`
+  },
+  'L6_SIZING': {
+    title: 'L6 — Dynamic Risk & Sizing Engine',
+    level: 'Level L6 (Execution Engine)',
+    spec: 'SMC_WORKFLOW_ORCHESTRATION.md §3 & Audit Defect 1',
+    rows: [
+      ['SL Anchor', 'Structural sweep extreme (Head) ± 0.3× ATR buffer'],
+      ['Formula', 'Lots = (Equity × Risk%) / (SL_Distance × Tick_Value)'],
+      ['Risk Percentage', '0.5%–1.0% per trade (FROZEN)'],
+      ['Efficiency', 'Computed directly from sweep_extreme with zero DB query']
+    ],
+    code: `{
+  "equity": 50000,
+  "risk_pct": 0.01,
+  "risk_dollars": 500.0,
+  "sweep_extreme": 2519.85,
+  "atr_buffer": 1.40,
+  "sl_price": 2521.25,
+  "entry_price": 2515.50,
+  "sl_distance": 5.75,
+  "calculated_lots": 0.87
+}`
+  },
+  'L6_ORDER': {
+    title: 'L6 — Broker Order Execution',
+    level: 'Level L6 (Execution Engine)',
+    spec: 'SMC_WORKFLOW_ORCHESTRATION.md §6',
+    rows: [
+      ['Order Type', 'Limit order with physical SL + TP on broker server'],
+      ['Latency Target', 'Internal pipeline ≤35ms | Broker ACK ≤100ms'],
+      ['Target Ceiling', 'Structural liquidity target or 4.0× ATR cap'],
+      ['State Transition', 'Registers ticket in active positions table']
+    ],
+    code: `{
+  "action": "BROKER_ORDER_DISPATCH",
+  "ticket": 7892104,
+  "symbol": "XAUUSD",
+  "type": "ORDER_TYPE_SELL_LIMIT",
+  "price": 2515.50,
+  "sl": 2521.25,
+  "tp": 2496.00,
+  "lots": 0.87,
+  "broker_ack_ms": 42
+}`
+  },
+  'L7_PURERUNNER': {
+    title: 'L7 — PureRunner Real-Time Trade Manager',
+    level: 'Level L7 (Trade Management)',
+    spec: 'LOCKED_DECISIONS.md §21 & SMC_WORKFLOW_ORCHESTRATION.md §3',
+    rows: [
+      ['Early Partials', 'ZERO early partials (PureRunner mode)'],
+      ['SL to Breakeven', 'Triggered at +1.0× ATR favorable excursion'],
+      ['Driver Stream', 'Real-time tick.quote (reacts within 5 ms)'],
+      ['Exit Target', '100% of position runs to structural TP']
+    ],
+    code: `{
+  "trade_id": 7892104,
+  "current_profit_atr": 1.05,
+  "action": "MOVE_SL_TO_BREAKEVEN",
+  "new_sl": 2515.50,
+  "reaction_ms": 3.8
+}`
+  },
+  'L7_FVG_EXIT': {
+    title: 'L7 — FVG Invalidation Hard Exit',
+    level: 'Level L7 (Trade Management)',
+    spec: 'LOCKED_DECISIONS.md §21',
+    rows: [
+      ['Condition', 'Candle body close beyond active FVG boundary'],
+      ['Action', 'Immediate market order exit (close position)'],
+      ['Rationale', 'Premise of trade invalidated; prevent full SL hit']
+    ],
+    code: `{
+  "trade_id": 7892104,
+  "fvg_top": 2516.10,
+  "bar_close": 2516.45,
+  "action": "HARD_EXIT_IMMEDIATE",
+  "saved_loss_atr": 0.65
+}`
+  },
+  'L7_GUARDS': {
+    title: 'L7 — Circuit Breakers & Systemic Guards',
+    level: 'Level L7 (Trade Management)',
+    spec: 'LOCKED_DECISIONS.md §21 & §22',
+    rows: [
+      ['Circuit Breaker', '3 consecutive losses → 4-hour trading pause'],
+      ['Same-Level Guard', 'Failed sweep level → 4-bar cooldown on re-entry'],
+      ['Weekend Protection', 'Force close all positions Friday 20:00 UTC']
+    ],
+    code: `{
+  "consecutive_losses": 3,
+  "circuit_breaker_active": true,
+  "trading_locked_until": 1725552000,
+  "friday_hard_close_utc": "20:00"
+}`
+  },
+  'INFRA_BUS': {
+    title: 'Infrastructure — Two-Tier Partitioned Event Bus',
+    level: 'Core Infrastructure',
+    spec: 'SMC_WORKFLOW_ORCHESTRATION.md §2 & Audit Defect 2',
+    rows: [
+      ['Tier 1 Partition Key', '{symbol} — preserves strict bar time ordering across timeframes'],
+      ['Tier 2 Partition Key', '{symbol, poi_id} — for post-discovery L4–L7'],
+      ['Deadlock Resolution', 'Kills Model 8 H4-discovery / M1-trigger race condition'],
+      ['Message Bus', 'Redis Streams / NATS / RabbitMQ with acking']
+    ],
+    code: `// Partition Routing Logic
+if event_type == "bar.closed" or event_type == "liquidity.sweep" then
+  partition_key = event.symbol
+else
+  partition_key = event.symbol .. ":" .. event.poi_id
+end`
+  },
+  'INFRA_REDIS': {
+    title: 'Infrastructure — Redis State Store & Lua CAS Engine',
+    level: 'Core Infrastructure',
+    spec: 'SMC_WORKFLOW_ORCHESTRATION.md §5',
+    rows: [
+      ['Role', 'Single source of truth for POI states, cooldowns, sweeps'],
+      ['Concurrency Control', 'Atomic Lua CAS prevents second-touch races'],
+      ['Keyspaces', 'liq:{id}, poi:{id}, cooldown:{level_id}, cb:losses']
+    ],
+    code: `// Redis Key Schema
+poi:XAUUSD:H1:2515 -> {
+  "tags": ["M1","M3","M8"],
+  "state": "FRESH",
+  "score": 3,
+  "p1": "PASS", "p2": "PASS", "p3": "PASS", "p4": "PASS", "p5": 1.0,
+  "sweep_extreme": 2519.85
+}`
+  },
+  'INFRA_SINKS': {
+    title: 'Infrastructure — Output Sinks & Telemetry Pipeline',
+    level: 'Core Infrastructure',
+    spec: 'SMC_WORKFLOW_ORCHESTRATION.md §1 & GOLD_SMC_v25_DIAG.mq5',
+    rows: [
+      ['Ranked Signals', 'Highest confluence (3+ tags) published first'],
+      ['Broker Execution', 'Live MT5 order tickets sent via Bridge'],
+      ['DIAG Forensic CSV', '25+ columns forensic trade log for hypothesis testing'],
+      ['ML Training Data', '3 synchronized CSVs: entry, bar, and close feature vectors']
+    ],
+    code: `// Output Destinations
+1. Broker Terminal: OrderSend() ticket registration
+2. WebSocket Feed: Ranked POI signals for live GUI HUD
+3. Common Files: SMC_TradeLog_v23.csv forensic log
+4. ML Data Store: entry_YYYY-MM-DD.csv (29 features)`
+  }
+};
+
+function inspectNode(key) {
+  const node = nodeDatabase[key];
+  if (!node) return;
+
+  document.querySelectorAll('.n8n-node').forEach(el => el.classList.remove('selected'));
+  if (event && event.currentTarget) event.currentTarget.classList.add('selected');
+
+  document.getElementById('inspTitle').textContent = node.title;
+
+  let tableHtml = `<tr><td>Specification</td><td>${node.spec}</td></tr>`;
+  node.rows.forEach(r => {
+    tableHtml += `<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`;
+  });
+  document.getElementById('inspTable').innerHTML = tableHtml;
+  document.getElementById('inspCode').textContent = node.code;
+
+  const evBox = document.getElementById('inspEvidenceBox');
+  const evList = document.getElementById('inspEvidenceList');
+  if (node.evidence && node.evidence.length > 0) {
+    evBox.style.display = 'block';
+    let evHtml = '';
+    node.evidence.forEach(e => {
+      evHtml += `<div class="chart-link">🖼️ <strong>${e[0]}</strong> — ${e[1]}</div>`;
+    });
+    evList.innerHTML = evHtml;
+  } else {
+    evBox.style.display = 'none';
+  }
+
+  document.getElementById('nodeInspector').classList.remove('hidden');
+}
+
+function closeInspector() {
+  document.getElementById('nodeInspector').classList.add('hidden');
+  document.querySelectorAll('.n8n-node').forEach(el => el.classList.remove('selected'));
+}
+
+function filterLevel(level) {
+  document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+  event.currentTarget.classList.add('active');
+
+  const sections = document.querySelectorAll('.level-section');
+  sections.forEach(sec => {
+    if (level === 'all' || sec.getAttribute('data-level') === level) {
+      sec.style.display = 'block';
+    } else {
+      sec.style.display = 'none';
+    }
+  });
+
+  document.querySelectorAll('.connector-pipe').forEach(pipe => {
+    pipe.style.display = (level === 'all') ? 'flex' : 'none';
+  });
+}
+
+// Auto open first node on load
+window.addEventListener('DOMContentLoaded', () => {
+  inspectNode('L1_EQH');
+});
+</script>
+
+</body>
+</html>
