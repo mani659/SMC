@@ -1,6 +1,6 @@
 # CHANGELOG
 
-**Last Updated:** 2026-09-07
+**Last Updated:** 2026-09-09
 **Rules:** Every change to the project is recorded here. Format: date, session title, what was added/changed/fixed.
 
 ---
@@ -8,6 +8,103 @@
 ## [Unreleased]
 
 _No pending changes._
+
+---
+
+## [2026-09-09] — Phase 6 Complete: Backtesting & Paper Trading (V1)
+
+### Added
+- **`smc/backtest/`** — deterministic, MT5-free backtest stack (M1–M5):
+  - `data_feed.py` — `CandleSeries` (single- and multi-TF feed shape,
+    exact-timestamp indexing contract).
+  - `clock.py` — `BarClock`: the injected `now` (strictly advancing;
+    reading before the first bar raises; zero wall-clock reads).
+  - `bar_loop.py` — `BarLoop` + `BarHandler` seam: ONE loop, two
+    backends (backtest + later live), deterministic bar order and
+    `LoopStats`.
+  - `orders.py` — `PendingOrderBook`: insertion-ordered pending LIMIT
+    book, deterministic tickets, §23/§24 unfilled-order expiry.
+  - `fill_model.py` — limit fills AT THE LIMIT PRICE; physical SL/TP
+    with the same-bar SL-FIRST rule; `CloseKind` taxonomy.
+  - `positions.py` — `PositionStore`: open/close/modify with POI/trigger
+    identity on every position; `ClosedPosition` trade-log records.
+  - `runner.py` — `BacktestRunner`: the LOCKED per-bar order —
+    `reset_day` on UTC date change → `evaluate_friday_close` once →
+    `hard_cancel_pending` (§11) → per-position risk exits (FVG
+    invalidation + PureRunner BE; `on_be_applied` only after a
+    successful modify) → pending-limit fills + physical SL/TP → new
+    entries LAST. Blocked risk verdicts place nothing. `submit_entry`
+    seam (M3) + `set_pipeline_adapter` (M4) + `result()` snapshot (M5).
+  - `pipeline_bridge.py` — `TriggerRoute` → `CandidateEntry` pure
+    mapping: direction / limit entry / SL, §15 confluence score,
+    `poi_id` + `trigger` + `route_id` ("{poi}:{trigger}@{bar}" §11
+    event identity), and the bound FVG provider (Trigger F's signal FVG
+    only — geometry never invented).
+  - `pipeline_adapter.py` — per-bar engine drive: scan-before-feed (§5
+    first-touch OK window covers the touch bar + one bar so an in-zone
+    Trigger D pattern stays routable), §11 one-shot workflows (BLOCKED
+    verdicts re-submit the SAME candidate without consuming; §24 expiry
+    or POI VIOLATED retires the workflow and cancels the resting limit),
+    no-lookahead prefix scans.
+  - `reports.py` / `export.py` — `build_report(RunnerResult)`: trade
+    list, win rate, gross/net P/L, profit factor (zero-loss case →
+    explicit `None`, never inf), max drawdown on the closed-trade equity
+    curve, per-trigger + per-POI breakdowns (`unattributed` when
+    identity is absent), blocked-entry counts by reason, empty-run
+    defined zeros; deterministic CSV + JSON export (`sort_keys`).
+- **`smc/paper/`** — paper trading over the live execution layer (M6):
+  - `runner.py` — `PaperRunner`: the same locked bar order applied
+    bar-close driven; implements the M4 adapter seam directly
+    (`submit_entry` / `on_candidate_accepted` /
+    `cancel_pending_for_poi`) so the identical `PipelineAdapter` drives
+    backtest AND paper; broker-truth observation (fill = pending ticket
+    appears as a position; close = tracked position disappears);
+    `on_trade_opened` on fill; `on_be_applied` ONLY on a confirmed
+    modify; dry-run flag; refuses to start when
+    `connector.initialize()` fails.
+  - `broker_adapter.py` — thin `OrderManager`/`PositionManager`
+    boundary: place-limit (§10 limits only), close (opposite DEAL),
+    cancel; SL modify re-sends the untouched TP (post-audit rule at the
+    execution layer); raises nothing — returns success/latency outcomes
+    measured with the injected `perf` source.
+  - `kpi_logger.py` — append-only structured KPI records (decision,
+    order_ack, management, fill, trade_closed, missed_bar, hard_cancel,
+    friday_close) with INJECTED timestamps only; derived `counters()`;
+    deterministic JSON/JSONL/CSV exports. NO pass/fail threshold engine
+    (Future Flexibility Clause thresholds are not frozen — metrics
+    logged only).
+- **Design notes** — `01_ARCHITECTURE/SMC_PHASE_6_M4_DESIGN_NOTE.md`,
+  `SMC_PHASE_6_M5_DESIGN_NOTE.md`, `SMC_PHASE_6_M6_DESIGN_NOTE.md`
+  (alongside the phase-level `SMC_PHASE_6_DESIGN.md`).
+- **Tests** — M1–M6 suites including pipeline-integration (9), reports
+  (14) and paper (15) files — **496 tests total passing**
+  (`python -m pytest tests` from `04_SRC/`); suite progression 458 (M3
+  accepted) → 467 (M4) → 481 (M5) → **496 (M6)**.
+
+### Binding decisions honored (Phase 6 constraints)
+- Fill AT THE LIMIT PRICE; same-bar SL-first on physical closes.
+- Injected `now` only — bar clock in backtest, bar timestamps + injected
+  `perf` monotonic source in paper; no wall-clock reads.
+- Pure `RiskEngine` (decisions only); `PipelineEngine` finds/validates/
+  routes; runners/stores apply.
+- A blocked risk verdict places nothing and consumes nothing — the POI
+  one-shot survives (I2 parity across engine, adapter and paper runner).
+- Single sizing path (§28.7 policy band + `LOT_MAX_SAFETY` cap) in both
+  runners; no second sizing implementation.
+- FVG context attached at trade open ONLY when the signal can supply a
+  real one (Trigger F); otherwise absent and invalidation skipped —
+  geometry never fabricated.
+
+### Changed
+- `smc/orchestration/engine.py` — `scan_route(..., to_bar=)` no-lookahead
+  cap + `tracked_pois()` arm-order registry (M4 integration seams; no
+  trading-logic change).
+- `README.md` — Phase 6 milestones + test counts updated to 496.
+
+### Deferred to V1.1 (recorded, not built)
+- Walk-forward analysis; Monte Carlo; Future Flexibility KPI pass/fail
+  thresholds; slippage simulator; Redis/event-bus abstraction (V1
+  in-memory stores documented as the seam).
 
 ---
 

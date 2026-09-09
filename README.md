@@ -78,9 +78,9 @@ Implementation proceeds through locked milestones (see `00_LOCKED/DEVELOPMENT_PL
 |-------|-------|
 | Phase 0–5 | Core types, detection, POI models, triggers, validation, risk, backtest engine — frozen |
 | Phase 6 M1–M3 | Multi-TF feed, pipeline detection, backtest runner — accepted (458 tests green) |
-| Phase 6 M4 | **Full PipelineEngine integration** — real detection → validation → trigger path wired into the backtest runner |
-| Phase 6 M5 | Full reporting package (planned) |
-| Phase 6 M6 | Paper trading (planned) |
+| Phase 6 M4 | PipelineEngine → backtest integration: real detection → risk-gated pending limits, POI/trigger identity, FVG capture (467 tests green) |
+| Phase 6 M5 | Core reports: trade list, metrics (PF/DD/win-rate), per-trigger & per-POI breakdowns, blocked-entry counts, CSV/JSON export (481 tests green) |
+| Phase 6 M6 | Paper runner + broker adapter + operational KPI logging over the live execution layer (496 tests green) |
 
 ---
 

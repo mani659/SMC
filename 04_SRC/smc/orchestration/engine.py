@@ -120,6 +120,7 @@ class PipelineEngine:
         self.order_manager = order_manager
         self.symbol = symbol
         self._episodes: dict[str, _PoiEpisode] = {}
+        self._armed_order: list[POI] = []  # M4: arm-order registry for tracked_pois()
 
     # ------------------------------------------------------------------ #
     # Stage 2 — merge + validate
@@ -181,10 +182,20 @@ class PipelineEngine:
         if poi.state is not POIState.FRESH:
             raise ValueError("arm_at expects a CREATED or FRESH POI")
         self._episodes[poi.id] = _PoiEpisode(arm_bar=arm_bar)
+        if poi.id not in {p.id for p in self._armed_order}:
+            self._armed_order.append(poi)
 
     def episode(self, poi: POI) -> _PoiEpisode | None:
         """Engine bookkeeping for a POI (None when not armed through this engine)."""
         return self._episodes.get(poi.id)
+
+    def tracked_pois(self) -> list[POI]:
+        """All POIs armed through this engine, in arm order (M4 adapter seam).
+
+        Arm order is insertion order of the episode dict — deterministic
+        per construction; the bar-loop caller processes them in that order.
+        """
+        return list(self._armed_order)
 
     # ------------------------------------------------------------------ #
     # Stage 3 — per-bar trigger scan + state feed (Pillar 4 events)
@@ -216,16 +227,21 @@ class PipelineEngine:
         candles: list[Candle],
         swings: list[Swing],
         from_bar: int | None = None,
+        to_bar: int | None = None,
     ) -> TriggerRoute | None:
         """Chronological trigger scan within the §24 give-up window.
 
         Returns the FIRST valid route (bar order, §12). The scan is bounded
         by ``arm_bar + poi_give_up_bars()`` (V1, documented — see
-        ``trigger_expiry.poi_give_up_bars``).
+        ``trigger_expiry.poi_give_up_bars``). ``to_bar`` (M4) optionally
+        caps the scan at the CURRENT bar — the backtest adapter passes the
+        bar-loop index so the scan never sees future candles (no lookahead).
         """
         episode = self._episodes.get(poi.id)
         start = episode.arm_bar if episode is not None else (from_bar or 0)
         deadline = start + poi_give_up_bars()
+        if to_bar is not None:
+            deadline = min(deadline, to_bar)
         return self.router.scan(poi, candles, swings, from_bar=start, to_bar=deadline)
 
     # ------------------------------------------------------------------ #

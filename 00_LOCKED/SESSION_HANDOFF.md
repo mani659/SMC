@@ -1,6 +1,6 @@
 # SESSION HANDOFF — SMC BOT
 
-**Last Updated:** 2026-09-07
+**Last Updated:** 2026-09-09
 **Purpose:** Everything a new agent needs to continue this project without asking questions.
 
 ---
@@ -54,7 +54,7 @@ SMC/
 ├── 01_ARCHITECTURE/     ← Current design docs + v5 flowcharts
 ├── 02_KNOWLEDGE_BASE/   ← 57 PNG visual references
 ├── 03_REFERENCE_CODE/   ← GOLD_SMC_v25_DIAG.mq5 + CAB files
-├── 04_SRC/              ← Python codebase (Phases 0–5 built: `smc` package + tests)
+├── 04_SRC/              ← Python codebase (Phases 0–6 built: `smc` package + tests)
 ├── 05_MQL5_SAFETY/      ← Future Safety Watchdog EA
 ├── 06_RESEARCH/         ← Active research scripts + experiments
 └── ARCHIVE/             ← All historical files by era
@@ -98,9 +98,9 @@ SMC/
 - **Phase 3:** 5-Pillar Validation Pipeline (3–4 days) — ✅ BUILT (2026-09-07)
 - **Phase 4:** LTF Triggers + Python Execution (5–8 days) — ✅ BUILT (2026-09-07)
 - **Phase 5:** Port v25_DIAG Risk Layer to Python (3–5 days) — ✅ BUILT (2026-09-07)
-- **Phase 6:** Backtesting & Paper Trading (4–6 days) — NEXT
-- **Phase 7:** MQL5 Safety Watchdog + Live Integration (1–2 days)
-- **News Hard-Cancel:** Must be implemented in Python (not yet ported)
+- **Phase 6:** Backtesting & Paper Trading (4–6 days) — ✅ BUILT (2026-09-09) — M1–M6 accepted, suite **496 passed**
+- **Phase 7:** MQL5 Safety Watchdog + Live Integration (1–2 days) — NEXT
+- **News Hard-Cancel:** ✅ implemented in Python (`news_guard.py` + §11 hard-cancel in both runners)
 
 **Total estimated effort:** 25–39 working days
 
@@ -108,19 +108,88 @@ SMC/
 
 ## Current Phase & Next Task
 
-**Current Phase:** Phase 5 — Risk Layer (v25_DIAG Port) ✅ COMPLETE (2026-09-07)
-**Next Phase:** Phase 6 — Backtesting & Paper Trading
-(backtest engine, event bus, state store, performance analyzer,
-walk-forward, Monte Carlo, report generator; paper trading runner,
-slippage simulator, KPI logger)
+**Current Phase:** Phase 6 — Backtesting & Paper Trading ✅ COMPLETE (2026-09-09)
+**Next Phase:** Phase 7 — Live Readiness + MQL5 Safety Watchdog
+(live config loader, heartbeat, main loop, integration test;
+`05_MQL5_SAFETY/SMC_Safety_Watchdog.mq5`)
 
-Phase 5 locked the risk constants (§28 in `locked_constants.py` +
-`LOCKED_DECISIONS.md` §28.1–28.9) and delivered `smc/risk/` (Stage 5: lot
-sizing policy, circuit breaker, same-level guard, Friday EOD, sweep guard,
-spread grading, PureRunner, FVG invalidation and the `RiskEngine`
-orchestrator) with 90 tests; full suite is **340/340** (36 Phase 0 +
-56 Phase 1 + 42 Phase 2 + 40 Phase 3 + 76 Phase 4 + 90 Phase 5). See
-`TODO.md` (Phase 6 checklist) and `CHANGELOG.md` for details.
+Phase 6 delivered the full backtest + paper stack through six accepted
+milestones (M1–M6): the deterministic bar loop/feed/clock (M1), pending
+orders + fill model + position store (M2), `BacktestRunner` RiskEngine
+integration (M3), `PipelineEngine` integration via the pipeline
+bridge/adapter with §11 one-shot workflows (M4), core reports +
+CSV/JSON export (M5), and the paper runner + broker adapter + KPI
+logger over the live execution layer (M6). Full suite is **496/496**.
+Deferred to V1.1: walk-forward, Monte Carlo, Future Flexibility KPI
+thresholds. See `TODO.md` (Phase 6 checklist), `CHANGELOG.md`
+(2026-09-09 entry) and the M4/M5/M6 design notes in
+`01_ARCHITECTURE/` for details.
+
+---
+
+## Phase 6 Implementation Notes (V1 definitions — 2026-09-09)
+
+- **Shared bar-order contract (backtest AND paper):** both runners
+  apply the same locked per-bar order — 1) `reset_day()` on UTC date
+  change; 2) `evaluate_friday_close(now)` ONCE (portfolio: close ALL +
+  cancel ALL, then skip the bar); 3) §11 `hard_cancel_pending`; 4)
+  per-position `evaluate_exit` (FVG invalidation on the CLOSED bar →
+  PureRunner BE proposal; `on_be_applied()` ONLY after a successful
+  modify); 5) fills (pending-limit fills AT THE LIMIT PRICE + physical
+  SL/TP with same-bar SL-FIRST); 6) new entries LAST. In backtest the
+  stores simulate; in paper the broker decides and the runner observes.
+- **Backtest vs paper split:** `BacktestRunner` + M2 stores
+  (`PendingOrderBook` / `PositionStore`) are backtest-pure — no MT5
+  imports (guarded by tests). `PaperRunner` composes the SAME pure
+  components (`PipelineEngine` through the M4 `PipelineAdapter`,
+  `RiskEngine`) but applies decisions through the live execution layer
+  (`OrderManager` / `PositionManager` / `MT5Connector`) via the thin
+  `BrokerAdapter`. The paper runner implements the adapter's runner
+  seam (`submit_entry` / `on_candidate_accepted` /
+  `cancel_pending_for_poi`), so the identical adapter object drives
+  both paths. Fill/close observation is broker truth: fill = a pending
+  ticket appears as a position (MT5 position-id convention); close = a
+  tracked position disappears from `positions_get`.
+- **Report identity fields (M5):** every candidate/pending/fill/closed
+  trade carries `poi_id`, `trigger` (TriggerType) and `route_id`
+  ("{poi}:{trigger}@{bar}" §11 event identity, kept in the order
+  comment client-side); `runner.result()` → `RunnerResult(closed,
+  blocked, route_ids)` feeds `build_report`. Per-trigger + per-POI
+  breakdowns group on these; identity-absent trades land in
+  `unattributed`. Model tags are NOT on closed positions — no per-model
+  section exists (nothing invented). Profit factor zero-loss case is an
+  explicit `None` (never inf); max DD is on the closed-trade equity
+  curve (V1).
+- **KPI metrics logged (M6, NO thresholds):** `decision` (bar-close →
+  decision-complete latency, candidates/placed/blocked/rejected),
+  `order_ack` (decision → broker ack, success/retcode), `management`
+  (modify_sl / close / cancel outcomes + latency), `fill`,
+  `trade_closed`, `missed_bar` (feed-gap detection), `hard_cancel`,
+  `friday_close`. Every timestamp is injected (bar clock + injected
+  `perf` monotonic source); records are append-only with deterministic
+  JSON/JSONL/CSV exports. No pass/fail engine — Future Flexibility
+  Clause thresholds stay unfrozen until measured evidence exists.
+- **Known V1 limitations (documented, not faked):**
+  - Live close P/L/kind/price are NOT reconstructed from MT5 history —
+    unknown-win closes carry `win=None` and are deliberately NOT fed to
+    the circuit breaker (deal-history reconciliation is the Phase 7
+    candidate).
+  - Partial fills are logged at the reported volume (no volume-specific
+    partial handling); order rejects are logged with the broker retcode
+    (no retry policy in V1).
+  - Walk-forward and Monte Carlo are deferred to V1.1.
+- **Integration seams Phase 7 must respect:**
+  - *Loop reuse:* Phase 7's live main loop should drive
+    `PaperRunner.run_one_cycle(bar)` per closed bar (bar-close driven
+    V1) rather than inventing a third orchestrator; heartbeat/watchdog
+    wraps the PROCESS, not the strategy.
+  - *Connector contract:* the paper stack requires
+    `initialize()` / `account_info()` / `positions_get(symbol)` /
+    `order_send(request)` (+ optional `shutdown()`); the MQL5 watchdog
+    must stay outside this contract (MT5-side safety only).
+  - *Sizing inputs:* live equity comes from `connector.account_info()`
+    each cycle; symbol/magic live on the injected managers — the
+    watchdog's emergency protection must not race the Python book.
 
 ---
 

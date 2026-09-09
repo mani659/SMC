@@ -1,7 +1,7 @@
 # TODO — SMC BOT Task Board
 
-**Last Updated:** 2026-09-07
-**Current Phase:** Phase 6 — Backtesting & Paper Trading (next)
+**Last Updated:** 2026-09-09
+**Current Phase:** Phase 7 — Live Readiness + MQL5 Safety Watchdog (next)
 **Architecture:** Python-First + MQL5 Safety Watchdog (Option A Locked)
 
 ---
@@ -16,7 +16,7 @@
 | 3 | 5-Pillar Validation | ✅ COMPLETE (2026-09-07) |
 | 4 | LTF Triggers + Python Execution | ✅ COMPLETE (2026-09-07) |
 | 5 | Risk Layer — Port v25_DIAG to Python | ✅ COMPLETE (2026-09-07) |
-| 6 | Backtesting & Paper Trading | Pending |
+| 6 | Backtesting & Paper Trading | ✅ COMPLETE (2026-09-09) |
 | 7 | Live Readiness + MQL5 Safety Watchdog | Pending |
 
 ---
@@ -192,18 +192,49 @@
 - [x] ~~`smc/risk/adx_gate.py`~~ — NOT ported (constants locked as conditional gate only, §28.8)
 - [x] ~~`smc/risk/atr_floor.py`~~ — NOT ported (constants locked as conditional gate only, §28.8)
 
-## Phase 6: Backtesting & Paper Trading (Pending)
+## Phase 6: Backtesting & Paper Trading ✅ COMPLETE (2026-09-09)
 
-- [ ] `smc/backtest/backtest_engine.py`
-- [ ] `smc/backtest/event_bus.py`
-- [ ] `smc/backtest/state_store.py`
-- [ ] `smc/backtest/performance_analyzer.py`
-- [ ] `smc/backtest/walk_forward.py`
-- [ ] `smc/backtest/monte_carlo.py`
-- [ ] `smc/backtest/report_generator.py`
-- [ ] `smc/paper/paper_trading_runner.py`
-- [ ] `smc/paper/slippage_simulator.py`
-- [ ] `smc/paper/kpi_logger.py`
+> Delivered through six accepted milestones (M1–M6) per the Phase 6
+> design (`01_ARCHITECTURE/SMC_PHASE_6_DESIGN.md`) and per-milestone
+> design notes (`SMC_PHASE_6_M4/M5/M6_DESIGN_NOTE.md`). The original
+> placeholder checklist (backtest_engine/event_bus/state_store/…)
+> was superseded by the locked M1–M6 milestone plan.
+
+### M1 — Thin bar loop + data feed
+- [x] `smc/backtest/data_feed.py` — `CandleSeries` (multi-TF feed shape, exact-timestamp contract)
+- [x] `smc/backtest/clock.py` — deterministic `BarClock` (strictly-advancing injected `now`)
+- [x] `smc/backtest/bar_loop.py` — `BarLoop` + `BarHandler` seam (ONE loop, backtest/live shared skeleton)
+
+### M2 — Pending orders + fill model + position store
+- [x] `smc/backtest/orders.py` — `PendingOrderBook` (deterministic tickets, §23/§24 expiry)
+- [x] `smc/backtest/fill_model.py` — limit fills at LIMIT PRICE, physical SL/TP, same-bar SL-first rule
+- [x] `smc/backtest/positions.py` — `PositionStore` (open/close/modify, POI/trigger identity on trades)
+
+### M3 — RiskEngine integration (backtest runner)
+- [x] `smc/backtest/runner.py` — `BacktestRunner`: locked per-bar order (reset_day → Friday EOD → hard-cancel → risk exits → fills → entries last), blocked entries place nothing, injected `now` only
+
+### M4 — PipelineEngine integration (real detection in the loop)
+- [x] `smc/backtest/pipeline_bridge.py` — `TriggerRoute` → `CandidateEntry` mapping (poi_id / trigger / route_id identity, honest FVG provider)
+- [x] `smc/backtest/pipeline_adapter.py` — per-bar engine drive: scan-before-feed, §11 one-shot workflows, §24 expiry, VIOLATED → cancel resting limit
+- [x] `smc/orchestration/engine.py` — `scan_route(to_bar=)` no-lookahead cap + `tracked_pois()` arm-order registry
+
+### M5 — Core reports
+- [x] `smc/backtest/reports.py` — `TradeRecord`/`CoreMetrics`/`GroupMetrics`/`BacktestReport` (win rate, PF with explicit zero-loss `None`, net P/L, closed-trade max DD, per-trigger + per-POI breakdowns, blocked counts, empty-run defined zeros)
+- [x] `smc/backtest/export.py` — deterministic CSV (18-column trade list) + JSON (sorted keys)
+- [x] `runner.result()` — `RunnerResult` snapshot (closed trades + blocked log + route_ids)
+
+### M6 — Paper runner + KPI logging
+- [x] `smc/paper/runner.py` — `PaperRunner`: same bar order over the LIVE execution layer; implements the M4 adapter seam (submit_entry / on_candidate_accepted / cancel_pending_for_poi); broker-truth fill/close observation; dry-run + refuse-to-start safety posture
+- [x] `smc/paper/broker_adapter.py` — thin `OrderManager`/`PositionManager` boundary (raises nothing; TP preserved on SL modify; `on_be_applied` only on confirmed success)
+- [x] `smc/paper/kpi_logger.py` — append-only structured KPI records (decision/order_ack/management/fill/trade_closed/missed_bar/hard_cancel/friday_close), injected timestamps, deterministic JSON/JSONL/CSV exports
+
+### Suite
+- [x] **496 tests total passing** (`python -m pytest tests` from `04_SRC/`)
+
+### Deferred to V1.1 (recorded, NOT built)
+- [ ] Walk-forward analysis
+- [ ] Monte Carlo
+- [ ] Future Flexibility Clause KPI pass/fail thresholds (metrics logged; thresholds not frozen)
 
 ## Phase 7: Live + Safety Watchdog (Pending)
 
@@ -220,8 +251,8 @@
 | Item | Blocked By | Notes |
 |------|-----------|-------|
 | Phase 1–7 tasks | Phase 0 completion | Foundation must be solid first |
-| `redis_store.py` decision | Redis vs SQLite for backtesting? | Need decision before coding |
-| Event bus abstraction | Design not yet started | `EventBus` interface with `InProcessBus` and `RedisStreamsBus` |
+| `redis_store.py` decision | Redis vs SQLite for backtesting? | **Resolved by design (2026-09-09):** V1 uses in-memory stores (`PendingOrderBook` / `PositionStore` / `POIStateMachine`), documented as the seam for a later Redis CAS — no Redis in V1 |
+| Event bus abstraction | Design not yet started | **Resolved by design (2026-09-09):** no bus in V1 — the runners compose components via direct calls in the locked per-bar order; an abstraction would add indirection without a consumer |
 
 ---
 
@@ -256,3 +287,9 @@
 | 2026-09-07 | Phase 5 Milestone 3 — pure runner (BE at 1.0× ATR + 0.10 buffer, one-shot latch), FVG invalidation (`FvgContext` contract, closed-candle exit) — **320 tests total passing** | Phase 5 |
 | 2026-09-07 | Phase 5 Final Milestone — `risk_engine.py` orchestrator (typed Entry/Exit decisions, v25 gate order, DI of all components, pure decisions) — **340 tests total passing** | Phase 5 |
 | 2026-09-08 | Phase 0–5 audit fixes — PositionManager SL/TP preserve (C1), `compute_risk_lots` through §28.7 policy (C2), blocked routes keep the POI one-shot (I2), same-bar tie-break A-first (I3), §7 constants imported (I4), injected `now` in `execute_route` (I5), governance docs aligned to post-audit RiskEngine API — **363 tests total passing** | Audit |
+| 2026-09-08 | Phase 6 M1 — thin bar loop + data feed (`BarLoop`/`BarHandler`, `BarClock`, `CandleSeries`) + M2 — pending orders, fill model (limit-price fills, SL-first), position store | Phase 6 |
+| 2026-09-08 | Phase 6 M3 — `BacktestRunner` RiskEngine integration (locked per-bar order, blocked entries place nothing, injected clock) — **458 tests total passing** (M1–M3 accepted and frozen) | Phase 6 |
+| 2026-09-09 | Phase 6 M4 — PipelineEngine integration: pipeline bridge + adapter (scan-before-feed, §11 one-shot workflows, no-lookahead `to_bar` cap), POI/trigger/route identity through fill, honest FVG capture — **467 tests total passing** | Phase 6 |
+| 2026-09-09 | Phase 6 M5 — core reports (`reports.py`, `export.py`, `runner.result()`): trade list, PF/win-rate/net P/L, closed-trade max DD, per-trigger + per-POI breakdowns, CSV/JSON export — **481 tests total passing** | Phase 6 |
+| 2026-09-09 | Phase 6 M6 — paper runner + broker adapter + KPI logger (same bar order over the live execution layer, broker-truth observation, `on_be_applied` only on confirmed modify, dry-run posture, deterministic KPI records) — **496 tests total passing** | Phase 6 |
+| 2026-09-09 | Phase 6 documentation freeze — TODO/CHANGELOG/SESSION_HANDOFF updated to Phase 7 next; Phase 6 design notes referenced; repo committed and pushed | Governance |
