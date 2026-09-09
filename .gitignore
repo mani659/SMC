@@ -10,6 +10,10 @@
 # Historical archives: old reports, logs, MQL5 history, superseded docs
 ARCHIVE/
 
+# Reference implementation code (MQL5/legacy bots): proprietary origin,
+# kept local-only for consultation — never tracked or pushed
+03_REFERENCE_CODE/
+
 # Research bulk data: large per-trade / extraction CSVs and result dumps
 # (methodology & validation .md records remain tracked; big data artifacts do not)
 06_RESEARCH/experiments/*.csv
