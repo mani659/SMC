@@ -1,7 +1,7 @@
 # TODO — SMC BOT Task Board
 
 **Last Updated:** 2026-09-09
-**Current Phase:** Phase 7 — Live Readiness + MQL5 Safety Watchdog (next)
+**Current Phase:** ✅ V1 COMPLETE — Phase 7 Live Readiness + MQL5 Safety Watchdog (next cycle: V1.1 — walk-forward / Monte Carlo / KPI thresholds)
 **Architecture:** Python-First + MQL5 Safety Watchdog (Option A Locked)
 
 ---
@@ -17,7 +17,7 @@
 | 4 | LTF Triggers + Python Execution | ✅ COMPLETE (2026-09-07) |
 | 5 | Risk Layer — Port v25_DIAG to Python | ✅ COMPLETE (2026-09-07) |
 | 6 | Backtesting & Paper Trading | ✅ COMPLETE (2026-09-09) |
-| 7 | Live Readiness + MQL5 Safety Watchdog | Pending |
+| 7 | Live Readiness + MQL5 Safety Watchdog | ✅ COMPLETE (2026-09-09) |
 
 ---
 
@@ -236,13 +236,35 @@
 - [ ] Monte Carlo
 - [ ] Future Flexibility Clause KPI pass/fail thresholds (metrics logged; thresholds not frozen)
 
-## Phase 7: Live + Safety Watchdog (Pending)
+## Phase 7: Live Readiness + MQL5 Safety Watchdog ✅ COMPLETE (2026-09-09)
 
-- [ ] `smc/live/config_loader.py`
-- [ ] `smc/live/heartbeat.py`
-- [ ] `smc/live/main_loop.py`
-- [ ] `smc/live/integration_test.py`
-- [ ] `05_MQL5_SAFETY/SMC_Safety_Watchdog.mq5`
+> Option A locked: Python owns ALL trading logic; MQL5 is ONLY a Safety
+> Watchdog (heartbeat monitoring + emergency flatten — no strategy logic).
+> Design note: `01_ARCHITECTURE/SMC_PHASE_7_DESIGN_NOTE.md`.
+
+### 7.1 — Live config + heartbeat
+- [x] `smc/live/config.py` — `LiveConfig` (demo-first defaults, single-sizing-path risk inputs, heartbeat/watchdog timing) + `live_config_from_dict`
+- [x] `smc/live/heartbeat.py` — plain-text heartbeat file (`<unix_secs> <seq>` + `state=`), atomic writes, `HeartbeatPublisher` (interval-bounded, injected clock), `read_heartbeat`/`is_stale` (fail-closed on missing/garbage), `evaluate_watchdog` (the tested spec the EA mirrors)
+
+### 7.2 — Live main loop
+- [x] `smc/live/loop.py` — `LiveLoop`: connector poll → rolling-window `DetectionDriver.validate_window` → arm ONLY newly-passed POIs → `PaperRunner.run_one_cycle` (REAL adapter/engine/risk stack) → heartbeat; cold start anchors history (no replay); `start()` refuses when the connector fails; `run_once()` is the deterministic test seam
+- [x] `smc/orchestration/detection_driver.py` — `validate_window` (validate WITHOUT arming) so rolling callers never re-arm (arm-bar/one-shot preserved)
+
+### 7.3 — MQL5 Safety Watchdog EA
+- [x] `05_MQL5_SAFETY/SMC_Safety_Watchdog.mq5` — 1 s timer, 5 s stale timeout (`TimeGMT` vs file epoch), emergency close-ALL + delete-ALL (magic/symbol scoped), healthy → no trading actions; NO strategy logic
+
+### 7.4 — Tests + watchdog contract
+- [x] `tests/test_live_phase7.py` — 9 tests: heartbeat roundtrip/freshness, fail-closed garbage/missing, sequence + clean-shutdown marker, publisher interval, watchdog decision (healthy → no_action / stale → emergency / missing → emergency), live loop over fake connector (history anchor → new-bar cycle → heartbeat fresh → shutdown marker), start refusal, no re-arming of existing POIs, config coercion
+- [x] EA manual validation checklist — `01_ARCHITECTURE/SMC_PHASE_7_DESIGN_NOTE.md` §6
+
+### Suite
+- [x] **519 tests total passing** (`python -m pytest tests` from `04_SRC/`)
+
+### Deferred to V1.1 / next cycle (recorded, NOT built)
+- [ ] Walk-forward analysis
+- [ ] Monte Carlo
+- [ ] Future Flexibility Clause KPI pass/fail thresholds (metrics logged; thresholds not frozen)
+- [ ] Production alerting (Telegram/email) + M8 HTF provisioning in the live driver + remote/VPS heartbeat transport
 
 ---
 
@@ -293,3 +315,6 @@
 | 2026-09-09 | Phase 6 M5 — core reports (`reports.py`, `export.py`, `runner.result()`): trade list, PF/win-rate/net P/L, closed-trade max DD, per-trigger + per-POI breakdowns, CSV/JSON export — **481 tests total passing** | Phase 6 |
 | 2026-09-09 | Phase 6 M6 — paper runner + broker adapter + KPI logger (same bar order over the live execution layer, broker-truth observation, `on_be_applied` only on confirmed modify, dry-run posture, deterministic KPI records) — **496 tests total passing** | Phase 6 |
 | 2026-09-09 | Phase 6 documentation freeze — TODO/CHANGELOG/SESSION_HANDOFF updated to Phase 7 next; Phase 6 design notes referenced; repo committed and pushed | Governance |
+| 2026-09-09 | Phase 6 audit fixes — C1 §23/§24 expiry wired into the loop, C2 paper fill linkage (symbol/magic/comment), I1 per-bar ATR/spread, I2 real-adapter auto-attach, I3/I5 rulings recorded — **501 tests total passing** | Phase 6 |
+| 2026-09-09 | Pre-Phase-7 coherence patch — CR1 detection driver (candles → validated/armed POIs), I1 single §5 state machine, I2 running equity in backtest sizing, CR2 paper close outcomes feed risk guards, I4 terminal-state retention — **510 tests total passing** | Phase 7 prep |
+| 2026-09-09 | Phase 7 — live readiness: `smc/live/` (LiveConfig, heartbeat publisher + watchdog decision spec, `LiveLoop` over the real stack) + `05_MQL5_SAFETY/SMC_Safety_Watchdog.mq5` (heartbeat + emergency flatten only) — **519 tests total passing** | Phase 7 |

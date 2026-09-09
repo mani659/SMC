@@ -15,7 +15,7 @@ SMC/
 ├── 02_KNOWLEDGE_BASE/    Visual chart library (POI models, OB/FVG, CHOCH, sweeps) — reference material (not in git)
 ├── 03_REFERENCE_CODE/    Legacy/reference MQL5 expert advisors and helper scripts
 ├── 04_SRC/               Main Python source: smc/ package + test suite
-├── 05_MQL5_SAFETY/       MQL5 safety-layer components (reserved)
+├── 05_MQL5_SAFETY/       MQL5 Safety Watchdog EA (heartbeat + emergency flatten only)
 ├── 06_RESEARCH/          Research results, experiments, validation artifacts, methodology records
 └── ARCHIVE/              Historical artifacts: old reports, superseded docs, MQL5 history (not in git)
 ```
@@ -81,6 +81,7 @@ Implementation proceeds through locked milestones (see `00_LOCKED/DEVELOPMENT_PL
 | Phase 6 M4 | PipelineEngine → backtest integration: real detection → risk-gated pending limits, POI/trigger identity, FVG capture (467 tests green) |
 | Phase 6 M5 | Core reports: trade list, metrics (PF/DD/win-rate), per-trigger & per-POI breakdowns, blocked-entry counts, CSV/JSON export (481 tests green) |
 | Phase 6 M6 | Paper runner + broker adapter + operational KPI logging over the live execution layer (496 tests green) |
+| Phase 7 | Live readiness: `smc/live/` (LiveConfig, heartbeat publisher + watchdog decision, `LiveLoop` over the full stack) + `05_MQL5_SAFETY/SMC_Safety_Watchdog.mq5` (heartbeat monitor + emergency flatten only) — 519 tests green |
 
 ---
 

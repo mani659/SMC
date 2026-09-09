@@ -54,8 +54,8 @@ SMC/
 ├── 01_ARCHITECTURE/     ← Current design docs + v5 flowcharts
 ├── 02_KNOWLEDGE_BASE/   ← 57 PNG visual references
 ├── 03_REFERENCE_CODE/   ← GOLD_SMC_v25_DIAG.mq5 + CAB files
-├── 04_SRC/              ← Python codebase (Phases 0–6 built: `smc` package + tests)
-├── 05_MQL5_SAFETY/      ← Future Safety Watchdog EA
+├── 04_SRC/              ← Python codebase (Phases 0–7 built: `smc` package + tests)
+├── 05_MQL5_SAFETY/      ← Safety Watchdog EA (SMC_Safety_Watchdog.mq5)
 ├── 06_RESEARCH/         ← Active research scripts + experiments
 └── ARCHIVE/             ← All historical files by era
 ```
@@ -98,8 +98,8 @@ SMC/
 - **Phase 3:** 5-Pillar Validation Pipeline (3–4 days) — ✅ BUILT (2026-09-07)
 - **Phase 4:** LTF Triggers + Python Execution (5–8 days) — ✅ BUILT (2026-09-07)
 - **Phase 5:** Port v25_DIAG Risk Layer to Python (3–5 days) — ✅ BUILT (2026-09-07)
-- **Phase 6:** Backtesting & Paper Trading (4–6 days) — ✅ BUILT (2026-09-09) — M1–M6 accepted, suite **496 passed**
-- **Phase 7:** MQL5 Safety Watchdog + Live Integration (1–2 days) — NEXT
+- **Phase 6:** Backtesting & Paper Trading (4–6 days) — ✅ BUILT (2026-09-09) — M1–M6 accepted, suite **496 passed** (audit fixes → **501**; coherence patch → **510**)
+- **Phase 7:** Live Readiness + MQL5 Safety Watchdog (1–2 days) — ✅ BUILT (2026-09-09) — live loop + heartbeat + watchdog EA, suite **519 passed**
 - **News Hard-Cancel:** ✅ implemented in Python (`news_guard.py` + §11 hard-cancel in both runners)
 
 **Total estimated effort:** 25–39 working days
@@ -108,22 +108,66 @@ SMC/
 
 ## Current Phase & Next Task
 
-**Current Phase:** Phase 6 — Backtesting & Paper Trading ✅ COMPLETE (2026-09-09)
-**Next Phase:** Phase 7 — Live Readiness + MQL5 Safety Watchdog
-(live config loader, heartbeat, main loop, integration test;
-`05_MQL5_SAFETY/SMC_Safety_Watchdog.mq5`)
+**Current Phase:** ✅ V1 COMPLETE — Phase 7 Live Readiness + MQL5 Safety Watchdog (2026-09-09)
+**Next Cycle:** V1.1 — walk-forward, Monte Carlo, Future Flexibility KPI thresholds
 
-Phase 6 delivered the full backtest + paper stack through six accepted
-milestones (M1–M6): the deterministic bar loop/feed/clock (M1), pending
-orders + fill model + position store (M2), `BacktestRunner` RiskEngine
-integration (M3), `PipelineEngine` integration via the pipeline
-bridge/adapter with §11 one-shot workflows (M4), core reports +
-CSV/JSON export (M5), and the paper runner + broker adapter + KPI
-logger over the live execution layer (M6). Full suite is **496/496**.
-Deferred to V1.1: walk-forward, Monte Carlo, Future Flexibility KPI
-thresholds. See `TODO.md` (Phase 6 checklist), `CHANGELOG.md`
-(2026-09-09 entry) and the M4/M5/M6 design notes in
-`01_ARCHITECTURE/` for details.
+Phase 7 delivered live readiness under the locked Option A architecture:
+`smc/live/` (LiveConfig, heartbeat publisher + watchdog-decision spec,
+`LiveLoop` over the REAL stack) plus `05_MQL5_SAFETY/SMC_Safety_Watchdog.mq5`
+(heartbeat monitor + emergency flatten ONLY — no strategy logic). The
+live loop polls the connector for new closed bars, validates/arms new
+POIs through the rolling-window `DetectionDriver` into the SAME engine the
+M4 `PipelineAdapter` drives, and runs `PaperRunner.run_one_cycle(bar)` per
+bar; the heartbeat file (`<unix_secs> <seq>` + `state=`) is written every
+~1 s and the EA fails-closed on any stale/unreadable heartbeat (close ALL
+scoped positions + delete ALL scoped pendings). Full suite is **519/519**
+(510 pre-Phase-7 + 9 new). Deferred to V1.1: walk-forward, Monte Carlo,
+Future Flexibility KPI thresholds, production alerting, M8 HTF
+provisioning in the live driver, remote/VPS heartbeat transport. See
+`TODO.md` (Phase 7 checklist), `CHANGELOG.md` (2026-09-09 entries) and
+`01_ARCHITECTURE/SMC_PHASE_7_DESIGN_NOTE.md` (+ the pre-Phase-7 coherence
+patch note) for details.
+
+---
+
+## Phase 7 Implementation Notes (V1 definitions — 2026-09-09)
+
+- **Option A honored:** Python owns ALL trading logic; the MQL5 EA
+  (`05_MQL5_SAFETY/SMC_Safety_Watchdog.mq5`) ONLY monitors the heartbeat
+  file and emergency-flattens (close scoped positions + delete scoped
+  pendings) when the heartbeat is stale or unreadable. Healthy heartbeat
+  → the EA does nothing. No POI detection / validation / entries /
+  PureRunner-FVG management / session-news-risk policy / sizing in MQL5.
+- **Heartbeat transport:** a plain-text file is the V1 transport (Redis
+  rejected for V1 — no deployment, and the EA cannot read Redis without a
+  third-party socket lib). Format: line 1 `<unix_epoch_seconds>
+  <monotonic_sequence>`; optional `state=<running|shutdown>` line for
+  operators. Python writes with the injected clock; the EA compares
+  against `TimeGMT()` (UTC). Missing/garbage file == stale (fail-closed).
+  Defaults (UNFROZEN operational timing): 1 s interval, 5 s stale
+  timeout, 1 s EA timer, 0.5 s bar poll, 200-bar detection window.
+- **Live loop (`smc/live/loop.py`):** connector poll → rolling window →
+  `DetectionDriver.validate_window` (validate WITHOUT arming) → arm ONLY
+  newly-passed POIs (an existing episode is never re-armed — §24 arm-bar
+  anchor and §11 one-shot stay) → `PaperRunner.run_one_cycle(bar)` with
+  the REAL adapter/engine/risk stack → interval-bounded heartbeat.
+  `start()` refuses when the connector fails; cold start anchors the
+  latest bar timestamp WITHOUT replaying history; `run_once()` is the
+  deterministic test seam; `stop()` writes `state=shutdown` — the
+  watchdog does NOT distinguish clean stop from death (both stale →
+  emergency; fail-closed), the marker is operator diagnostics.
+- **Watchdog decision spec:** `smc.live.heartbeat.evaluate_watchdog` is
+  the pure-Python, pytest-tested decision the EA mirrors exactly
+  (healthy → `no_action`; stale / unreadable → `emergency`). Keep the EA
+  and the spec in sync (comments in both files).
+- **Pre-Phase-7 coherence patch (folded into this freeze):** CR1
+  `DetectionDriver` (candles → validated/armed POIs), I1 single §5 state
+  machine across engine+pipeline, I2 backtest running equity from
+  realized P/L (units: raw pnl × pip-value-per-lot), CR2 paper close
+  outcomes feed risk guards (exact for runner-issued closes; bar-range
+  determination for broker closes; ambiguous closes stay unfed), I4
+  terminal-state retention (workflow-live + touch-window POIs never
+  pruned). See `SMC_PHASE_7_PREP_COHERENCE_PATCH.md`.
 
 ---
 
@@ -138,6 +182,11 @@ thresholds. See `TODO.md` (Phase 6 checklist), `CHANGELOG.md`
   modify); 5) fills (pending-limit fills AT THE LIMIT PRICE + physical
   SL/TP with same-bar SL-FIRST); 6) new entries LAST. In backtest the
   stores simulate; in paper the broker decides and the runner observes.
+  A 3b) step applies the frozen §23/§24 unfilled-order expiry each bar
+  (backtest: `PendingOrderBook.expired_by_section23` /
+  `expired_by_give_up` before fills, affected POIs driven TESTED through
+  the state machine; paper: runner-side age cancel of GTC pendings,
+  audit C1).
 - **Backtest vs paper split:** `BacktestRunner` + M2 stores
   (`PendingOrderBook` / `PositionStore`) are backtest-pure — no MT5
   imports (guarded by tests). `PaperRunner` composes the SAME pure
@@ -147,9 +196,12 @@ thresholds. See `TODO.md` (Phase 6 checklist), `CHANGELOG.md`
   `BrokerAdapter`. The paper runner implements the adapter's runner
   seam (`submit_entry` / `on_candidate_accepted` /
   `cancel_pending_for_poi`), so the identical adapter object drives
-  both paths. Fill/close observation is broker truth: fill = a pending
-  ticket appears as a position (MT5 position-id convention); close = a
-  tracked position disappears from `positions_get`.
+  both paths. Fill/close observation is broker truth: fill = a broker
+  position whose (symbol, magic, comment) matches a placed pending's
+  order identity (MT5 `POSITION_MAGIC` / `POSITION_COMMENT` — the
+  position ticket is a DIFFERENT identifier from the order ticket, so
+  ticket equality is never used, audit C2); close = a tracked position
+  disappears from `positions_get`.
 - **Report identity fields (M5):** every candidate/pending/fill/closed
   trade carries `poi_id`, `trigger` (TriggerType) and `route_id`
   ("{poi}:{trigger}@{bar}" §11 event identity, kept in the order
@@ -171,9 +223,10 @@ thresholds. See `TODO.md` (Phase 6 checklist), `CHANGELOG.md`
   Clause thresholds stay unfrozen until measured evidence exists.
 - **Known V1 limitations (documented, not faked):**
   - Live close P/L/kind/price are NOT reconstructed from MT5 history —
-    unknown-win closes carry `win=None` and are deliberately NOT fed to
-    the circuit breaker (deal-history reconciliation is the Phase 7
-    candidate).
+    closes whose outcome is ambiguous (the closing bar reaches no SL/TP
+    level) carry `win=None` and are NOT fed to the guards; SL/TP-determined
+    and runner-issued closes ARE fed (coherence patch CR2). Full
+    deal-history reconciliation remains a later candidate.
   - Partial fills are logged at the reported volume (no volume-specific
     partial handling); order rejects are logged with the broker retcode
     (no retry policy in V1).

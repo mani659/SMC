@@ -31,7 +31,15 @@ _CLOSE_TYPE = {Direction.LONG: ORDER_TYPE_SELL, Direction.SHORT: ORDER_TYPE_BUY}
 
 @dataclass(frozen=True, slots=True)
 class PositionSnapshot:
-    """A read-only view of one open position (decoupled from MT5 tuples)."""
+    """A read-only view of one open position (decoupled from MT5 tuples).
+
+    ``magic`` / ``comment`` are the order-identity linkage fields the
+    paper runner uses to match a broker fill back to the pending that
+    produced it (M6 audit fix — ``POSITION_MAGIC`` / ``POSITION_COMMENT``
+    carry through from the order in MT5; the position's own ticket is a
+    DIFFERENT identifier from the order ticket, so ticket equality is
+    not a valid fill key).
+    """
 
     ticket: int
     symbol: str
@@ -40,6 +48,8 @@ class PositionSnapshot:
     open_price: float
     sl: float | None = None
     tp: float | None = None
+    magic: int | None = None
+    comment: str = ""
 
 
 class PositionManager:
@@ -139,6 +149,7 @@ def _snapshot(position) -> PositionSnapshot:
     volume = float(get("volume") or 0.0)
     raw_type = int(get("type") or 0)
     direction = Direction.LONG if raw_type == 0 else Direction.SHORT  # BUY=0
+    magic_raw = get("magic")
     return PositionSnapshot(
         ticket=ticket,
         symbol=str(get("symbol") or ""),
@@ -147,6 +158,8 @@ def _snapshot(position) -> PositionSnapshot:
         open_price=float(get("price_open") or 0.0),
         sl=float(get("sl")) if get("sl") else None,
         tp=float(get("tp")) if get("tp") else None,
+        magic=int(magic_raw) if magic_raw not in (None, 0) else None,
+        comment=str(get("comment") or ""),
     )
 
 

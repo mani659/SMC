@@ -23,8 +23,8 @@ Milestone 3 (RiskEngine integration) adds the runner:
   of operations (Friday EOD → hard-cancel → exits → fills → entries) as an
   M1 ``BarHandler``, with the candidate-entry test seam
 
-Later milestones add reports (M4) and the paper runner (M5) behind the
-same seams — see ``01_ARCHITECTURE/SMC_PHASE_6_DESIGN.md``.
+Later milestones add core reports (M5) and the paper runner (M6)
+behind the same seams — see ``01_ARCHITECTURE/SMC_PHASE_6_DESIGN.md``.
 """
 
 from smc.backtest.bar_loop import BarHandler, BarLoop, LoopStats, RecordingHandler

@@ -38,7 +38,7 @@ from smc.backtest.runner import BacktestRunner, CandidateEntry, RunnerConfig
 from smc.config.model_type import ModelType
 from smc.config.timeframe import Timeframe
 from smc.core.candle import Candle
-from smc.core.enums import Direction, LiquidityType, PoolType, TriggerType
+from smc.core.enums import Direction, LiquidityType, POIState, PoolType, TriggerType
 from smc.core.liquidity_level import LiquidityLevel
 from smc.core.poi import POI
 from smc.core.zone import Zone
@@ -433,3 +433,68 @@ def test_deterministic_results_on_repeated_runs(candle_factory, swing_factory):
     # Mechanics are identical run to run (POI UUIDs are per-run values, so
     # identity STRINGS are deliberately excluded from the comparison).
     assert results[0] == results[1]
+
+
+# ---------------------------------------------------------------------- #
+# C1 audit fix: §23/§24 unfilled-order expiry in the integrated loop
+# ---------------------------------------------------------------------- #
+def test_resting_limit_expires_by_section23_and_cannot_fill_later(
+    candle_factory
+):
+    """C1: a limit placed on bar 0 rests until bars_open = 12 (M5 §23),
+    is cancelled at the START of the 12th bar, and can never fill after —
+    even when later bars trade through the entry level."""
+    rows = [NOFILL] * 14  # low 100.5 > D_ENTRY 100.45 → never fills
+    loop, runner = _make_runner(candle_factory, rows)
+    runner.submit_entry(
+        CandidateEntry(
+            direction=Direction.LONG, entry_price=D_ENTRY, sl_price=D_STOP,
+        )
+    )
+    loop.run(end_timestamp=loop._series.candles[10].timestamp)  # bars 0..10
+    assert len(runner.orders) == 1  # bars_open 11 < 12 — still resting
+    # Bar 11 only: bars_open 12 → §23 expiry fires at the START of the bar.
+    loop.run(
+        start_timestamp=loop._series.candles[11].timestamp,
+        end_timestamp=loop._series.candles[11].timestamp,
+    )
+    assert len(runner.orders) == 0  # cancelled before this bar's fills
+    assert len(runner.positions) == 0
+    # Later bars trading through the limit must NOT fill the cancelled order.
+    loop.run(start_timestamp=loop._series.candles[12].timestamp)  # bars 12..13
+    assert len(runner.positions) == 0
+
+
+def test_expired_resting_limit_marks_poi_tested(candle_factory):
+    """C1: the POI behind an expired resting limit goes TESTED through the
+    state machine (engine authority) — it can never route again."""
+    engine = PipelineEngine()
+    poi = POI(
+        # Zone far below the bars: never touched, never violated → the only
+        # way out of FRESH is the §23 expiry itself.
+        zone=Zone(top=99.2, bottom=99.0, direction=Direction.LONG, timeframe=TF),
+        models=[ModelType.M1],
+    )
+    engine.arm_at(poi, arm_bar=0)  # CREATED → FRESH, tracked
+    rows = [NOFILL] * 14
+    loop, runner = _make_runner(candle_factory, rows)
+    adapter = PipelineAdapter(engine)
+    adapter.set_candles(candle_factory(rows, timeframe=TF, start=START))
+    adapter.attach(runner)
+    runner.submit_entry(
+        CandidateEntry(
+            direction=Direction.LONG, entry_price=D_ENTRY, sl_price=D_STOP,
+            poi_id=poi.id, trigger=TriggerType.D_TWO_BAR_REVERSAL,
+        )
+    )
+    loop.run(end_timestamp=loop._series.candles[10].timestamp)
+    assert len(runner.orders) == 1
+    assert poi.state is POIState.FRESH
+    loop.run(
+        start_timestamp=loop._series.candles[11].timestamp,
+        end_timestamp=loop._series.candles[11].timestamp,
+    )
+    assert len(runner.orders) == 0
+    assert poi.state is POIState.TESTED  # §23 drove the POI TESTED
+    loop.run(start_timestamp=loop._series.candles[12].timestamp)
+    assert len(runner.positions) == 0  # nothing left to fill

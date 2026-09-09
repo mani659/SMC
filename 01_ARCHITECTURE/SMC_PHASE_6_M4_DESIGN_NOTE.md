@@ -29,6 +29,39 @@ The locked M3 per-bar order is unchanged and still authoritative:
 5. M2 fills: pending limits, then physical SL/TP (same-bar SL first)
 6. **entries last** — and inside the entry step: `adapter.generate_candidates(bar, bar_index, now)` runs BEFORE `_process_entries`, which risk-gates whatever the adapter queued
 
+## 1a. Audit fixes (post-freeze, Phase 6 audit accepted)
+
+* **C1 — §23/§24 unfilled-order expiry is now wired into the bar loop.**
+  `BacktestRunner.on_bar` runs a dedicated expiry step (3c, before fills):
+  `PendingOrderBook.expired_by_section23(timeframe)` (M5 = 12 / M1 = 30
+  bars) then `expired_by_give_up` (the 20-bar §24 backstop for timeframes
+  without a §23 rule). Cancelled orders' per-order context maps are
+  cleaned, and each affected POI is driven to TESTED through the engine's
+  state machine via `PipelineAdapter.notify_order_expired` (the frozen
+  `expire_unfilled` path when a §23 rule exists, else a FRESH → TESTED
+  transition). An order reaching expiry on a bar is cancelled BEFORE that
+  bar's fills are evaluated, so it can never fill after its window.
+* **I1 — ATR and spread are fed per bar.** The adapter exposes
+  `current_atr(bar_index)` — `latest_atr` over the honest candle prefix
+  `[: bar_index + 1]` (no lookahead, same contract as the trigger scan);
+  the runner feeds it to `set_atr` each bar before exit management. The
+  spread input comes from `RunnerConfig.spread_price` (PRICE units; a
+  caller enabling the §28.5 spread gate must configure it — no longer a
+  silent default). The paper runner computes the same ATR from its own
+  growing series, so backtest and paper gate on the same inputs.
+* **I5 (ruling) — fill-before-entry is the V1 rule.** The runner evaluates
+  fills (step 5) BEFORE the entry step (step 6): a limit placed on bar N
+  can only fill from bar N+1 — a just-placed limit never fills on its own
+  bar's range, even if that bar traded through the price.
+* **I3 (ruling) — hard-cancel does not consume the workflow.** After a §11
+  hard-cancel the adapter's workflow survives; a new limit may be placed
+  only after the blackout clears, and only while the workflow is still
+  alive (§24 `signal_expired` drops it, a POI VIOLATION drops it and
+  cancels resting limits). The §5 machine is never re-armed — a TESTED /
+  VIOLATED POI never routes again.
+
+---
+
 Per bar, per tracked POI (arm order — deterministic), the adapter runs:
 
 1. **Trigger scan** — `PipelineEngine.scan_route(poi, prefix, detect_swings(prefix, tf), to_bar=bar_index)`. The scan universe is the candle prefix `[: bar_index + 1]` (never a future bar — no lookahead). §19 swings are recomputed on the same prefix rather than trusting caller-supplied full-history swing lists (V1 honesty note: those lists are not assumed prefix-safe; recomputing keeps the backtest strictly causal). The scan is bounded by the §24 give-up window anchored at the POI's arm bar (engine bookkeeping).

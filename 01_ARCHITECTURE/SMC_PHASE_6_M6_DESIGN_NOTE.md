@@ -1,6 +1,6 @@
 # Phase 6 — Milestone 6 Design Note: Paper Runner + KPI Logging
 
-Status: COMPLETE (all 496 tests green — 481 pre-existing + 15 new M6 paper tests)
+Status: COMPLETE (all 501 tests green — 496 pre-existing + 5 audit-fix tests)
 Scope: paper-trading runner over the live execution layer + operational KPI logging. Walk-forward / Monte Carlo remain V1.1 (out of scope).
 
 ---
@@ -15,7 +15,17 @@ a copy of `BacktestRunner`:
   The paper runner IS the adapter's runner: it implements the same
   `submit_entry` / `set_pipeline_adapter` / `cancel_pending_for_poi` /
   `on_candidate_accepted` seam the backtest runner exposes, so the
-  identical adapter object drives both paths.
+  identical adapter object drives both paths. **The real adapter is
+  auto-attached**: `PaperRunner.__init__` calls `pipeline.attach(self)`
+  (guarded for protocol stubs), so no manual wiring step is needed
+  (audit I2; proven by the real-adapter composition test).
+* **POI provisioning (audit I2)**: validated POIs reach the engine the
+  same way they do in the M4 integration tests — an external driver
+  calls `engine.validate(...)` (with injected displacement) then
+  `engine.arm_at(poi, arm_bar)` before the first cycle. V1 ships no
+  in-package detection loop; the Phase 7 live driver owns
+  detect → validate → arm, and the paper runner consumes whatever the
+  adapter's engine tracks.
 * **Risk side**: the same pure `RiskEngine` — `evaluate_entry`,
   `evaluate_exit`, `evaluate_friday_close`, `hard_cancel_pending`,
   `on_trade_opened`, `on_be_applied`, state updates. No second sizing
@@ -31,6 +41,10 @@ is called when a bar CLOSES — bar-close driven V1):
 2. `evaluate_friday_close(now)` → close ALL + cancel ALL (portfolio,
    KPI-logged) and skip the rest of the bar;
 3. `hard_cancel_pending(now, news_events)` → cancel all pendings (§11);
+   3b. **C1 §23/§24 age expiry**: GTC pendings never expire at the
+   broker (`ORDER_TIME_GTC`), so the runner cancels by AGE — M5 = 12 /
+   M1 = 30 bars (§23), the 20-bar §24 give-up backstop elsewhere —
+   before fill observation, emitting a `management` cancel record;
 4. observe broker truth: fills (pending → position) and closes
    (position disappeared);
 5. per-position `evaluate_exit` → EXIT (market close) / MOVE_SL (modify);
@@ -39,7 +53,9 @@ is called when a bar CLOSES — bar-close driven V1):
 The live scan series: the runner appends each closed bar to the adapter's
 candle list (`_remember_bar`), so the adapter's per-bar prefix slicing
 keeps the same causal no-lookahead contract as backtest. The bar index
-handed to the adapter is the last index of that growing series.
+handed to the adapter is the last index of that growing series. The
+runner also computes ATR from that same series per bar (I1 parity with
+backtest).
 
 ## 2. Live adapter responsibilities (`broker_adapter.py`)
 
@@ -86,11 +102,21 @@ identical inputs (proven by test).
 
 ## 4. Fill / close observation (broker truth, not simulation)
 
-* **Fill** = the broker reports a position whose ticket equals a placed
-  pending's order ticket (MT5 position-id convention). The pending's
-  client-side identity (poi_id, trigger, route_id, FVG context, sweep
-  level) transfers to the tracked position; `on_trade_opened()` fires
-  (BE latch re-arm); a `fill` KPI record is emitted.
+* **Fill matching is by ORDER IDENTITY LINKAGE, never ticket equality
+  (audit C2).** In the real MT5 API `POSITION_TICKET` is a DIFFERENT
+  identifier from the order ticket returned by `order_send` — the
+  earlier "position id equals order ticket" claim in this note was
+  wrong and is retracted. A placed pending is matched to a broker
+  position on `(symbol, magic, comment)` — the fields that carry from
+  the order record to the position record (`POSITION_MAGIC` /
+  `POSITION_COMMENT`; the order comment is the §11 `route_id`, which
+  the runner stamps at placement). `PositionSnapshot` now surfaces
+  `magic` / `comment` for this. The pending's client-side identity
+  (poi_id, trigger, route_id, FVG context, sweep level) transfers to
+  the tracked position keyed by the POSITION ticket; `on_trade_opened()`
+  fires (BE latch re-arm); a `fill` KPI record is emitted.
+  `ORDER_POSITION_ID`-based matching (polling `orders_get` after fill)
+  is the recorded Phase-7 upgrade when order-history polling lands.
 * **Close** = a tracked position disappears from `positions_get`.
   Documented V1 limitation (honest, not faked): the closing deal's
   exact price/kind/P&L is NOT reconstructed from MT5 history, so
@@ -98,6 +124,15 @@ identical inputs (proven by test).
   circuit breaker (`record_result` must never guess). Same for
   runner-initiated exits and Friday closes. History/deal
   reconciliation is the recorded next-milestone item.
+
+### Hard-cancel ruling (audit I3 — recorded)
+
+A §11 hard-cancel does NOT consume the adapter's one-shot workflow: the
+workflow survives and its candidate may be re-submitted once the blackout
+clears, but a new limit is placed only while the workflow is still alive
+(§24 `signal_expired` drops it; a POI VIOLATION drops it and cancels
+resting limits). The §5 machine is never re-armed — FRESH is never
+restored, so this is not an auto-rearm of the POI.
 
 ## 5. Safety / demo posture
 
@@ -137,3 +172,9 @@ determinism (`to_json` byte-identical under the fake clock/connector).
    nominal TF cadence; irregular-session gaps (weekends) are not
    special-cased (the gap counter may over-count across a weekend —
    acceptable for a demo-posture V1, recorded honestly).
+5. Fill linkage requires the broker position to carry the order's
+   magic/comment (true for real MT5 `positions_get`). Brokers that strip
+   comments would need `ORDER_POSITION_ID` polling (Phase 7 upgrade).
+   A filled pending matched by linkage is consumed even if the broker
+   reports the fill at a position ticket that never appears in
+   `positions_get` again.

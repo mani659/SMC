@@ -27,12 +27,20 @@ Per-bar order (the locked backtest order, applied live — the loop calls
    semantics — the route may be re-attempted later).
 
 Fill/close observation is broker-truth-based: a pending is FILLED when
-the broker reports a position whose ticket equals the pending's order
-ticket (MT5's position-id convention); a position is CLOSED when it
-disappears from ``positions_get``. Documented V1 limitations (honest,
-not faked): the closing deal's exact price/kind/P/L is not
-reconstructed from MT5 history, so closes of unknown P/L are NOT fed
-into the circuit breaker (``record_result`` requires a known win/loss).
+the broker reports a position whose (symbol, magic, comment) matches
+the pending's order identity (MT5 ``POSITION_MAGIC`` /
+``POSITION_COMMENT`` carry from the order to the position record; the
+position's own ticket is a DIFFERENT identifier from the order ticket,
+so ticket equality is never used as a fill key — audit C2); a position
+is CLOSED when it disappears from ``positions_get``. Close outcomes are
+determined HONESTLY from tracked state (coherence patch CR2): runner-
+issued closes (Friday EOD / risk exit) exit at the bar close price, so
+win/loss is exact; broker closes are matched to THIS bar's range — an
+SL-piercing bar means the stop-loss closed (loss → circuit breaker +
+same-level guard), a TP-reaching bar means take-profit closed (win),
+and a bar reaching neither (or both levels ambiguously) stays UNKNOWN
+and feeds no guard (documented V1 limitation; the closing deal's exact
+price/kind/P/L is not reconstructed from MT5 history in V1).
 
 Determinism: the ONLY clock inputs are the injected ``now`` (bar
 timestamp) and the injected ``perf`` monotonic source; KPI records are
@@ -57,6 +65,8 @@ from smc.core.enums import Direction
 from smc.execution.order_manager import OrderKind, OrderRequest
 from smc.paper.broker_adapter import BrokerAdapter
 from smc.paper.kpi_logger import KPILogger
+from smc.triggers.trigger_expiry import poi_give_up_bars
+from smc.validation.state_machine import expiry_bars_for
 from smc.risk.risk_engine import (
     EntryDecision,
     EntryRequest,
@@ -86,7 +96,14 @@ class PaperConfig:
 
 @dataclass(slots=True)
 class _TrackedPending:
-    """A pending we placed at the broker (identity kept client-side)."""
+    """A pending we placed at the broker (identity kept client-side).
+
+    ``symbol`` / ``magic`` / ``comment`` are the order-identity linkage
+    used to match a broker fill back to THIS pending (M6 audit fix): in
+    MT5 the filled position's ticket differs from the order ticket, so
+    fills are matched on (symbol, magic, comment) — the fields that carry
+    through from the order to the position record.
+    """
 
     ticket: int
     poi_id: str | None
@@ -95,6 +112,9 @@ class _TrackedPending:
     fvg_context: object | None
     sweep_level: float | None
     placed_at: datetime
+    symbol: str = ""
+    magic: int | None = None
+    comment: str = ""
 
 
 @dataclass(slots=True)
@@ -111,6 +131,7 @@ class _TrackedPosition:
     route_id: str | None
     fvg_context: object | None
     sweep_level: float | None
+    tp: float | None = None
 
 
 class PaperRunner:
@@ -151,6 +172,14 @@ class PaperRunner:
         self._positions: dict[int, _TrackedPosition] = {}
         self._entry_queue: list = []     # candidates the adapter queued this bar
         self._bar_count = 0              # monotonically increasing bar anchor
+        # I2: wire the REAL M4 adapter in directly (its ``attach`` sets
+        # ``adapter._runner`` and calls ``set_pipeline_adapter``), so the
+        # identical adapter object drives backtest AND paper without a
+        # manual wiring step. Protocol-conformant stubs without ``attach``
+        # (tests) bind themselves as before.
+        attach = getattr(self.adapter, "attach", None)
+        if callable(attach):
+            attach(self)
 
     # ------------------------------------------------------------------ #
     # M4 adapter-runner protocol (same seam the backtest runner exposes)
@@ -186,7 +215,7 @@ class PaperRunner:
 
         # 2. Portfolio-level Friday EOD (once per bar, first).
         if self.risk.evaluate_friday_close(now):
-            self._friday_close(now)
+            self._friday_close(now, bar)
             self._last_bar_at = now
             return
 
@@ -196,9 +225,14 @@ class PaperRunner:
         ):
             self._hard_cancel_all(now)
 
+        # 3b. C1: §23/§24 unfilled-order age expiry. The broker places GTC
+        # orders (no MT5-side expiry), so the runner cancels by age:
+        # M5 = 12 / M1 = 30 bars; the §24 give-up backstop elsewhere.
+        self._expire_pendings(now)
+
         # 4. Observe the broker: fills + closes (broker truth).
         self._observe_fills(now)
-        self._observe_closes(now)
+        self._observe_closes(now, bar)
 
         # 5. Per-position risk exits (FVG invalidation + PureRunner BE).
         self._manage_open_positions(bar, now)
@@ -246,8 +280,14 @@ class PaperRunner:
             gap_bars = max(gap_minutes // self.timeframe.minutes, 1)
             self.kpi.record_missed_bar(at=now, expected_at=expected, gap_bars=gap_bars)
 
-    def _friday_close(self, now: datetime) -> None:
-        """§28.4: close ALL positions + cancel ALL pendings (portfolio)."""
+    def _friday_close(self, now: datetime, bar: Candle) -> None:
+        """§28.4: close ALL positions + cancel ALL pendings (portfolio).
+
+        The forced close exits at the bar close price (the same convention
+        as the backtest runner's risk exits), so win/loss is exact and the
+        circuit breaker / sweep guard are fed honestly (CR2).
+        """
+        bar_index = self._bar_index(bar)
         closed = 0
         for snapshot in list(self._broker_positions()):
             outcome = self.broker.close_position(
@@ -260,9 +300,15 @@ class PaperRunner:
             if outcome.success:
                 closed += 1
                 tracked = self._positions.pop(snapshot.ticket, None)
+                win = self._derive_close_win(tracked, bar.close)
+                if tracked is not None and win is not None:
+                    self._feed_risk_close(
+                        tracked, win=win, sl_level=None,
+                        now=now, bar_index=bar_index,
+                    )
                 self.kpi.record_trade_closed(
                     at=now, ticket=snapshot.ticket, kind="friday_eod",
-                    win=None,  # honest: live P/L not reconstructed in V1
+                    win=win,
                     poi_id=tracked.poi_id if tracked else None,
                 )
         cancelled = self._cancel_all_pendings(now)
@@ -289,6 +335,33 @@ class PaperRunner:
             _ = tracked  # identity retained only while the order rests
         return cancelled
 
+    def _expire_pendings(self, now: datetime) -> None:
+        """C1: §23/§24 unfilled-order age expiry (runner-side, audit fix).
+
+        The broker places GTC pendings (``ORDER_TIME_GTC`` — no MT5-side
+        expiry), so the runner cancels by AGE: M5 = 12 / M1 = 30 bars
+        (§23); timeframes without a frozen rule fall back to the §24
+        give-up backstop (20 bars). Cancelled pendings emit a
+        ``management`` KPI record; the POI one-shot was already consumed
+        at placement, so no engine state is touched here.
+        """
+        limit = expiry_bars_for(self.timeframe)
+        if limit is None:
+            limit = poi_give_up_bars()
+        bar_seconds = self.timeframe.minutes * 60
+        for ticket in sorted(self._pendings):  # deterministic order
+            tracked = self._pendings[ticket]
+            age_bars = int((now - tracked.placed_at).total_seconds() // bar_seconds)
+            if age_bars < limit:
+                continue
+            outcome = self.broker.cancel_pending(ticket)
+            self.kpi.record_management(
+                at=now, op="cancel", ticket=ticket,
+                success=outcome.success, latency_ms=outcome.latency_ms,
+            )
+            if outcome.success:
+                self._pendings.pop(ticket, None)
+
     def cancel_pending_for_poi(self, poi_id: str) -> int:
         """M4 parity: cancel a violated POI's resting limits (dead thesis)."""
         cancelled = 0
@@ -309,20 +382,35 @@ class PaperRunner:
     def _observe_fills(self, now: datetime) -> None:
         """Pending → position transitions reported by the broker.
 
-        MT5 convention: a filled pending's position id equals the order
-        ticket, so the pending's tracked identity transfers to the
-        position keyed by the SAME ticket.
+        Fill matching is by ORDER IDENTITY LINKAGE, not ticket equality
+        (M6 audit fix): in MT5 a filled pending's position ticket is a
+        DIFFERENT identifier from the order ticket, so a pending is
+        matched to a position on (symbol, magic, comment) — the fields
+        that carry from the order record to the position record
+        (POSITION_SYMBOL / POSITION_MAGIC / POSITION_COMMENT). The
+        pending's tracked identity transfers to the position keyed by the
+        POSITION's ticket.
         """
+        by_linkage: dict[tuple, list[int]] = {}
+        for ticket, tracked in self._pendings.items():
+            key = (tracked.symbol, tracked.magic, tracked.comment)
+            by_linkage.setdefault(key, []).append(ticket)
         for snapshot in self._broker_positions():
-            tracked = self._pendings.pop(snapshot.ticket, None)
+            key = (snapshot.symbol, snapshot.magic, snapshot.comment)
+            candidates = by_linkage.get(key) or []
+            ticket = candidates.pop(0) if candidates else None
+            if ticket is None:
+                continue  # not a pending we placed (identity never guessed)
+            tracked = self._pendings.pop(ticket, None)
             if tracked is None:
-                continue  # not a pending we placed
+                continue
             self._positions[snapshot.ticket] = _TrackedPosition(
                 ticket=snapshot.ticket,
                 direction=snapshot.direction,
                 volume=snapshot.volume,
                 entry_price=snapshot.open_price,
                 sl=snapshot.sl,
+                tp=snapshot.tp,
                 poi_id=tracked.poi_id,
                 trigger=tracked.trigger,
                 route_id=tracked.route_id,
@@ -335,20 +423,45 @@ class PaperRunner:
             )
             self.risk.on_trade_opened()  # re-arm the BE latch for THIS trade
 
-    def _observe_closes(self, now: datetime) -> None:
+    def _observe_closes(self, now: datetime, bar: Candle) -> None:
         """Position disappearance = closed (SL/TP or manual — broker truth).
 
-        V1 limitation (documented, not faked): the closing deal's exact
-        price/kind is not reconstructed from MT5 history, so the win/loss
-        is UNKNOWN here — unknown-P/L closes are NOT fed to the circuit
-        breaker (``record_result`` must never guess).
+        Honest local determination (CR2): when THIS closed bar's range can
+        only have triggered one protective level, the outcome is KNOWN —
+        an SL-piercing bar means a stop-loss close (loss → circuit breaker
+        + same-level guard + sweep guard when a sweep level is tracked), a
+        TP-reaching bar means a take-profit close (win → circuit breaker).
+        SL-first is the same-bar tie-break (mirrors the backtest fill
+        model). A bar reaching neither level leaves the outcome UNKNOWN
+        and no guard is fed — the V1 limitation stays honest (the closing
+        deal's exact price/kind/P/L is not reconstructed from MT5
+        history).
         """
+        bar_index = self._bar_index(bar)
         known = set(self._positions)
         seen = {snapshot.ticket for snapshot in self._broker_positions()}
         for ticket in sorted(known - seen):  # deterministic order
             tracked = self._positions.pop(ticket)
+            win: bool | None = None
+            kind = "broker_close"
+            sl_level: float | None = None
+            if tracked.direction is Direction.LONG:
+                if tracked.sl is not None and bar.low <= tracked.sl:
+                    win, kind, sl_level = False, "stop_loss", tracked.sl
+                elif tracked.tp is not None and bar.high >= tracked.tp:
+                    win, kind = True, "take_profit"
+            else:
+                if tracked.sl is not None and bar.high >= tracked.sl:
+                    win, kind, sl_level = False, "stop_loss", tracked.sl
+                elif tracked.tp is not None and bar.low <= tracked.tp:
+                    win, kind = True, "take_profit"
+            if win is not None:
+                self._feed_risk_close(
+                    tracked, win=win, sl_level=sl_level,
+                    now=now, bar_index=bar_index,
+                )
             self.kpi.record_trade_closed(
-                at=now, ticket=ticket, kind="broker_close", win=None,
+                at=now, ticket=ticket, kind=kind, win=win,
                 poi_id=tracked.poi_id,
             )
 
@@ -386,9 +499,16 @@ class PaperRunner:
                 )
                 if outcome.success:
                     self._positions.pop(ticket, None)
+                    # Risk exit at the bar close price → exact P/L (CR2).
+                    win = self._derive_close_win(tracked, bar.close)
+                    if win is not None:
+                        self._feed_risk_close(
+                            tracked, win=win, sl_level=None,
+                            now=now, bar_index=self._bar_index(bar),
+                        )
                     self.kpi.record_trade_closed(
                         at=now, ticket=ticket, kind=decision.reason or "risk_exit",
-                        win=None,  # honest: exit P/L unknown until history
+                        win=win,
                         poi_id=tracked.poi_id,
                     )
             elif decision.action is RiskAction.MOVE_SL:
@@ -407,6 +527,10 @@ class PaperRunner:
     def _entry_step(self, bar: Candle, now: datetime) -> None:
         start = self._perf() if self._perf else None
         bar_index = self._bar_index(bar)
+        # I4: retire terminal engine POIs (ids with resting pendings or
+        # open positions retained; workflow-live + touch-window ids are
+        # retained inside the adapter) before this bar's scan.
+        self._prune_engine_state(bar_index)
         # Drive the REAL pipeline (M4 adapter protocol — scan + feed);
         # candidates arrive through submit_entry().
         self.adapter.generate_candidates(bar, bar_index, now)
@@ -438,7 +562,11 @@ class PaperRunner:
                 blocked += 1
                 continue  # nothing placed, nothing consumed (I2 parity)
             if self.config.dry_run:
-                placed += 1  # decision logged; the broker sees nothing
+                # dry-run: the decision was evaluated and logged, but no
+                # order reached the broker and the §11 one-shot is not
+                # consumed. ``placed`` counts "would have placed" accepted
+                # verdicts, not broker acks.
+                placed += 1
                 continue
             outcome = self.broker.place_limit(
                 OrderRequest(
@@ -467,6 +595,12 @@ class PaperRunner:
                     fvg_context=candidate.fvg_context(),
                     sweep_level=candidate.sweep_level,
                     placed_at=now,
+                    # Fill-linkage identity (M6 audit fix): the broker
+                    # matches a fill to this pending on these fields — the
+                    # order's symbol/magic/comment carry to the position.
+                    symbol=self.broker.orders.symbol,
+                    magic=getattr(self.broker.orders, "magic", None),
+                    comment=candidate.route_id or "",
                 )
                 accepted = getattr(self.adapter, "on_candidate_accepted", None)
                 if accepted is not None:
@@ -483,6 +617,48 @@ class PaperRunner:
     # ------------------------------------------------------------------ #
     # Internals
     # ------------------------------------------------------------------ #
+    def _derive_close_win(self, tracked, exit_price: float) -> bool | None:
+        """Win/loss for a runner-issued close at a KNOWN price (exact)."""
+        if tracked is None:
+            return None
+        if tracked.direction is Direction.LONG:
+            return exit_price > tracked.entry_price
+        return exit_price < tracked.entry_price
+
+    def _feed_risk_close(
+        self, tracked, *, win: bool, sl_level: float | None,
+        now: datetime, bar_index: int,
+    ) -> None:
+        """CR2: feed a closed trade's outcome into the risk guards.
+
+        Circuit breaker (win/loss) always; same-level guard when the close
+        was a stop-loss (``sl_level`` known); sweep guard when the trade
+        carried a sweep level and the close was a loss — the exact same
+        feeding rule the backtest runner uses (never fabricated).
+        """
+        self.risk.record_result(win=win, at=now)
+        if sl_level is not None:
+            self.risk.record_sl_close(sl_level=sl_level, bar_index=bar_index)
+        if not win and tracked.sweep_level not in (None, 0.0):
+            self.risk.record_failed_sweep(
+                sweep_level=tracked.sweep_level,
+                bar_index=bar_index,
+                is_long=tracked.direction is Direction.LONG,
+            )
+
+    def _prune_engine_state(self, bar_index: int) -> None:
+        """I4: retire terminal engine POIs (workflow-live ids kept)."""
+        engine = getattr(self.adapter, "engine", None)
+        if engine is None:
+            return  # protocol stubs without an engine keep everything
+        prune = getattr(self.adapter, "prune_terminal_pois", None)
+        retain = {t.poi_id for t in self._pendings.values() if t.poi_id}
+        retain |= {p.poi_id for p in self._positions.values() if p.poi_id}
+        if callable(prune):
+            prune(retain, bar_index)
+        else:
+            engine.prune_terminal(retain)
+
     def _current_atr(self) -> float:
         """ATR over the adapter's known series (0.0 until enough bars)."""
         from smc.utils.atr import latest_atr

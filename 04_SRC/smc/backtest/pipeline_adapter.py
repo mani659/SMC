@@ -94,9 +94,11 @@ class PipelineAdapter:
         engine: PipelineEngine,
         *,
         timeframe: Timeframe = Timeframe.M5,
+        atr_period: int = 14,
     ) -> None:
         self.engine = engine
         self.timeframe = timeframe
+        self.atr_period = atr_period
         self._runner = None
         self._candles: list[Candle] = []
         # §11 one-shot: POI id → its single routed workflow (never two).
@@ -172,6 +174,76 @@ class PipelineAdapter:
         """Consume the POI one-shot — called ONLY on an accepted placement."""
         if candidate.poi_id is not None:
             self._workflows.pop(candidate.poi_id, None)
+
+    def notify_order_expired(self, poi_id: str, bars_open: int) -> None:
+        """C1: a resting limit for ``poi_id`` hit §23/§24 unfilled-order
+        expiry (the runner already cancelled it) — retire the POI.
+
+        The engine stays the sole §5 authority: the state machine
+        transitions the POI to TESTED through the frozen
+        ``expire_unfilled`` path when a §23 rule exists for its timeframe
+        (M5 = 12 / M1 = 30); otherwise the §24 give-up backstop applies
+        (FRESH → TESTED directly). A TESTED POI can never route again
+        (``_may_route`` requires FRESH, or TESTED only within the
+        first-touch window). No-op when the POI is not tracked here or
+        already terminal.
+        """
+        machine = self.engine.state_machine
+        for poi in self.engine.tracked_pois():
+            if poi.id != poi_id:
+                continue
+            if machine.expire_unfilled(poi, bars_open) is None:
+                # No frozen §23 rule for this timeframe → give-up backstop.
+                if machine.current(poi) is POIState.FRESH:
+                    machine.transition(poi, POIState.TESTED)
+            self._workflows.pop(poi_id, None)
+            return
+
+    def current_atr(self, bar_index: int) -> float:
+        """I1: ATR over the honest candle prefix ``[: bar_index + 1]``.
+
+        Capped at the current bar — never the future (same no-lookahead
+        contract as the trigger scan). Returns 0.0 before the period
+        warm-up so the ATR-dependent gates stay deterministically off
+        (never an exception). The runner feeds this to ``set_atr`` each
+        bar; the paper runner computes the same value from its own
+        growing series.
+        """
+        from smc.utils.atr import latest_atr
+
+        prefix = self._candles[: bar_index + 1]
+        atr = latest_atr(prefix, self.atr_period)
+        return float(atr) if atr is not None else 0.0
+
+    def prune_terminal_pois(
+        self, retain_ids: set[str] | None = None, bar_index: int | None = None
+    ) -> list[str]:
+        """I4: retire terminal POIs from the engine (runner calls per bar).
+
+        ``retain_ids`` — POI ids still tied to a resting order or open
+        position (the runner supplies them from its stores); workflow-live
+        POIs (a routed candidate awaiting its risk verdict) are ALWAYS
+        retained so a mid-flight one-shot is never orphaned. A TESTED POI
+        still inside the first-touch routing window (touch bar + 1 — see
+        :meth:`_may_route`) is also retained when ``bar_index`` is given:
+        it may still produce its first workflow on this bar, so pruning it
+        here would orphan the route the scan is about to create. Returns
+        the pruned ids and drops their adapter bookkeeping (workflow /
+        touch bar / routed flag) so a pruned POI cannot resurface.
+        """
+        retain = set(retain_ids or ())
+        retain |= set(self._workflows)
+        if bar_index is not None:
+            for poi in self.engine.tracked_pois():
+                state = self.engine.state_machine.current(poi)
+                if self._may_route(poi, state, bar_index):
+                    retain.add(poi.id)
+        pruned = self.engine.prune_terminal(retain)
+        for poi_id in pruned:
+            self._workflows.pop(poi_id, None)
+            self._tested_bar.pop(poi_id, None)
+            self._routed.discard(poi_id)
+        return pruned
 
     # ------------------------------------------------------------------ #
     # Internals

@@ -11,6 +11,58 @@ _No pending changes._
 
 ---
 
+## [2026-09-09] — Phase 7 Complete: Live Readiness + MQL5 Safety Watchdog (V1)
+
+### Added
+- **`smc/live/` — Python live package (Option A: Python owns the brain):**
+  - `config.py` — `LiveConfig` (symbol/timeframe/magic, demo-first flags, risk inputs on the single §28.7 sizing path, heartbeat/watchdog timing, detection window) + `live_config_from_dict` (timeframe coercion).
+  - `heartbeat.py` — plain-text heartbeat file (`<unix_secs> <sequence>` + `state=`), atomic temp+rename writes, `HeartbeatPublisher` (interval-bounded, injected clock), `read_heartbeat`/`is_stale` (fail-closed: missing/garbage == stale), and `evaluate_watchdog` — the pure-Python decision the EA mirrors (healthy → no action; stale/unreadable → emergency). Defaults: 1 s interval, 5 s stale timeout (documented UNFROZEN operational timing, not trading thresholds).
+  - `loop.py` — `LiveLoop`: connect (refuse on failure) → poll new closed bars → rolling 200-bar window → `DetectionDriver.validate_window` → arm ONLY newly-passed POIs (never re-arm; §24 anchor + §11 one-shot preserved) → `PaperRunner.run_one_cycle` over the REAL adapter/engine/risk stack → interval-bounded heartbeat. Cold start anchors history without replay; `run_once()` is the deterministic test seam; `stop()` writes a `shutdown` heartbeat (watchdog treats it like death — fail-closed).
+- **`05_MQL5_SAFETY/SMC_Safety_Watchdog.mq5` — MQL5 Safety Watchdog EA only.**
+  - MAY: monitor heartbeat (1 s timer, 5 s timeout vs `TimeGMT()`), emergency close ALL scoped positions + delete ALL scoped pendings on stale/unreadable heartbeat, log/alert.
+  - MUST NOT: any strategy logic — no POI detection, validation, entries, PureRunner/FVG management, session/news/risk policy, sizing. Healthy heartbeat → no trading actions.
+- **`smc/orchestration/detection_driver.py`** — `validate_window` extracted (Stage 0/1 → detect → merge → validate WITHOUT arming); `run` delegates and arms.
+- **Tests** — `tests/test_live_phase7.py` (9): heartbeat roundtrip/freshness, fail-closed garbage/missing, sequence + clean-shutdown marker, publisher interval, watchdog decision (healthy/stale/missing), live loop over a fake connector (history anchor → new-bar cycle → heartbeat fresh → shutdown marker), start refusal, no re-arming of existing POIs, config coercion.
+- Design note: `01_ARCHITECTURE/SMC_PHASE_7_DESIGN_NOTE.md` (transport + timeouts + loop structure + exact EA responsibilities + clean shutdown + manual EA validation checklist + residual risks).
+- Suite: **510 → 519 passed**.
+
+### Fixed / integrated
+- The pre-Phase-7 coherence patch (CR1 detection driver, I1 single §5 state machine, I2 running equity, CR2 paper close guards, I4 retention — 510 passed) is folded into this freeze; see `SMC_PHASE_7_PREP_COHERENCE_PATCH.md`.
+
+---
+
+## [2026-09-09] — Phase 6 Audit Fixes (independent audit accepted)
+
+### Fixed
+- **C1 — §23/§24 unfilled-order expiry wired into the integrated loop.**
+  `BacktestRunner` runs an expiry step (3c, before fills) calling
+  `expired_by_section23(timeframe)` + `expired_by_give_up`; affected
+  POIs are driven TESTED through the state machine via
+  `PipelineAdapter.notify_order_expired`; paper cancels GTC pendings by
+  age (M5 12 / M1 30 bars, §24 backstop). Resting limits can no longer
+  fill past their frozen window.
+- **C2 — paper fill matching by order identity linkage, not ticket
+  equality.** `PositionSnapshot` now surfaces `magic`/`comment`;
+  `PaperRunner._observe_fills` matches a fill to a pending on
+  (symbol, magic, comment) — the fields real MT5 carries from the order
+  to the position record (`POSITION_MAGIC`/`POSITION_COMMENT`); the
+  position ticket is keyed separately. The false "position id equals
+  order ticket" claim is retracted in the M6 note + SESSION_HANDOFF.
+- **I1 — ATR/spread fed per bar in the integrated backtest path**
+  (`PipelineAdapter.current_atr` on the honest prefix; spread from
+  `RunnerConfig.spread_price`) so BE/spread/same-level gates are not
+  silently disabled; parity with the paper runner.
+- **I2 — the real `PipelineAdapter` is auto-attached by `PaperRunner`**
+  (`init`), with a real-adapter composition test; POI provisioning for
+  demo use documented in the M6 note.
+- **I3/I5 rulings recorded** in the M4/M6 design notes (hard-cancel
+  workflow survival + re-placement bounds; fill-before-entry is the V1
+  rule).
+- Suite: **496 → 501 passed** (2 backtest expiry tests + 3 paper tests:
+  linkage fill, age expiry, real-adapter composition).
+
+---
+
 ## [2026-09-09] — Phase 6 Complete: Backtesting & Paper Trading (V1)
 
 ### Added

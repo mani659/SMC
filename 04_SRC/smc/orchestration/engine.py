@@ -112,10 +112,25 @@ class PipelineEngine:
         matrix: CompatibilityMatrix = DEFAULT_MATRIX,
         symbol: str = "XAUUSD.x",
     ) -> None:
-        self.pipeline = pipeline if pipeline is not None else ValidationPipeline()
-        self.state_machine = (
-            state_machine if state_machine is not None else POIStateMachine()
-        )
+        # I1 (coherence patch): ONE §5 state machine instance. The pipeline
+        # and the engine must share the same machine — no dual-machine
+        # coherence via ``poi.state`` fallback. Whichever side is supplied,
+        # the other adopts it; supplying two DIFFERENT machines is a loud
+        # error, never a silent split.
+        if pipeline is None and state_machine is None:
+            state_machine = POIStateMachine()
+            pipeline = ValidationPipeline(state_machine=state_machine)
+        elif pipeline is None:
+            pipeline = ValidationPipeline(state_machine=state_machine)
+        elif state_machine is None:
+            state_machine = pipeline.state_machine
+        elif pipeline.state_machine is not state_machine:
+            raise ValueError(
+                "pipeline and state_machine must be the same POIStateMachine "
+                "instance (single §5 authority)"
+            )
+        self.pipeline = pipeline
+        self.state_machine = state_machine
         self.router = router if router is not None else TriggerRouter(matrix=matrix)
         self.order_manager = order_manager
         self.symbol = symbol
@@ -233,7 +248,7 @@ class PipelineEngine:
 
         Returns the FIRST valid route (bar order, §12). The scan is bounded
         by ``arm_bar + poi_give_up_bars()`` (V1, documented — see
-        ``trigger_expiry.poi_give_up_bars``). ``to_bar`` (M4) optionally
+        ``trigger_expiry.poi_give_up_bars``).        ``to_bar`` (M4) optionally
         caps the scan at the CURRENT bar — the backtest adapter passes the
         bar-loop index so the scan never sees future candles (no lookahead).
         """
@@ -269,6 +284,15 @@ class PipelineEngine:
 
         The order volume comes from :meth:`compute_risk_lots` (the §28.7
         policy path — band clamp + ``LOT_MAX_SAFETY`` cap).
+
+        V1.1 (coherence patch I3): superseded as the placement seam. The
+        shipped runners do NOT call this method — the backtest adapter
+        places through the runner's ``PendingOrderBook`` and the paper
+        runner through its ``BrokerAdapter``, both building ``OrderRequest``
+        at their own boundaries (``comment`` carries the §11 route
+        identity). This helper is retained for tests and direct live use;
+        ``build_limit_request`` remains its single request builder (no
+        third construction path).
         """
         poi = route.poi
         episode = self._episodes.get(poi.id)
@@ -318,6 +342,36 @@ class PipelineEngine:
             min_lots,
             lot_step,
         )
+
+    # ------------------------------------------------------------------ #
+    # I4 — terminal-state retention
+    # ------------------------------------------------------------------ #
+    def prune_terminal(self, retain_ids: set[str] | None = None) -> list[str]:
+        """I4: drop terminal (TESTED/VIOLATED) POIs from the arm indexes.
+
+        Long runs must not keep every terminal POI/episode forever. A POI
+        is pruned when its §5 state is terminal AND its id is not in
+        ``retain_ids`` — the caller supplies the ids still tied to a
+        resting order / open position / in-flight workflow (the runners do
+        this per bar). The state machine's per-id store is deliberately
+        left intact (it is shared with the validation pipeline and a pruned
+        id costs nothing); the POI object and its episode — the heavy part
+        — are released. Returns the pruned POI ids.
+        """
+        retain = set(retain_ids or ())
+        kept: list[POI] = []
+        pruned: list[str] = []
+        for poi in self._armed_order:
+            if poi.id in retain:
+                kept.append(poi)
+                continue
+            if self.state_machine.current(poi) in (POIState.TESTED, POIState.VIOLATED):
+                self._episodes.pop(poi.id, None)
+                pruned.append(poi.id)
+            else:
+                kept.append(poi)
+        self._armed_order = kept
+        return pruned
 
     # ------------------------------------------------------------------ #
     def _mark_fired(self, poi: POI, episode: _PoiEpisode, outcome: ExecutionOutcome) -> None:

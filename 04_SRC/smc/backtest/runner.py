@@ -42,6 +42,7 @@ from smc.backtest.clock import BarClock
 from smc.backtest.fill_model import CloseKind
 from smc.backtest.orders import PendingOrderBook
 from smc.backtest.positions import ClosedPosition, PositionStore
+from smc.config.timeframe import Timeframe
 from smc.core.candle import Candle
 from smc.core.enums import Direction
 from smc.risk.risk_engine import (
@@ -63,10 +64,11 @@ __all__ = [
     "BLOCKED_BY_SESSION",
 ]
 
-# M4 TODO (sweep-level plumbing): when a signal/route object exposes its
-# sweep level cleanly, record it on the candidate → pending order → fill
-# path so losing closes feed the sweep guard (record_failed_sweep). No
-# sweep level is fabricated in the meantime.
+# M4 sweep-level plumbing: the adapter records a candidate's sweep level
+# on the pending order → fill ticket → losing close so the §28.6 sweep
+# guard is fed (record_failed_sweep). No trigger in the frozen Phase 4 set
+# exposes a sweep level on its signal yet, so the plumbing is complete but
+# usually dormant — no sweep level is ever fabricated.
 
 BLOCKED_BY_NEWS = BLOCK_NEWS
 BLOCKED_BY_SESSION = BLOCK_SESSION
@@ -122,6 +124,12 @@ class RunnerConfig:
     lot_step: float = 0.01
     allowed_sessions: tuple | list | None = None   # None = no session gate
     news_events: list = field(default_factory=list)
+    # M4/I1: the runner's execution timeframe (drives the frozen §23
+    # unfilled-order expiry: M5 = 12 / M1 = 30 bars) and the per-bar
+    # spread input for the §28.5 spread gate (PRICE units; 0.0 leaves the
+    # gate off — a caller enabling spread grading must configure it here).
+    timeframe: Timeframe = Timeframe.M5
+    spread_price: float = 0.0
 
 
 @dataclass(slots=True)
@@ -163,6 +171,10 @@ class BacktestRunner(BarHandler):
         self.orders = order_book
         self.positions = position_store
         self.config = config if config is not None else RunnerConfig()
+        # I2 (coherence patch): RUNNING equity — starts at the configured
+        # value and moves with realized P/L (see _record_close). Sizing
+        # reads this, never the static config, after the first close.
+        self._equity: float = self.config.equity
         self.blocked_log: list[BlockedEntry] = []
         self._fvg_by_ticket: dict[int, object] = {}   # ticket → FvgContext
         self._sweep_level_by_ticket: dict[int, float | None] = {}
@@ -204,17 +216,34 @@ class BacktestRunner(BarHandler):
         ):
             self._cancel_all_pending()
 
+        # 3b. I1: feed ATR + spread per bar so the ATR-dependent gates
+        # (PureRunner BE, §28.5 spread, same-level) are never silently
+        # disabled in the integrated path. ATR comes from the pipeline
+        # adapter's honest candle prefix (capped at this bar — no
+        # lookahead); the M3 test seam keeps its explicit set_atr().
+        if self._pipeline_adapter is not None:
+            self.set_atr(self._pipeline_adapter.current_atr(bar_index))
+        self.set_spread_price(self.config.spread_price)
+
+        # 3c. C1: §23/§24 unfilled-order expiry — resting limits past the
+        # frozen bars (M5 = 12 / M1 = 30; give-up backstop elsewhere) are
+        # cancelled BEFORE this bar's fills are evaluated, so an expired
+        # order can never fill. Affected POIs go TESTED through the
+        # state machine (engine authority).
+        self._expire_orders(bar_index)
+
         # 4. Per-position risk exits (FVG invalidation + PureRunner BE).
         self._manage_open_positions(bar, bar_index, now)
 
         # 5. M2 fills: pending limits, then physical SL/TP (SL first).
         self._apply_fills(bar, bar_index)
-        self._apply_physical_closes(bar, bar_index)
-
-        # 6. Entry path: the M4 pipeline adapter (real detection) when
-        # attached, else the M3 candidate seam. Both end in the same
-        # risk-gated pending-limit placement.
+        self._apply_physical_closes(bar, bar_index)        # 6. Entry path: the M4 pipeline adapter (real detection) when
+        #    attached, else the M3 candidate seam. Both end in the same
+        #    risk-gated pending-limit placement.
         if self._pipeline_adapter is not None:
+            # I4: retire terminal POIs (workflow-live + order/position-
+            # tied ids retained by the adapter) before this bar's scan.
+            self._prune_engine_state(bar_index)
             self._pipeline_adapter.generate_candidates(bar, bar_index, now)
         self._process_entries(bar, bar_index, now)
 
@@ -245,6 +274,27 @@ class BacktestRunner(BarHandler):
         for order in self.orders.active():
             self.orders.cancel(order.ticket)
 
+    def _expire_orders(self, bar_index: int) -> None:
+        """C1: apply the frozen §23/§24 unfilled-order expiry (audit fix).
+
+        ``PendingOrderBook.expired_by_section23`` / ``expired_by_give_up``
+        cancel resting limits past their window (M5 = 12 / M1 = 30 bars;
+        the 20-bar §24 give-up backstop for timeframes without a §23
+        rule). Each affected POI is driven to TESTED through the engine's
+        state machine (the sole §5 authority) via the adapter seam, and
+        the runner's per-order context maps are cleaned up. Runs BEFORE
+        fills each bar so an order reaching expiry on this bar can never
+        fill on it.
+        """
+        expired = self.orders.expired_by_section23(bar_index, self.config.timeframe)
+        expired += self.orders.expired_by_give_up(bar_index)
+        for order in expired:
+            self._sweep_by_order.pop(order.ticket, None)
+            self._fvg_by_order.pop(order.ticket, None)
+            self._route_by_order.pop(order.ticket, None)
+            if self._pipeline_adapter is not None and order.poi_id is not None:
+                bars_open = bar_index - order.placed_bar + 1
+                self._pipeline_adapter.notify_order_expired(order.poi_id, bars_open)
     def _manage_open_positions(self, bar: Candle, bar_index: int, now: datetime) -> None:
         for position in list(self.positions.open_positions()):
             fvg_context = self._fvg_by_ticket.get(position.ticket)
@@ -335,7 +385,7 @@ class BacktestRunner(BarHandler):
                 atr=self._atr,
                 current_bar=bar_index,
                 now=now,
-                equity=self.config.equity,
+                equity=self._equity,  # I2: running equity, not the static config
                 risk_fraction=self.config.risk_fraction,
                 pip_value_per_lot=self.config.pip_value_per_lot,
                 min_lots=self.config.min_lots,
@@ -399,6 +449,35 @@ class BacktestRunner(BarHandler):
         ``None`` detaches (falls back to the M3 seam only).
         """
         self._pipeline_adapter = adapter
+
+    def _prune_engine_state(self, bar_index: int) -> None:
+        """I4: drop terminal engine POIs whose state fully resolved.
+
+        Retained ids: any POI with a resting pending limit or an open
+        position in this runner's stores (its trade may still resolve).
+        Workflow-live ids and POIs still inside the first-touch routing
+        window are retained inside the adapter itself. Safe when no
+        adapter is attached (backtest-only runs keep every POI the caller
+        armed — there is no engine bookkeeping to prune).
+        """
+        adapter = self._pipeline_adapter
+        prune = getattr(adapter, "prune_terminal_pois", None)
+        if prune is None:
+            return
+        retain = {o.poi_id for o in self.orders.active() if o.poi_id}
+        retain |= {p.poi_id for p in self.positions.open_positions() if p.poi_id}
+        prune(retain, bar_index)
+
+    def current_equity(self) -> float:
+        """I2: running account equity (config start + realized P/L).
+
+        Unit note: ``realized_pnl`` is raw price×volume; it is converted
+        to the account-currency units of ``equity`` via
+        ``pip_value_per_lot`` — the exact inverse of the sizing formula's
+        divisor (``sl_distance × pip_value_per_lot``), so a winning close
+        of +1.0 raw P/L on a 10.0 pip-value symbol adds 10.0 to equity.
+        """
+        return self._equity
 
     def _fvg_of_candidate(self, candidate: CandidateEntry):
         """FVG context attached to a candidate (None when not supplied).
@@ -472,13 +551,11 @@ class BacktestRunner(BarHandler):
     # ------------------------------------------------------------------ #
     def _record_close(self, record: ClosedPosition, *, bar_index: int) -> None:
         self.risk.record_result(win=record.win, at=record.exit_at)
+        # I2: running equity moves with realized P/L (currency conversion:
+        # raw price×volume × pip value per lot — see current_equity).
+        self._equity += record.realized_pnl * self.config.pip_value_per_lot
         if record.kind == CloseKind.STOP_LOSS:
             self.risk.record_sl_close(sl_level=record.exit_price, bar_index=bar_index)
-        # Sweep-guard recording needs the candidate's sweep level; M3's
-        # entry seam does not plumb it per fill yet — deliberately NOT
-        # fabricated (TODO(M4): thread candidate.sweep_level through the
-        # fill into _sweep_level_by_ticket and call record_failed_sweep on
-        # losing closes with a recorded level).
         # M4 sweep plumbing: a losing close on a trade whose candidate
         # carried a sweep level feeds the sweep guard. No level → nothing
         # recorded (never fabricated).

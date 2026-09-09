@@ -148,8 +148,11 @@ class StubAdapter:
 
 
 def _bar(ts, row):
-    o, h, l, c = row
-    return Candle(timestamp=ts, open=o, high=h, low=l, close=c, timeframe=TF)
+    o, h, l, c = row[:4]
+    volume = float(row[4]) if len(row) > 4 else 0.0
+    return Candle(
+        timestamp=ts, open=o, high=h, low=l, close=c, volume=volume, timeframe=TF
+    )
 
 
 def _seed(n: int = 14):
@@ -159,7 +162,14 @@ def _seed(n: int = 14):
     ]
 
 
-def _pos(ticket, *, direction=Direction.LONG, price=100.0, sl=99.0, volume=0.10):
+def _pos(
+    ticket, *, direction=Direction.LONG, price=100.0, sl=99.0, volume=0.10,
+    magic=999, comment="",
+):
+    # magic/comment mirror the placed order's identity — the linkage fields
+    # a real MT5 position record carries from the order (POSITION_MAGIC /
+    # POSITION_COMMENT). The position ticket is a DIFFERENT identifier
+    # from the order ticket, so tests pass an arbitrary position ticket.
     return {
         "ticket": ticket,
         "symbol": "XAUUSD.x",
@@ -168,6 +178,8 @@ def _pos(ticket, *, direction=Direction.LONG, price=100.0, sl=99.0, volume=0.10)
         "price_open": price,
         "sl": sl,
         "tp": 0.0,
+        "magic": magic,
+        "comment": comment,
     }
 
 
@@ -314,7 +326,7 @@ def _filled_runner():
     adapter._candles = _seed()
     adapter.queue(_candidate())
     runner.run_one_cycle(_bar(START, CALM))          # place (ticket 1001)
-    connector.positions.append(_pos(1001))
+    connector.positions.append(_pos(1001, comment="poi-1:D@3"))
     runner.run_one_cycle(_bar(START + timedelta(minutes=5), CALM))  # fill observed
     return runner, adapter, connector
 
@@ -331,6 +343,28 @@ def test_fill_observed_from_broker_and_identity_transfers():
     assert len(fills) == 1 and fills[0].fields["ticket"] == 1001
     # on_trade_opened fired → the BE latch is re-armed for THIS trade.
     assert runner.risk.pure_runner.state.be_moved is False
+
+
+def test_fill_matched_by_linkage_when_position_ticket_differs():
+    """C2 audit fix: a fill is matched on (symbol, magic, comment) identity,
+    never on ``position.ticket == order.ticket`` — in real MT5 the
+    position ticket is a different identifier from the order ticket."""
+    runner, adapter, connector = _make_runner()
+    adapter._candles = _seed()
+    adapter.queue(_candidate())
+    runner.run_one_cycle(_bar(START, CALM))          # place (order ticket 1001)
+    # Broker fills with ticket 7001 — NOT the order ticket — but carrying
+    # the order's magic + comment (the real MT5 linkage fields).
+    connector.positions.append(_pos(7001, comment="poi-1:D@3"))
+    runner.run_one_cycle(_bar(START + timedelta(minutes=5), CALM))
+    assert runner._pendings == {}                    # pending consumed
+    tracked = runner._positions[7001]                # keyed by POSITION ticket
+    assert tracked.poi_id == "poi-1"
+    assert tracked.trigger is TriggerType.D_TWO_BAR_REVERSAL
+    assert tracked.route_id == "poi-1:D@3"
+    fills = [r for r in runner.kpi.records if r.event == "fill"]
+    assert len(fills) == 1 and fills[0].fields["ticket"] == 7001
+    assert runner.risk.pure_runner.state.be_moved is False  # on_trade_opened
 
 
 def test_be_modify_success_confirms_latch():
@@ -445,10 +479,137 @@ def test_kpi_records_deterministic_under_fake_clock_and_connector():
         adapter._candles = _seed()
         adapter.queue(_candidate())
         runner.run_one_cycle(_bar(START, CALM))                     # place
-        runner._wire_positions = None
-        runner.broker.positions.connector.positions.append(_pos(1001))
+        runner.broker.positions.connector.positions.append(
+            _pos(1001, comment="poi-1:D@3")
+        )
         runner.run_one_cycle(_bar(START + timedelta(minutes=5), CALM))  # fill
         runner.run_one_cycle(_bar(START + timedelta(minutes=10), RUN_UP))  # BE
         return runner.kpi.to_json()
 
     assert one_run() == one_run()
+
+
+def test_pending_expires_by_age_and_is_cancelled():
+    """C1 paper path: GTC pendings are cancelled runner-side by age — M5
+    §23 = 12 bars — since the broker never expires them."""
+    runner, adapter, connector = _make_runner()
+    adapter._candles = _seed()
+    adapter.queue(_candidate())
+    runner.run_one_cycle(_bar(START, CALM))          # pending 1001 resting
+    assert list(runner._pendings) == [1001]
+    # 13 M5 bars later (65 minutes), still unfilled → age-expired.
+    runner.run_one_cycle(_bar(START + timedelta(minutes=65), CALM))
+    assert runner._pendings == {}
+    cancels = [
+        r for r in runner.kpi.records
+        if r.event == "management" and r.fields["op"] == "cancel"
+    ]
+    assert cancels and cancels[-1].fields["success"] is True
+    assert len(_requests_of(connector, TRADE_ACTION_REMOVE)) == 1
+
+
+def test_real_pipeline_adapter_drives_paper_runner():
+    """I2 audit fix: the REAL M4 PipelineAdapter (not a stub) drives the
+    paper runner end-to-end — real Trigger D scan → risk gate → broker
+    limit → linkage-matched fill with identity transfer."""
+    from smc.backtest.pipeline_adapter import PipelineAdapter
+    from smc.config.model_type import ModelType
+    from smc.core.enums import LiquidityType, PoolType
+    from smc.core.liquidity_level import LiquidityLevel
+    from smc.core.poi import POI
+    from smc.core.swing import Swing
+    from smc.core.zone import Zone
+    from smc.detection.displacement_checker import check_displacement
+    from smc.orchestration.engine import PipelineEngine
+    from smc.utils.timestamps import Session
+
+    # Pattern bars sitting ABOVE the zone [100.0, 100.2] until the engulfing
+    # bar (bar 2) touches it — same geometry as the M4 integration tests.
+    calm = (100.4, 100.6, 100.3, 100.5)
+    engulfed = (100.5, 100.55, 100.3, 100.4, 500.0)
+    engulfer = (100.4, 100.6, 99.9, 100.5, 300.0)   # §5 touch + pattern
+    signal_bar = (100.4, 100.6, 100.3, 100.5)       # Trigger D entry bar
+
+    def bars(rows):
+        return [_bar(START + timedelta(minutes=5 * i), row) for i, row in enumerate(rows)]
+
+    engine = PipelineEngine()
+    poi = POI(
+        zone=Zone(top=100.2, bottom=100.0, direction=Direction.LONG, timeframe=TF),
+        models=[ModelType.M1],
+    )
+    validate_candles = bars(
+        [(99.5, 99.7, 99.3, 99.6)] * 15
+        + [
+            (99.9, 100.0, 99.7, 99.9),
+            (100.0, 100.1, 99.6, 100.0),
+            (100.15, 100.35, 100.2, 100.3),
+            (100.3, 100.4, 100.1, 100.35),
+        ]
+    )
+    swings = [
+        Swing(is_high=True, level=105.0, candle_index=3, base_candle=validate_candles[3], timeframe=TF, is_valid=True),
+        Swing(is_high=False, level=99.0, candle_index=4, base_candle=validate_candles[4], timeframe=TF, is_valid=True),
+    ]
+    displacement = check_displacement(
+        bars(
+            [(100.5, 101.5, 99.5, 100.5)] * 15
+            + [
+                (99.8, 100.5, 98.2, 99.6),
+                (100.0, 102.5, 100.3, 100.8),
+                (101.0, 103.5, 102.0, 103.2),
+            ]
+        ),
+        Direction.LONG,
+        sweep_index=15,
+        bos_level=101.2,
+    )
+    passed, _ = engine.validate(
+        [poi],
+        validate_candles,
+        swings,
+        [
+            LiquidityLevel(
+                type=LiquidityType.EQUAL_HIGHS_LOWS, level=100.3,
+                pool=PoolType.SSL, timeframe=TF,
+            )
+        ],
+        displacement_map={poi.id: displacement},
+        merge_first=False,
+    )
+    assert len(passed) == 1
+    poi = passed[0]
+    engine.arm_at(poi, arm_bar=0)
+
+    adapter = PipelineAdapter(engine)
+    connector = FakeConnector()
+    runner = PaperRunner(
+        connector=connector,
+        risk_engine=RiskEngine(),
+        pipeline=adapter,  # the REAL adapter — auto-attached by __init__
+        order_manager=OrderManager(connector, symbol="XAUUSD.x", magic=999),
+        position_manager=PositionManager(connector, symbol="XAUUSD.x"),
+        config=PaperConfig(allowed_sessions=(Session.LONDON, Session.NEW_YORK)),
+        perf=FakePerf(),
+    )
+    assert adapter._runner is runner  # I2: no manual wiring step needed
+
+    for bar in bars([calm, engulfed, engulfer, signal_bar]):
+        runner.run_one_cycle(bar)
+
+    placed = _requests_of(connector, TRADE_ACTION_PENDING)
+    assert len(placed) == 1
+    request = placed[0]
+    assert request["type"] == ORDER_TYPE_BUY_LIMIT
+    assert request["volume"] == pytest.approx(0.10)     # §28.7 policy cap
+    assert request["comment"] == f"{poi.id}:D@3"       # §11 identity
+    assert poi.id not in adapter._workflows              # one-shot consumed
+
+    # Broker fills with a DIFFERENT ticket + the order's magic/comment.
+    connector.positions.append(_pos(7001, comment=f"{poi.id}:D@3"))
+    runner.run_one_cycle(_bar(START + timedelta(minutes=20), calm))
+    tracked = runner._positions[7001]
+    assert tracked.poi_id == poi.id
+    assert tracked.trigger is TriggerType.D_TWO_BAR_REVERSAL
+    fills = [r for r in runner.kpi.records if r.event == "fill"]
+    assert len(fills) == 1 and fills[0].fields["ticket"] == 7001
