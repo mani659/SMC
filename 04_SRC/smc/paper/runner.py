@@ -58,15 +58,27 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
+from smc.backtest.intents import IntentBook
 from smc.backtest.pipeline_adapter import PipelineAdapter
 from smc.config.timeframe import Timeframe
 from smc.core.candle import Candle
 from smc.core.enums import Direction
+from smc.orchestration.multi_tf_runtime import (
+    MultiTFBatchReport,
+    MultiTFProductRuntime,
+    build_htf_prefixes,
+)
 from smc.execution.order_manager import OrderKind, OrderRequest
 from smc.paper.broker_adapter import BrokerAdapter
 from smc.paper.kpi_logger import KPILogger
 from smc.triggers.trigger_expiry import poi_give_up_bars
 from smc.validation.state_machine import expiry_bars_for
+from smc.risk.fill_regime_policy import (
+    SKIP_PLACE_FAR_FROM_ZONE,
+    market_reentered_zone,
+    rest_bars_for,
+    zone_place_allowed,
+)
 from smc.risk.risk_engine import (
     EntryDecision,
     EntryRequest,
@@ -115,6 +127,20 @@ class _TrackedPending:
     symbol: str = ""
     magic: int | None = None
     comment: str = ""
+    # Identity enrichment (logging only — carried pending → position).
+    model_tags: tuple | None = None
+    pillar_path: str | None = None
+    disp_magnitude_atr: float | None = None
+    # Placement-time geometry (logging only — never modified after place).
+    original_sl: float | None = None
+    zone_low: float | None = None
+    zone_high: float | None = None
+    signal_data_json: str | None = None
+    # E1: trigger entry-anchor provenance (see CandidateEntry.entry_anchor).
+    entry_anchor: str | None = None
+    # FR fill-regime policy (R8): this pending's own lifetime in bars
+    # (§23 bars_open convention). None = runner-timeframe default.
+    rest_bars: int | None = None
 
 
 @dataclass(slots=True)
@@ -132,6 +158,17 @@ class _TrackedPosition:
     fvg_context: object | None
     sweep_level: float | None
     tp: float | None = None
+    # Identity enrichment (logging only — copied from the tracked pending).
+    model_tags: tuple | None = None
+    pillar_path: str | None = None
+    disp_magnitude_atr: float | None = None
+    # Placement-time geometry (logging only — copied verbatim, never modified).
+    original_sl: float | None = None
+    zone_low: float | None = None
+    zone_high: float | None = None
+    signal_data_json: str | None = None
+    # E1: trigger entry-anchor provenance (copied verbatim from the pending).
+    entry_anchor: str | None = None
 
 
 class PaperRunner:
@@ -155,6 +192,7 @@ class PaperRunner:
         kpi: KPILogger | None = None,
         perf=None,
         timeframe: Timeframe = Timeframe.M5,
+        runtime: MultiTFProductRuntime | None = None,
     ) -> None:
         self.connector = connector
         self.risk = risk_engine
@@ -166,12 +204,22 @@ class PaperRunner:
         self.kpi = kpi if kpi is not None else KPILogger()
         self._perf = perf                # injected monotonic () -> float
         self.timeframe = timeframe
+        # C1 product seam: paper detection/arming goes through the SAME
+        # multi-TF runtime live and research use (contract §2). Product mode
+        # by default (no silent single-TF fallback).
+        self.runtime = (runtime if runtime is not None
+                        else MultiTFProductRuntime(
+                            execution_timeframe=timeframe))
         self._last_date: object | None = None
         self._last_bar_at: datetime | None = None
         self._pendings: dict[int, _TrackedPending] = {}
         self._positions: dict[int, _TrackedPosition] = {}
         self._entry_queue: list = []     # candidates the adapter queued this bar
         self._bar_count = 0              # monotonically increasing bar anchor
+        # R9: deferred placements for R7-skipped candidates (same shared
+        # IntentBook the backtest runner uses — design §7; the paper bar
+        # anchor is ``_bar_index`` of the adapter's scan series).
+        self.intents = IntentBook()
         # I2: wire the REAL M4 adapter in directly (its ``attach`` sets
         # ``adapter._runner`` and calls ``set_pipeline_adapter``), so the
         # identical adapter object drives backtest AND paper without a
@@ -191,6 +239,51 @@ class PaperRunner:
     def submit_entry(self, candidate) -> None:
         """Adapter seam: queue a candidate for THIS bar's entry step."""
         self._entry_queue.append(candidate)
+
+    # ------------------------------------------------------------------ #
+    # C1 product seam — multi-TF detection/arming (contract §2)
+    # ------------------------------------------------------------------ #
+    def arm_multi_tf(
+        self,
+        series_by_tf: dict,
+        *,
+        as_of=None,
+        arm_bar: int | None = None,
+        execution_candles: list | None = None,
+        dedup=None,
+    ) -> MultiTFBatchReport:
+        """Validate + arm one product multi-TF batch via the shared runtime.
+
+        ``series_by_tf`` carries the HTF series (H4/H1 required; D1 optional
+        for M8). ``as_of`` trims honest prefixes per timeframe (bars with
+        ``timestamp <= as_of``); ``None`` uses the series verbatim (callers
+        that already built prefixes). ``arm_bar`` defaults to the last known
+        execution bar (the adapter's growing scan series) so §24 anchors
+        match the per-bar runtime. Loud by contract: missing HTF raises
+        ``MissingHtfSeriesError`` unless the runtime explicitly opted into
+        the test-only degraded mode.
+        """
+        engine = getattr(self.adapter, "engine", None)
+        if engine is None:
+            raise RuntimeError(
+                "paper arm_multi_tf requires the real M4 adapter (no engine "
+                "on the attached adapter)"
+            )
+        if arm_bar is None:
+            arm_bar = max(len(getattr(self.adapter, "_candles", []) or []) - 1, 0)
+        prefixes = (build_htf_prefixes(series_by_tf, as_of)
+                    if as_of is not None else dict(series_by_tf))
+        return self.runtime.run_batch(
+            engine=engine,
+            series_by_tf=prefixes,
+            as_of=as_of,
+            arm_bar=arm_bar,
+            adapter=self.adapter,
+            execution_candles=(execution_candles
+                              if execution_candles is not None
+                              else getattr(self.adapter, "_candles", None)),
+            dedup=dedup,
+        )
 
     # ------------------------------------------------------------------ #
     # Lifecycle
@@ -216,6 +309,9 @@ class PaperRunner:
         # 2. Portfolio-level Friday EOD (once per bar, first).
         if self.risk.evaluate_friday_close(now):
             self._friday_close(now, bar)
+            # R9: portfolio event — deferred placements die with it.
+            self.intents.drop_all(self._bar_index(bar),
+                                  "dropped_portfolio_friday")
             self._last_bar_at = now
             return
 
@@ -224,11 +320,16 @@ class PaperRunner:
             now, self.config.news_events
         ):
             self._hard_cancel_all(now)
+            # R9: §11 kills resting orders — intents die with them.
+            self.intents.drop_all(self._bar_index(bar),
+                                  "dropped_portfolio_news")
 
         # 3b. C1: §23/§24 unfilled-order age expiry. The broker places GTC
         # orders (no MT5-side expiry), so the runner cancels by age:
         # M5 = 12 / M1 = 30 bars; the §24 give-up backstop elsewhere.
         self._expire_pendings(now)
+        # 3b-i. R9: intent expiry (R8 clock from signal; design §2a).
+        self._expire_intents(bar)
 
         # 4. Observe the broker: fills + closes (broker truth).
         self._observe_fills(now)
@@ -237,8 +338,17 @@ class PaperRunner:
         # 5. Per-position risk exits (FVG invalidation + PureRunner BE).
         self._manage_open_positions(bar, now)
 
-        # 6. Entry step LAST — pipeline scan → risk gate → broker limit.
+        # 6. Entry step — pipeline scan → risk gate → broker limit. Runs
+        # BEFORE the R9 intent step so a same-bar in-band re-proposal
+        # places immediately and SUPERSEDES the alive intent (REPLACED)
+        # — never two orders for one route on the same bar (design §4).
         self._entry_step(bar, now)
+
+        # 6b. R9: intent re-entry placements — AFTER the entry step (a
+        # re-proposal that placed immediately left nothing alive) and
+        # after fills/closes were observed (a bar-B placement cannot fill
+        # on B: no lookahead, no retroactive fill). Insertion order.
+        self._place_due_intents(bar, now)
         self._last_bar_at = now
 
     # ------------------------------------------------------------------ #
@@ -345,12 +455,26 @@ class PaperRunner:
         ``management`` KPI record; the POI one-shot was already consumed
         at placement, so no engine state is touched here.
         """
-        limit = expiry_bars_for(self.timeframe)
-        if limit is None:
-            limit = poi_give_up_bars()
+        default_limit = expiry_bars_for(self.timeframe)
         bar_seconds = self.timeframe.minutes * 60
+        give_up = poi_give_up_bars()
         for ticket in sorted(self._pendings):  # deterministic order
             tracked = self._pendings[ticket]
+            # R8: per-pending lifetime (H1→36 / H4, M8, D1→48 bars),
+            # falling back to the runner-timeframe §23 default for orders
+            # without provenance. Mirrors the backtest book's dual checks
+            # EXACTLY: the §23 threshold and the give-up backstop are
+            # independent — the order dies at whichever hits FIRST
+            # (min of the applicable limits). The backstop raises only
+            # R8-extended lifetimes above 20; it must never raise the
+            # frozen M5/M1 §23 defaults (12/30) — that would silently
+            # lengthen the locked rule.
+            s23_limit = tracked.rest_bars if tracked.rest_bars is not None else default_limit
+            backstop = max(give_up, tracked.rest_bars) if tracked.rest_bars is not None else give_up
+            applicable = [limit for limit in (s23_limit, backstop) if limit is not None]
+            if not applicable:
+                continue  # no §23 rule for this timeframe and no backstop
+            limit = min(applicable)
             age_bars = int((now - tracked.placed_at).total_seconds() // bar_seconds)
             if age_bars < limit:
                 continue
@@ -363,7 +487,11 @@ class PaperRunner:
                 self._pendings.pop(ticket, None)
 
     def cancel_pending_for_poi(self, poi_id: str) -> int:
-        """M4 parity: cancel a violated POI's resting limits (dead thesis)."""
+        """M4 parity: cancel a violated POI's resting limits (dead thesis).
+
+        R9: the POI's alive place-intent dies with it — a violated zone
+        is a dead thesis, mirroring the resting-order rule.
+        """
         cancelled = 0
         for ticket in sorted(self._pendings):
             if self._pendings[ticket].poi_id == poi_id:
@@ -371,7 +499,111 @@ class PaperRunner:
                 if outcome.success:
                     cancelled += 1
                     self._pendings.pop(ticket, None)
+        self.intents.drop_for_poi(poi_id, self._bar_count)
         return cancelled
+
+    # ------------------------------------------------------------------ #
+    # R9 — place-on-reentry intents (design: R9_PLACE_ON_REENTRY_DESIGN.md)
+    # ------------------------------------------------------------------ #
+    def _expire_intents(self, bar: Candle) -> None:
+        """R9 step 3b-i: expire intents whose R8 clock ended (design §2a).
+
+        Runs BEFORE the re-entry step, so an intent whose clock ends on
+        this bar can never place on it. Machine-readable KPI record per
+        expired intent (the IntentBook's own event log keeps the full
+        lifecycle for reports).
+        """
+        bar_index = self._bar_index(bar)
+        now = bar.timestamp
+        for intent in self.intents.expire_due(bar_index):
+            self.kpi.record(
+                "intent_expired_no_reentry", at=now,
+                intent_id=intent.intent_id,
+                poi_id=intent.candidate.poi_id,
+                trigger=getattr(intent.candidate.trigger, "value",
+                                str(intent.candidate.trigger)),
+                route_id=intent.candidate.route_id,
+                signal_bar=intent.signal_bar, rest_bars=intent.rest_bars,
+            )
+
+    def _place_due_intents(self, bar: Candle, now: datetime) -> None:
+        """R9 step 5.5: place resting limits for re-entered intents.
+
+        Runs AFTER fills/closes are observed and managed, BEFORE the
+        entry step. Insertion order. A placement requires >= 3 remaining
+        bars (>= 1 fill-eligible bar under the frozen §23 convention —
+        design §2b: fewer would be a born-expired order, never
+        fabricated). Re-entry = band re-entry (R7 geometry on this bar's
+        close) OR limit touch (fill-model rule on this bar's range).
+        Dry-run: the KPI event is recorded but NOTHING is sent and the
+        intent stays armed (parity with the candidate dry-run path).
+        """
+        bar_index = self._bar_index(bar)
+        atr = self._current_atr()
+        for intent in self.intents.alive_intents():
+            remaining = intent.remaining_bars(bar_index)
+            if remaining < 3:
+                continue  # born-expired placement is never fabricated
+            candidate = intent.candidate
+            if not market_reentered_zone(
+                    candidate.direction, candidate.zone_low,
+                    candidate.zone_high, candidate.entry_price,
+                    bar.close, atr, bar=bar):
+                continue
+            if self.config.dry_run:
+                self.kpi.record(
+                    "intent_place_dry_run", at=now,
+                    intent_id=intent.intent_id,
+                    poi_id=candidate.poi_id,
+                    route_id=candidate.route_id,
+                    bar_index=bar_index, remaining_bars=remaining,
+                )
+                continue  # nothing placed, nothing consumed, intent stays armed
+            outcome = self.broker.place_limit(
+                OrderRequest(
+                    symbol=self.broker.orders.symbol,
+                    kind=OrderKind.LIMIT,
+                    direction=candidate.direction,
+                    volume=intent.lots,  # frozen at signal acceptance
+                    price=candidate.entry_price,
+                    sl=candidate.sl_price,
+                    tp=candidate.tp_price,
+                    comment=candidate.route_id or "",
+                )
+            )
+            self.kpi.record_order_ack(
+                at=now, latency_ms=outcome.latency_ms,
+                success=outcome.success, retcode=outcome.retcode,
+                ticket=outcome.ticket,
+            )
+            if outcome.success:
+                self._pendings[outcome.ticket] = _TrackedPending(
+                    ticket=outcome.ticket,
+                    poi_id=candidate.poi_id,
+                    trigger=candidate.trigger,
+                    route_id=candidate.route_id,
+                    fvg_context=candidate.fvg_context(),
+                    sweep_level=candidate.sweep_level,
+                    placed_at=now,
+                    model_tags=candidate.model_tags,
+                    pillar_path=candidate.pillar_path,
+                    disp_magnitude_atr=candidate.disp_magnitude_atr,
+                    original_sl=candidate.original_sl,
+                    zone_low=candidate.zone_low,
+                    zone_high=candidate.zone_high,
+                    signal_data_json=candidate.signal_data_json,
+                    entry_anchor=candidate.entry_anchor,
+                    # R9: the order inherits the intent's REMAINING bars
+                    # (design §2a) under the same §23 age convention.
+                    rest_bars=remaining,
+                    symbol=self.broker.orders.symbol,
+                    magic=getattr(self.broker.orders, "magic", None),
+                    comment=candidate.route_id or "",
+                )
+                self.intents.mark_placed(intent, bar_index, outcome.ticket)
+                accepted = getattr(self.adapter, "on_candidate_accepted", None)
+                if accepted is not None:
+                    accepted(candidate)  # consume the §11 one-shot (a real place)
 
     # ------------------------------------------------------------------ #
     # Broker observation (fills + closes — broker truth, not simulation)
@@ -416,6 +648,14 @@ class PaperRunner:
                 route_id=tracked.route_id,
                 fvg_context=tracked.fvg_context,
                 sweep_level=tracked.sweep_level,
+                model_tags=tracked.model_tags,
+                pillar_path=tracked.pillar_path,
+                disp_magnitude_atr=tracked.disp_magnitude_atr,
+                original_sl=tracked.original_sl,
+                zone_low=tracked.zone_low,
+                zone_high=tracked.zone_high,
+                signal_data_json=tracked.signal_data_json,
+                entry_anchor=tracked.entry_anchor,
             )
             self.kpi.record_fill(
                 at=now, ticket=snapshot.ticket, poi_id=tracked.poi_id,
@@ -442,6 +682,7 @@ class PaperRunner:
         seen = {snapshot.ticket for snapshot in self._broker_positions()}
         for ticket in sorted(known - seen):  # deterministic order
             tracked = self._positions.pop(ticket)
+            self.risk.on_trade_closed(ticket)  # release the BE latch key
             win: bool | None = None
             kind = "broker_close"
             sl_level: float | None = None
@@ -488,6 +729,7 @@ class PaperRunner:
                 ),
                 now=now,
                 fvg_context=tracked.fvg_context,
+                trade_key=ticket,  # §28.1 one-shot is PER TRADE
             )
             if decision.action is RiskAction.EXIT:
                 outcome = self.broker.close_position(
@@ -518,7 +760,9 @@ class PaperRunner:
                     success=outcome.success, latency_ms=outcome.latency_ms,
                 )
                 if outcome.success:
-                    self.risk.on_be_applied()  # latch ONLY on real success
+                    # Latch ONLY on real success — keyed by THIS trade's
+                    # ticket (Phase B fidelity fix 2026-09-12).
+                    self.risk.on_be_applied(ticket)
                     tracked.sl = decision.new_sl
 
     # ------------------------------------------------------------------ #
@@ -561,6 +805,34 @@ class PaperRunner:
             if decision.action is not RiskAction.ENTER:
                 blocked += 1
                 continue  # nothing placed, nothing consumed (I2 parity)
+            # R7 fill-regime place guard (same shared policy as the
+            # backtest runner): the MARKET reference (this bar's close)
+            # having left the POI zone beyond the EXISTING FR-3 band means
+            # no placement; the candidate stays retryable (the §11 one-shot
+            # is consumed only on accepted placement). Machine-readable
+            # KPI record.
+            if not zone_place_allowed(
+                    candidate.direction, candidate.zone_low, candidate.zone_high,
+                    bar.close, request.atr):
+                blocked += 1
+                self.kpi.record(
+                    "place_skip", at=now,
+                    reason=SKIP_PLACE_FAR_FROM_ZONE,
+                    poi_id=candidate.poi_id,
+                    trigger=getattr(candidate.trigger, "value", str(candidate.trigger)),
+                    route_id=candidate.route_id,
+                    bar_index=bar_index,
+                )
+                # R9: the placement is deferred, not dropped — arm an
+                # intent carrying the FULL accepted placement (design
+                # 00_LOCKED/R9_PLACE_ON_REENTRY_DESIGN.md). Dedupe: one
+                # intent per route per run, clock never refreshed; the
+                # one-shot stays unburned until a real place.
+                self.intents.arm(
+                    candidate, decision.lots, bar_index,
+                    rest_bars_for(candidate.detection_tf, candidate.is_m8,
+                                  execution_tf=self.timeframe))
+                continue
             if self.config.dry_run:
                 # dry-run: the decision was evaluated and logged, but no
                 # order reached the broker and the §11 one-shot is not
@@ -595,6 +867,20 @@ class PaperRunner:
                     fvg_context=candidate.fvg_context(),
                     sweep_level=candidate.sweep_level,
                     placed_at=now,
+                    model_tags=candidate.model_tags,
+                    pillar_path=candidate.pillar_path,
+                    disp_magnitude_atr=candidate.disp_magnitude_atr,
+                    original_sl=candidate.original_sl,
+                    zone_low=candidate.zone_low,
+                    zone_high=candidate.zone_high,
+                    signal_data_json=candidate.signal_data_json,
+                    entry_anchor=candidate.entry_anchor,
+                    # FR fill-regime policy (R8): this pending's own
+                    # lifetime in bars (H1→36 / H4, M8, D1→48), applied by
+                    # _expire_pendings (§23 bars_open age convention).
+                    rest_bars=rest_bars_for(
+                        getattr(candidate, "detection_tf", None),
+                        bool(getattr(candidate, "is_m8", False))),
                     # Fill-linkage identity (M6 audit fix): the broker
                     # matches a fill to this pending on these fields — the
                     # order's symbol/magic/comment carry to the position.
@@ -605,6 +891,11 @@ class PaperRunner:
                 accepted = getattr(self.adapter, "on_candidate_accepted", None)
                 if accepted is not None:
                     accepted(candidate)  # consume the §11 one-shot
+                # R9: an alive intent for this route is superseded by the
+                # real order — drop it (never two orders for one route).
+                intent = self.intents.find_alive(candidate)
+                if intent is not None:
+                    self.intents.mark_replaced(intent, bar_index)
             else:
                 rejected += 1
         latency = (self._perf() - start) * 1000.0 if self._perf else 0.0
