@@ -14,6 +14,12 @@ ARCHIVE/
 # kept local-only for consultation — never tracked or pushed
 03_REFERENCE_CODE/
 
+# Local market data (never commit): canonical M1/parquet/tick datasets
+07_DATA/
+*.parquet
+*.tick
+*.ticks
+
 # Research bulk data: large per-trade / extraction CSVs and result dumps
 # (methodology & validation .md records remain tracked; big data artifacts do not)
 06_RESEARCH/experiments/*.csv
@@ -23,14 +29,24 @@ ARCHIVE/
 06_RESEARCH/**/*.h5
 06_RESEARCH/**/*.hdf5
 
-# Raw market data (canonical dataset and any data dumps)
+# Research results output tree (project-wide audit 2026-10-06): bulk run
+# artifacts — PNG charts, JSON/CSV result dumps, PDF packs (~90MB, 773
+# files as of audit date). Local-only by policy; the tracked methodology
+# notes under 06_RESEARCH/ record the conclusions. Curated exceptions (if
+# the Architect later wants e.g. setups.csv / summary.json tracked) are
+# force-added explicitly: `git add -f 06_RESEARCH/results/<path>`.
+06_RESEARCH/results/
+
+# Raw market data (canonical dataset and any data dumps) — root-anchored so
+# source packages like 04_SRC/smc/data/ are NOT swallowed (found 2026-09-09:
+# plain `data/` had silently excluded the whole smc/data package from git)
 *.csv.gz
 *.zip
 *.7z
 *.tar
 *.tar.gz
-data/
-datasets/
+/data/
+/datasets/
 **/m1_clean.csv
 **/*.parquet
 **/*.feather
@@ -117,3 +133,6 @@ secrets*.json
 
 # --- Codebuff / agent workspace metadata ---
 .freebuff/
+
+# --- Phase D operator pack runtime logs (append-only, local-only) ---
+logs/
