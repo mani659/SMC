@@ -97,6 +97,50 @@ All charts are in `Knowledge Base/` and cataloged in `Knowledge Base/README.md` 
 | **H1** | All models | All 8 models (most events, balances granularity) |
 | **M30** | Intraday | Models 2, 5, 6, 7 (faster detection, more noise) |
 
+### 4a. Product Detection-Timeframe Policy (amended 2026-10-06 — unified GLM + Co-pilot audit ruling; supersedes §4/§21/§27 where they conflict)
+
+> **Amendment record:** the product-mode detection-timeframe policy was locked
+> 2026-10-06 on the unified ruling of the GLM project-wide audit and the
+> Co-pilot audit (`06_RESEARCH/PROJECT_WIDE_AUDIT_2026-10-06.md`,
+> COMMIT_READY: YES_WITH_CAVEATS). Implementation:
+> `04_SRC/smc/orchestration/multi_tf_runtime.py` (construction-time check in
+> `MultiTFProductRuntime.__init__`; tests
+> `04_SRC/tests/test_product_mode_detection_policy.py`). Product contract:
+> `00_LOCKED/PRODUCT_RUNTIME_CONTRACT.md` — that document remains the runtime
+> seam contract; this amendment records the **detection-set minimum** it
+> enforces. Where §4 (Detection Timeframe Architecture) and §21 (Model 8
+> HTF D1/H4 zones) assign timeframe roles, this amendment is **normative for
+> the product runtime**; the model/TF mapping tables below remain the
+> detection-model reference and are unchanged in substance. **No numeric
+> threshold or locked constant is changed by this amendment**
+> (`smc/config/locked_constants.py` diff must be empty).
+
+**Normative rules (as implemented in `smc/orchestration/multi_tf_runtime.py`):**
+
+1. **Required detection minimum = H4 + H1.** A product runtime
+   (`allow_single_tf_degraded=False`, the default) cannot be constructed
+   whose `detection_timeframes` omits **either** H4 or H1. This is enforced
+   **at construction** (loud `ValueError` naming every missing timeframe,
+   citing the `allow_single_tf_degraded` opt-in) and again at batch time
+   (`MissingHtfSeriesError` when a required series is missing/empty —
+   nothing arms).
+2. **W1 + D1 are optional context, never required.** They are provisioned
+   as `optional_timeframes` (W1 weekly context tier — `Timeframe.W1` value
+   `32769`; D1 forwarded to Model 8 when present). A missing W1/D1 series is
+   tolerated and simply yields fewer context zones. Adding either to
+   `detection_timeframes` via operator config makes it **required** and the
+   loud-fail applies to it too.
+3. **Execution timeframe = M5** (the product default; §21's M1 entry-trigger
+   table is unchanged as the model reference, but the shipped product runtime
+   executes on M5 — LTF trigger geometry on the execution series).
+4. **Degraded single-TF detection is opt-in only.**
+   `allow_single_tf_degraded=True` (tests/legacy) is the ONLY path to a
+   detection set below the H4+H1 minimum; it stamps the report
+   `degraded=True` with a reason. There is **no automatic fallback**.
+5. **§27 swing N-bar parameters are unchanged** (Daily/H4/H1 = 5;
+   M30/M15/M5/M1 = 3) — W1 is an additional context series and does not
+   alter the N-bar table.
+
 ---
 
 ## 5. Freshness Rules
@@ -111,6 +155,63 @@ All charts are in `Knowledge Base/` and cataloged in `Knowledge Base/README.md` 
 - **Unfilled limit orders:** Expire after N bars AND mark POI as STATE_TESTED
   - **M5 timeframe:** 12 bars (1 hour)
   - **M1 timeframe:** 30 bars (30 minutes)
+
+### 5a. Seek/Scan Contract (amended 2026-10-05 — Lead Architect Option B; supersedes the one-touch+1 seek behaviour)
+
+> **Amendment record:** the seek/scan contract redesign was accepted 2026-10-05
+> (DESIGN_LOCK: `06_RESEARCH/SEEK_SCAN_CONTRACT_REDESIGN_DESIGN.md`,
+> DESIGN_LOCK_STATUS: PASS; implementation:
+> `06_RESEARCH/SEEK_SCAN_CONTRACT_IMPLEMENTATION_NOTE.md`, IMPL_STATUS: PASS,
+> suite 805, metrics M1–M5 accepted — M1 78.33% residual accepted as fully
+> attributed). The prior **one-touch +1** seek behaviour (a first §5 touch
+> ended the trigger scan on the touch bar +1, and an arm-bar violation
+> pre-empted the scan entirely) is **superseded**. The §5 state machine above
+> (states, atomic transitions, terminal semantics, §23 unfilled expiry) is
+> UNCHANGED — this amendment governs only when the Stage 3 trigger scan is
+> allowed to listen and what it may route.
+
+**Normative rules (as implemented in `smc/orchestration/engine.py` +
+`smc/backtest/pipeline_adapter.py`):**
+
+1. **Arming unchanged** — a POI arms on HTF structure close; `arm_bar` =
+   first M5 bar at/after the close (weekend gap → first tradable bar).
+2. **Initial posture** — the arm bar is classified (against the POI zone,
+   no new tolerance) into exactly one posture:
+   - `CLEAN_ARM` — arm bar neither touches the zone nor closes beyond it
+     adversely; behaviour identical to the pre-amendment contract.
+   - `IN_ZONE_AT_ARM` — the arm bar's range intersects the zone (inclusive
+     `touches_zone` semantics): that contact is **initial presence, NOT a
+     §5 first-touch terminator** — the scan opens at arm and stays open
+     (no re-entry gate; the completed LTF trigger geometry is the
+     surgical gate).
+   - `VIOLATION_AT_ARM` — the arm bar closes beyond the zone on the
+     adverse side: the §5-VIOLATED transition is **deferred** (the arming
+     candle belongs to the HTF structure, not to fresh LTF price action);
+     the episode is in REVALIDATION.
+3. **Scan opens at arm for every posture** — there is no posture in which
+   the scan does not open.
+4. **REVALIDATION routing** — a `VIOLATION_AT_ARM` episode routes only
+   after a later close back within the zone band via the existing named
+   rule `market_reentered_zone` (R7 band: `ZONE_REFINEMENT_ATR × ATR`,
+   fail-closed on warm-up ATR; limit-touch path inapplicable pre-route).
+   While awaiting re-entry, an adverse close is the arm-bar condition
+   continued (the episode dies at give-up if it never re-enters); a wick
+   contact is still recorded through the §5 machine. After re-entry, the
+   standard §5 feed applies — an adverse close is terminal.
+5. **Span** — the seek span remains the locked window
+   `[arm, arm + poi_give_up_bars()]` (= 20 M5 bars; §24 unchanged). A §5
+   TESTED state inside the span no longer ends the scan; Trigger D's
+   next-bar contract is preserved by its own frozen `TRIGGER_D_EXPIRY`.
+6. **Terminators** — the seek ends only on: **give-up** (past the locked
+   deadline), **violation after a live seek** (a post-arm adverse close
+   outside the REVALIDATION continuation rule — terminal, workflow
+   dropped, resting limits cancelled, unchanged), or a **one-shot route**
+   (§11 identity).
+7. **One-shot / episode identity unchanged** — one validated POI + one
+   trigger + one execution; at most one route per episode (machine-checked).
+8. **No numeric threshold or constant is changed by this amendment** —
+   every value above cites an existing locked constant or the existing
+   named rule.
 
 ---
 
@@ -376,7 +477,9 @@ STEP 3: EXECUTION TF (M1) — Entry trigger (Ending Diagonal preferred, BOS, Two
 - **Entry:** Limit order at M1 trigger level (within HTF zone)
 - **SL:** Below/above M1 structure (2–5 pips typical)
 - **RR Target:** Minimum 1:5 (tight SL → naturally high RR)
-- **Freshness:** 1-touch rule applies (same as Models 1–7)
+- **Freshness:** 1-touch rule applies (same as Models 1–7) — see §5a for the
+  seek/scan contract amendment (a §5 touch no longer ends the Stage 3 trigger
+  seek; the §5 state machine itself is unchanged)
 - **Zone boundaries:** Top/bottom of OB, FVG, or Demand/Supply area
 
 ### Scoring
@@ -412,14 +515,14 @@ Model 8 is a **full peer** in the modular system. It can combine with any of Mod
 - **Definition:** The **single last bearish candle** that appears just before a strong bullish impulsive move.
 - **Zone Boundaries:** Drawn from the **high** to the **low** of that single opposing candle (full body + wicks).
 - **NOT the bullish candles** — the demand zone is the last opposing (bearish) candle before the impulse.
-- **Freshness Rule:** 1-touch only (same as all models).
+- **Freshness Rule:** 1-touch only (same as all models; seek/scan amendment in §5a). 
 - **Evidence:** 650 pip and 2400 pip buy moves from Daily demand zones.
 
 ### Valid Supply Zone (Daily / H4)
 - **Definition:** The **single last bullish candle** that appears just before a strong bearish impulsive move.
 - **Zone Boundaries:** Drawn from the **high** to the **low** of that single opposing candle (full body + wicks).
 - **NOT the bearish candles** — the supply zone is the last opposing (bullish) candle before the impulse.
-- **Freshness Rule:** 1-touch only (same as all models).
+- **Freshness Rule:** 1-touch only (same as all models; seek/scan amendment in §5a).
 
 ### Algorithmic Identification
 ```

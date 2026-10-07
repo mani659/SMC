@@ -1,7 +1,7 @@
 # TODO — SMC BOT Task Board
 
-**Last Updated:** 2026-09-09
-**Current Phase:** ✅ V1 COMPLETE — Phase 7 Live Readiness + MQL5 Safety Watchdog (next cycle: V1.1 — walk-forward / Monte Carlo / KPI thresholds)
+**Last Updated:** 2026-09-15
+**Current Phase:** ✅ V1 COMPLETE — Phase 7 Live Readiness + MQL5 Safety Watchdog. Post-V1 work is governed by **`POST_V1_PLAN_OF_ACTION.md`** (binding order: Phase A Data Acceptance → B fidelity backtest → C 5y baseline → D demo → E V1.1). **Phase A — Data Acceptance: CLOSED 2026-09-09 (PASS; A5 ruled option (a) — baseline WITHOUT Trigger D). Phase B — Short Fidelity Backtest: CLOSED 2026-09-14 (PASS). Phase C — Full 5-Year Baseline: CLOSED 2026-09-19 (Lead Architect sign-off). **ACTIVE PROGRAM: V1.1 RUNTIME BASELINE FROZEN (2026-09-24 — `00_LOCKED/V1_1_RUNTIME_BASELINE_FREEZE.md`); next = Phase D watchdog GUI attach + stale-heartbeat drill or a dated research ruling.** Completed foundation: PRODUCT RUNTIME UNIFICATION (owner "Choice 1", 2026-09-23) — Phase 0 contract + Phase 1/C1 one multi-TF runtime (live = paper = research) + Phase 2 contracts + Phase 3 funnel + Phase 4 frozen backtest, ALL COMPLETE/PASS; Track A residuals COMPLETE; Phase D HTF probe PASS. Track R diagnosis CLOSED; Foundation Fidelity Reset (FR-1→R9) a completed prerequisite; Phase D ops parallel only. Day-to-day checklist: `POST_V1_ACTIVE_TODO.md` (this file tracks the V1 build only — do not duplicate its checkboxes here).**
 **Architecture:** Python-First + MQL5 Safety Watchdog (Option A Locked)
 
 ---
@@ -268,6 +268,56 @@
 
 ---
 
+## Post-V1 — Phases A–E (governed by `POST_V1_PLAN_OF_ACTION.md`)
+
+> **Order is binding:** A → B → C → D → E, one phase per engagement. The plan is the source of truth; every decision gets recorded there with date + rationale.
+
+### Phase A — Data Acceptance ✅ COMPLETE (2026-09-09)
+- [x] `06_RESEARCH/scripts/phase_a_data_acceptance.py` — read-only A1–A6 acceptance script (no trading logic touched)
+- [x] `06_RESEARCH/DATA_ACCEPTANCE_REPORT.md` — full report; verdict PASS
+- [x] A1 schema/Candle round-trip · A2 UTC localization · A3 gap census (1,679 gaps fully classified: weekends + NY-5pm rollover-hour omissions; no unexplained class) · A4 OHLC/units/spike integrity · A6 SHA-256 checksums — all PASS
+- [x] **A5 volume ruling — option (a):** dataset accepted as volume-less; Phase B/C baselines run WITHOUT Trigger D as a tradeable path (recorded in plan §3)
+- [x] `smc/data/parquet_loader.py` — accepted loader (`load_ohlcv_parquet`, 6 unit tests) — the ONLY sanctioned Phase B/C input path
+- [x] Canonical series: `07_DATA/XAUUSD_M1.parquet` (1,768,123 M1 bars, 2021-04-12 11:00 → 2026-04-10 20:59 UTC; SHA-256 in plan §3 A6); `07_DATA/` git-ignored
+
+### Phase B — Short Fidelity Backtest ✅ COMPLETE (CLOSED 2026-09-14 — PASS)
+- [x] Window selection — full October 2025 (2025-10-01 → 2025-10-31, 31,619 bars; last bar 20:59 = Friday rollover-hour omission, Phase A-classified) + frozen config recorded verbatim (`06_RESEARCH/PHASE_B_FIDELITY_REPORT.md` §2)
+- [x] Pipeline validated at three scales: Oct 1 smoke pair (byte-identical) → Oct 1–3 short pair (`phase_b_oct_short_run1/2`, byte-identical, all invariants OK, 6 trades) → full October
+- [x] **Perf fix (2026-09-13):** first full-October attempt aborted at bar ~12.5k — quadratic per-bar cost (O(prefix) swing/RSI/ATR/inversion rebuilds re-run per armed POI per bar, py-spy-diagnosed); three equivalence-preserving patches (`pipeline_adapter.generate_candidates` hoist + scan retirement, `engine.scan_route` resume cursor, `trigger_router.scan` arm-bar anchor preserved) — suite 529→**532**, golden check reproduces the Oct 1–3 pair BYTE-IDENTICALLY (`phase_b_golden_check/`)
+- [x] Full-October determinism pair — COMPLETE 2026-09-13 21:40/21:41 (31,619 bars each, ~11.8 h/run, 0.75 bars/s); exports BYTE-IDENTICAL; summary identical ex-runtime
+- [x] Kill-funnel counters — every stage non-zero or explained in writing: raw 189,284 → armed 237 → routes 49 → placed 42 → opened 41 (1 × §24 give-up) → closed 41; `positions_still_open = 0` = flat end-of-window book (explained); hard-cancelled_news 0, friday_closes 0
+- [x] Frozen-rule invariants verified: §23/§24 expiry, §11 one-shot, §5 one-touch terminal TESTED, BE latch once-per-trade, limit-price fills — all OK × 2 runs; same-bar SL-first verified over **ALL 41 trades** (`phase_b_sl_first_check.py`: every exit price == SL exactly, zero ambiguous bars) — stronger than the requested sample
+- [x] Determinism rerun — byte-identical `trades.csv` + `report.json`; `summary.json` identical ex-runtime; machine verdict `phase_b_verdict.json` = **PASS** (two checker defects fixed + disclosed: recursive runtime-strip; `positions_still_open` explanation)
+- [x] `PHASE_B_FIDELITY_REPORT.md` fully filled (funnel §3, metrics §4, per-trigger §5: A=2/B=7/F=32/D=0, determinism §6, §7.4 anomalies, §9 overall **PASS**); one-page fidelity note appended to the plan; marker → Phase C
+
+### Phase C — Full 5-Year Baseline (EXECUTED 2026-09-19; CLOSED — Lead Architect sign-off granted 2026-09-19)
+- [x] Runtime reality check: as-is ≈ 27 days/run (0.75 bars/s Phase B plateau + O(prefix) trigger costs) → **Option B** (semantics-preserving perf only, per plan)
+- [x] Perf patches P1–P3 (detection hoists + incremental `SeriesState` + trigger hints), suite 532 → **551** (19 new equivalence tests)
+- [x] Golden equivalence vs Phase B October pair: `trades.csv`/`report.json` **byte-identical**, summary identical ex-runtime (`06_RESEARCH/results/phase_c_golden_replay/`); post-patch plateau **110 ms/bar** → ETA ≈ 54 h/run
+- [x] Dual segmented baseline — **COMPLETE 2026-09-19**: 6 calendar-year segments × 2 runs, **1,768,123 bars each** (77.4 h/run after one interruption + supervisor relaunch; manifest resume preserved completed segments byte-identically); `trades.csv`/`report.json` byte-identical, summary identical ex-runtime, invariants all OK, Trigger D = 0; verdict **PASS** re-stamped 2026-09-19 09:55:10 against the final on-disk artifacts (`06_RESEARCH/results/phase_c_verdict.json`)
+- [x] Spread sensitivity — **COMPLETE 2026-09-19**: 4-arm constant-spread ladder {0.00, 0.05, 0.15, 0.35} on 2023-02-01 → 2023-04-30 (84,470 bars; window-adequacy + cold-start measurement note in report §8); result: gate removes flow monotonically — 52 → 22 → 2 → **0 trades at 0.35** (all 54 routes spread-blocked at the representative retail spread); invariants OK in every arm; identical pre-spread funnel (510,095 → 407 → 54) isolates the spread attribution (`06_RESEARCH/results/phase_c_spread_sens_sens0p{00,05,15,35}/`)
+- [x] `06_RESEARCH/PHASE_C_BASELINE_REPORT.md` — **COMPLETE 2026-09-19** (frozen config + 4 sha256 checksums, coverage, funnel, core + per-year + per-trigger breakdowns, boundary ruling accept+document with 0 warm-up-zone trades verified, spread ladder, anomalies incl. 0.10-lot cap binding 100 % of trades, binding interpretation, exit-criteria table, reproduce commands)
+- [x] Governance close-out (plan/handoff/TODO/CHANGELOG) — this update; suite re-verified **565 passed**; `SMC_phase_c_guard` scheduled task + Startup `phase_c_guard_hidden.vbs` removed
+- [x] **Lead Architect sign-off on the Phase C package** — GRANTED 2026-09-19: **Phase C CLOSED**; Phase D cleared for ops validation only (no optimization / no redesign / no locked-constant changes)
+
+### ACTIVE: Phase D — Demo/Paper Operational Validation (OPENED 2026-09-19 — session 1 done, market closed)
+- [x] Terminal binding + identity gate: EXNESS Copy path verified (dir identity MATCH), **DEMO** 474608655 @ Exness-MT5Trial15, symbol **XAUUSDm** resolved (`06_RESEARCH/scripts/phase_d_identity_check.py` → PHASE_D_IDENTITY: PASS)
+- [x] Watchdog EA deployed + compiled (**0 err / 0 warn**) into the terminal's `MQL5\Experts\`; heartbeat contract verified (5 s stale edge, file-format parity with EA parser, terminal `MQL5\Files` sandbox round-trip)
+- [x] Idle-session stability: 2 min LiveLoop dry-run — 60 polls, 0 errors, 0 new bars (weekend), heartbeat seq 60 + shutdown marker (`results/phase_d_ops/`)
+- [x] Order-path payload validation via `order_check`: BUY_LIMIT 0.10 @ magic **20260919** — retcode 0 (FOK + IOC); NO sends (market closed, Algo Trading OFF in terminal GUI)
+- [x] Divergence log started: `06_RESEARCH/PHASE_D_DIVERGENCES.md` — headline: §28.5 gate is ATR-relative ⇒ 2023's all-grades-blocked regime (ATR 0.30–1.06, ceiling 0.02–0.08) vs today's all-grades-pass regime (ATR ≈ 3.75); live spread constant 0.26
+- [x] **Operator pack delivered** (Lead Architect instruction 2026-09-19): `run_live.bat` launcher + `config/live_demo.json` (strict whitelist, LOCKED keys rejected loudly, risk_fraction band-checked) + `04_SRC/smc/live/run_operator.py` entrypoint (identity gate → loop → console board → backend logs in gitignored `logs/`) + pure renderer `operator_console.py`; 15 focused tests; suite **580**; live smoke on the EXNESS Copy terminal PASSED (identity, boards, heartbeat, clean shutdown; `trade_allowed=true` observed — Algo Trading is ON)
+- [ ] **EA attach via terminal GUI** (InpHeartbeatFile=smc_heartbeat.txt, InpSymbolFilter=XAUUSDm, InpMagicFilter=20260919) + Algo Trading ON — user/GUI step
+- [ ] Live bar-cycle session on open market: detect→arm→risk cycles, no crashes, KPI decision/ack latencies
+- [ ] Order sends on demo: place limit / cancel / SL-modify-preserves-TP / close (identity-gated, magic 20260919)
+- [ ] Stale-heartbeat emergency drill (Python stopped → watchdog closes scoped positions / cancels scoped pendings)
+- [ ] Full-trading-day spread distribution + gate/lot-cap observations → divergence log; KPI archive started
+- [ ] Phase D exit: ≥ 2 consecutive weeks unattended demo, zero unhandled exceptions, watchdog validated, divergence log maintained
+- [ ] Phase E — V1.1 (walk-forward, Monte Carlo, Future Flexibility thresholds) — BLOCKED until Phase D exit criteria met
+- [ ] Track V — Visual conviction / chart overlays (locked 2026-09-20; research visualizer V1 near-term, MT5 draw-only overlay V3 later) — pointer only, checklist lives in `POST_V1_ACTIVE_TODO.md` Track V
+
+---
+
 ## Blocked / Waiting
 
 | Item | Blocked By | Notes |
@@ -318,3 +368,10 @@
 | 2026-09-09 | Phase 6 audit fixes — C1 §23/§24 expiry wired into the loop, C2 paper fill linkage (symbol/magic/comment), I1 per-bar ATR/spread, I2 real-adapter auto-attach, I3/I5 rulings recorded — **501 tests total passing** | Phase 6 |
 | 2026-09-09 | Pre-Phase-7 coherence patch — CR1 detection driver (candles → validated/armed POIs), I1 single §5 state machine, I2 running equity in backtest sizing, CR2 paper close outcomes feed risk guards, I4 terminal-state retention — **510 tests total passing** | Phase 7 prep |
 | 2026-09-09 | Phase 7 — live readiness: `smc/live/` (LiveConfig, heartbeat publisher + watchdog decision spec, `LiveLoop` over the real stack) + `05_MQL5_SAFETY/SMC_Safety_Watchdog.mq5` (heartbeat + emergency flatten only) — **519 tests total passing** | Phase 7 |
+| 2026-09-09 | Post-V1 Phase A — Data Acceptance: acceptance script + report (A1–A6 PASS), A5 ruled option (a) (baseline WITHOUT Trigger D), canonical parquet + SHA-256 recorded, `smc/data/parquet_loader.py` merged (6 tests — **525 tests total passing**), `.gitignore` data protections + `data/` root-anchor fix | Post-V1 Phase A |
+| 2026-09-14 | Post-V1 Phase B — Short Fidelity Backtest CLOSED: **PASS** — full-October determinism pair (2025-10-01→31, 31,619 bars × 2, byte-identical exports, summary identical ex-runtime), all 7 plan §4 invariants OK × 2, Trigger D = 0, funnel every stage non-zero-or-explained, same-bar SL-first verified over all 41 trades, `phase_b_verdict.json` = PASS; report fully filled + one-page fidelity note in the plan; metrics (diagnostic): 41 trades, WR 36.59%, net −7.66, PF 0.0501, maxDD 7.66. Fixes en route: §28.1 BE-latch per-trade keying (525→529) + quadratic scan-cost patch with golden-check proof (529→**532**) | Post-V1 Phase B |
+| 2026-09-15 | Independent Phase C perf-patch audit CLOSED: **PASS WITH FINDINGS** (`06_RESEARCH/PHASE_C_PERF_AUDIT.md`) — 17 static equivalence claims OK (F1 LOW-latent, F2 INFO), suite 565 independently green, fold-convergence + warm-up-margin probes PASS. Boundary-probe finding: fresh-stack-per-segment loses episode/one-shot state at segment boundaries (CARRY_LOSS = 1, real October) and end-of-boundary open positions are dropped from the merged trade list — 2024→25 + 2025→26 year boundaries exposed (the other three are Friday-pre-flattened); probe's own false PREFIX_IDENTITY (midnight-truncated window) fixed + disclosed — corrected re-run: PREFIX_IDENTITY True (20 vs 20), CARRY_LOSS = 1 reproduced identically. Disposition (accept-and-document vs boundary-overlap trim) DEFERRED TO LEAD ARCHITECT; production pair unaffected in-flight | Post-V1 Phase C |
+| 2026-09-15 | Project-wide audit recorded (`06_RESEARCH/PROJECT_WIDE_AUDIT.md`): criticals C1 (boundary carry — pending ruling), C2 (segment-end open positions silently dropped from merge — no end-of-data warning), C3 (paper runner = largest, least-tested heavy module); strengths, clarity items and ranked enhancements E1–E6 catalogued; **re-check §7 scheduled at 5-year baseline completion** | Post-V1 Phase C |
+| 2026-09-15 | **LEAD ARCHITECT RULING (pending execution): boundary-carry disposition = OPTION B (boundary-overlap trim)** — to be applied to the Phase C merge AFTER the 5-year pair completes (drop per-segment trades whose `entry_bar < own_start`; bookkeeping-only, does not restore boundary state-carry). Also pending at completion: verify `positions_still_open` on the 2024→25 (Tue Dec 31) and 2025→26 (Wed Dec 31) midweek boundaries, watcher verdict, then work PROJECT_WIDE_AUDIT.md §7 with the user | Post-V1 Phase C |
+| 2026-09-17 | Phase C pair interruption (died ~2026-09-16 16:45 local at 2024 bar 196k/358.8k — machine-level; segments 2021–2023 intact and byte-identical) + relaunch: manifest-fingerprint resume skipped completed segments, 2024 restarted, watcher re-armed — ETA ≈ 28 h; checkpoint/resume design verified in production | Post-V1 Phase C |
+| 2026-09-17 | Forensics: pair death NOT a reboot/crash/OOM — unlogged session-level suspend/termination (watcher freeze/resume fingerprint: 16.75 h log gap, abort at 09:30 on machine resume). **Auto-relaunch supervisor deployed + live-fire tested** (scheduled task SMC_phase_c_guard /5 min + Startup copy + pythonw daemon; dead components self-heal ≤5 min; cleanup commands in CHANGELOG) | Post-V1 Phase C |
