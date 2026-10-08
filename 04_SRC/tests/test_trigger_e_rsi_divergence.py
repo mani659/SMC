@@ -14,8 +14,9 @@ from smc.config.timeframe import Timeframe
 from smc.core.enums import Direction, TriggerType
 from smc.core.poi import POI
 from smc.core.zone import Zone
-from smc.triggers.base_trigger import TriggerContext
+from smc.triggers.base_trigger import TriggerContext, structural_sl
 from smc.triggers.trigger_e_rsi_divergence import RsiDivergenceTrigger
+from smc.utils.atr import latest_atr
 
 TF = Timeframe.M5
 
@@ -96,7 +97,11 @@ def test_bearish_double_top_with_divergence(candle_factory, swing_factory):
     # Entry at the neckline (lowest low between the two peaks).
     neckline = min(c.low for c in candles[PEAK_1 + 1 : PEAK_2 + 1])
     assert signal.entry_price == neckline
-    assert signal.stop_reference == HIGH  # beyond the pattern extreme
+    # R5: pattern extreme plus 0.3×ATR completion-bar buffer (SHORT).
+    assert signal.stop_reference == structural_sl(
+        HIGH, Direction.SHORT,
+        latest_atr(candles[:signal.completion_index + 1]))
+    assert signal.stop_reference > HIGH  # buffer actually applied
     assert signal.completion_index == BREAK_BAR
     assert signal.expiry_bars == 15
 
@@ -112,7 +117,11 @@ def test_bullish_double_bottom_with_divergence(candle_factory, swing_factory):
     assert signal.direction is Direction.LONG
     neckline = max(c.high for c in candles[PEAK_1 + 1 : PEAK_2 + 1])
     assert signal.entry_price == neckline
-    assert signal.stop_reference == LOW
+    # R5: pattern extreme minus 0.3×ATR completion-bar buffer (LONG).
+    assert signal.stop_reference == structural_sl(
+        LOW, Direction.LONG,
+        latest_atr(candles[:signal.completion_index + 1]))
+    assert signal.stop_reference < LOW  # buffer actually applied
 
 
 def test_no_signal_without_divergence(candle_factory, swing_factory):

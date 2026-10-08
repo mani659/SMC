@@ -82,6 +82,17 @@ class TradeRecord:
     poi_id: str | None
     trigger: str | None               # normalized trigger type value
     route_id: str | None              # §11 event identity (None when absent)
+    model_tags: tuple | None = None   # POI model tag names (None = unknown)
+    pillar_path: str | None = None    # validation path summary (None = unknown)
+    disp_magnitude_atr: float | None = None  # displacement ATR multiple (None = unknown)
+    original_sl: float | None = None  # placement stop (NEVER BE-modified)
+    zone_low: float | None = None     # POI zone bottom at route time
+    zone_high: float | None = None    # POI zone top at route time
+    signal_data_json: str | None = None  # trigger signal data (JSON, or None)
+    entry_anchor: str | None = None   # E1: trigger entry-anchor provenance
+                                      # (None = unknown — never invented)
+    tp_source: str | None = None      # structural TP provenance: "structural_swing"
+                                      # | "atr_fallback" (None = unknown/legacy)
 
     @classmethod
     def from_closed(
@@ -96,6 +107,8 @@ class TradeRecord:
             trigger_str = str(trigger.value)
         else:
             trigger_str = str(trigger)
+        tags = record.position.model_tags
+        tags = tuple(tags) if tags is not None else None
         return cls(
             ticket=record.position.ticket,
             direction=record.position.direction,
@@ -115,6 +128,15 @@ class TradeRecord:
             poi_id=record.position.poi_id,
             trigger=trigger_str,
             route_id=route_id,
+            model_tags=tags,
+            pillar_path=record.position.pillar_path,
+            disp_magnitude_atr=record.position.disp_magnitude_atr,
+            original_sl=record.position.original_sl,
+            zone_low=record.position.zone_low,
+            zone_high=record.position.zone_high,
+            signal_data_json=record.position.signal_data_json,
+            entry_anchor=record.position.entry_anchor,
+            tp_source=record.position.tp_source,
         )
 
 

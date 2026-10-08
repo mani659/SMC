@@ -51,6 +51,8 @@ ALLOWED_KEYS = frozenset({
     "heartbeat_interval_s",
     "poll_interval_s",
     "console_refresh_s",
+    "console_mode",               # "event" (default) | "board" (legacy timed)
+    "alive_interval_s",           # event mode: short alive line every N s (0 = off)
     "log_dir",
 })
 
@@ -120,10 +122,26 @@ class OperatorConfig:
     detection_timeframes: tuple[str, ...] = ("H4", "H1")
     allow_single_tf_degraded: bool = False
     allowed_sessions: tuple[str, ...] | None = None   # None = no session gate
+    # Heartbeat is written where the MQL5 Safety Watchdog EA can read it.
+    # When ``terminal_path`` is set, the operator resolves the write path to
+    # ``<terminal_dir>/MQL5/Files/smc_heartbeat.txt`` so the EA sees it with
+    # its default ``InpHeartbeatFile = "smc_heartbeat.txt"``. When
+    # ``terminal_path`` is absent/untidy the operator falls back to the
+    # explicit ``heartbeat_path``, then to this log-local default and should
+    # log that the EA may not read it.
     heartbeat_path: str = "logs/phase_d/heartbeat.txt"
     heartbeat_interval_s: float = 1.0
     poll_interval_s: float = 0.5
     console_refresh_s: float = 5.0
+    # Event-driven console (2026-10-07): "event" = mostly silent, prints the
+    # full board only on major events (session start, new bar, HTF batch,
+    # flow/KPI change, new error, shutdown) plus a short one-line alive ping
+    # every ``alive_interval_s``. "board" = legacy timed full refresh every
+    # ``console_refresh_s`` (kept for debugging). ``console_refresh_s`` still
+    # rate-limits the display-only structure-snapshot rebuilds on new bars
+    # in both modes; batch changes always rebuild immediately.
+    console_mode: str = "event"
+    alive_interval_s: float = 300.0
     log_dir: str = "logs/phase_d"
     source_path: str | None = None
     raw: dict = field(default_factory=dict, repr=False, compare=False)
@@ -261,6 +279,26 @@ def load_operator_config(path: str | Path) -> OperatorConfig:
         kwargs["console_refresh_s"] = _coerce_positive_number(
             data["console_refresh_s"], "console_refresh_s"
         )
+    if "console_mode" in data:
+        mode = str(data["console_mode"]).strip().lower()
+        if mode not in ("event", "board"):
+            raise ConfigError(
+                'config.console_mode must be "event" or "board", got '
+                f"{data['console_mode']!r}"
+            )
+        kwargs["console_mode"] = mode
+    if "alive_interval_s" in data:
+        value = data["alive_interval_s"]
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ConfigError(
+                f"config.alive_interval_s must be a number, got {value!r}"
+            )
+        if value < 0:
+            raise ConfigError(
+                f"config.alive_interval_s must be >= 0 (0 disables the ping), "
+                f"got {value!r}"
+            )
+        kwargs["alive_interval_s"] = float(value)
     if "log_dir" in data:
         ld = str(data["log_dir"]).strip()
         if not ld:

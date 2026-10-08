@@ -66,7 +66,11 @@ class EndingDiagonalTrigger(Trigger):
 
         # V1 zone-context check: the terminal extreme must reach the POI
         # zone (within the 0.5×ATR band, reuse of the frozen §13 multiplier).
-        band = atr_band_half_width(context.candles, bar)
+        band = atr_band_half_width(
+            context.candles,
+            bar,
+            atr_values=getattr(context.hints, "atr_values", None),
+        )
         if not (
             zone.bottom - band
             <= diagonal.terminal_level

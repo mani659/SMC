@@ -32,7 +32,11 @@ _ROWS = [
 
 
 def _ctx(candles, swings, direction=Direction.LONG, bar=12, from_bar=8):
-    zone = Zone(top=103.0, bottom=102.2, direction=direction, timeframe=TF)
+    # FR-3: the fixture POI zone is the OB zone itself ([100.5, 101.6]),
+    # so the proximal-edge entry satisfies entry↔zone containment. A POI
+    # zone unrelated to the trigger OB RE-ANCHORS under FR-3.1 — see
+    # test_fr3_zone_m4.py and test_fr31_zone_anchored_entry.py.
+    zone = Zone(top=101.6, bottom=100.5, direction=direction, timeframe=TF)
     poi = POI(zone=zone, models=[ModelType.M5])
     return TriggerContext(poi=poi, candles=candles, swings=swings, bar_index=bar, from_bar=from_bar)
 

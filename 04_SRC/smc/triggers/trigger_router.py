@@ -90,6 +90,10 @@ class TriggerRouter:
         swings: list[Swing],
         bar: int,
         from_bar: int = 0,
+        *,
+        evaluation_candles: list[Candle] | None = None,
+        evaluation_swings: list[Swing] | None = None,
+        hints=None,
     ) -> TriggerRoute | None:
         """Best trigger signal completing at ``bar`` (grade tie-break).
 
@@ -97,19 +101,32 @@ class TriggerRouter:
         EQUAL grade the EARLIER trigger letter wins (A before F). The key is
         ascending-negated grade so a strict ``<`` comparison keeps the first
         trigger at equal grade — A never loses to F on the same bar/grade.
+
+        ``evaluation_candles`` / ``evaluation_swings`` (Phase C perf) are
+        the incremental full-prefix series the evaluations read INSTEAD of
+        prefix slices (every trigger read is bar-index-bounded, so the
+        full series evaluates identically to the slice it replaces).
+        ``hints`` (Phase C perf, duck-typed) carries the pre-computed
+        full-prefix artifacts — ATR/RSI series (both price spaces), the
+        mirrored candles/swings, and the base-sorted swing indexes — each
+        value-identical to what the evaluation would rebuild in place
+        (see the Phase C report). ``None`` keeps the legacy in-place path.
         """
         best: TriggerRoute | None = None
         best_key: tuple[int, str] | None = None
+        eval_candles = candles if evaluation_candles is None else evaluation_candles
+        eval_swings = swings if evaluation_swings is None else evaluation_swings
         for trigger_type in self.eligible_types(poi):
             trigger = self._by_type.get(trigger_type)
             if trigger is None:
                 continue
             context = TriggerContext(
                 poi=poi,
-                candles=candles,
-                swings=swings,
+                candles=eval_candles,
+                swings=eval_swings,
                 bar_index=bar,
                 from_bar=from_bar,
+                hints=hints,
             )
             signal = trigger.evaluate(context)
             if signal is None:
@@ -131,17 +148,43 @@ class TriggerRouter:
         swings: list[Swing],
         from_bar: int = 0,
         to_bar: int | None = None,
+        *,
+        scan_from: int | None = None,
+        evaluation_candles: list[Candle] | None = None,
+        evaluation_swings: list[Swing] | None = None,
+        hints=None,
     ) -> TriggerRoute | None:
         """Chronological scan: the FIRST bar in ``[from_bar, to_bar]`` that fires.
 
         ``to_bar`` defaults to the last candle; the scan may be bounded by
         the POI give-up window (``from_bar + poi_give_up_bars()``) by the
         caller. Returns the earliest route (chronological rule, §12).
+
+        ``scan_from`` (Phase B perf) starts the bar loop LATER without
+        touching the evaluation anchor: every evaluated bar still receives
+        ``from_bar`` (the episode anchor triggers A/D/E require — "the
+        pattern must post-date the POI arming"), so a resumed scan returns
+        the identical first route a full re-scan returns.
+
+        ``evaluation_candles`` / ``evaluation_swings`` (Phase C perf) pass
+        through to every evaluation (see ``evaluate_at``); ``to_bar`` still
+        bounds the bar loop and the nominal ``candles``/``swings`` anchor
+        the evaluated count. With no evaluation series supplied the scan
+        reads ``candles``/``swings`` exactly as before — the give-up
+        deadline is also re-derived from the NOMINAL series length (the
+        historical behavior; the Phase C caller caps ``to_bar`` itself).
         """
-        last = len(candles) - 1 if to_bar is None else to_bar
-        last = min(last, len(candles) - 1)
-        for bar in range(max(from_bar, 0), last + 1):
-            route = self.evaluate_at(poi, candles, swings, bar, from_bar)
+        first = max(from_bar, scan_from) if scan_from is not None else from_bar
+        if to_bar is None:
+            to_bar = len(candles) - 1
+        last = min(to_bar, len(candles) - 1)
+        for bar in range(max(first, 0), last + 1):
+            route = self.evaluate_at(
+                poi, candles, swings, bar, from_bar,
+                evaluation_candles=evaluation_candles,
+                evaluation_swings=evaluation_swings,
+                hints=hints,
+            )
             if route is not None:
                 return route
         return None

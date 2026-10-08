@@ -5,8 +5,9 @@ from smc.config.timeframe import Timeframe
 from smc.core.enums import Direction, TriggerType
 from smc.core.poi import POI
 from smc.core.zone import Zone
-from smc.triggers.base_trigger import TriggerContext
+from smc.triggers.base_trigger import TriggerContext, structural_sl
 from smc.triggers.trigger_a_choch import ChochReversalTrigger
+from smc.utils.atr import latest_atr
 
 TF = Timeframe.M5
 
@@ -59,7 +60,11 @@ def test_bullish_choch_fires_at_long_poi(candle_factory, swing_factory):
     assert signal.entry_price == 101.5  # broken structural level (§9 retest)
     assert signal.completion_index == 13
     assert signal.expiry_bars == 20
-    assert signal.stop_reference == 99.4  # sweep candle low (beyond the head)
+    # R5: sweep extreme (Head) minus 0.3×ATR completion-bar buffer.
+    assert signal.stop_reference == structural_sl(
+        99.4, Direction.LONG,
+        latest_atr(candles[:signal.completion_index + 1]))
+    assert signal.stop_reference < 99.4  # buffer actually applied
 
 
 def test_no_signal_when_sweep_predates_poi_arming(candle_factory, swing_factory):

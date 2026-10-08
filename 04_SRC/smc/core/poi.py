@@ -30,6 +30,9 @@ class POI:
     touch_count: int = 0
     htf_overlap: bool = False  # §21/§26: D1+H4 Demand/Supply overlap flag
     id: str = field(default_factory=lambda: str(uuid4()))
+    m8_kind: str | None = None  # M8 facet that produced this POI
+    # ("ob" | "demand_supply" | "fvg"); winner kind after episode collapse.
+    # None for non-M8 POIs. Logging/identity only — never a trading input.
 
     @property
     def model_count(self) -> int:

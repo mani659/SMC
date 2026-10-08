@@ -45,13 +45,16 @@ from smc.core.liquidity_level import LiquidityLevel
 from smc.core.poi import POI
 from smc.core.swing import Swing
 from smc.detection.displacement_checker import DisplacementResult, check_displacement
+from smc.detection.fvg_detector import FVG, detect_fvgs
 from smc.detection.liquidity_scanner import ALL_FAMILIES, scan as scan_liquidity
 from smc.detection.structural_swing_detector import detect_swings
 from smc.detection.sweep_detector import SweepResult, detect_sweeps
 from smc.orchestration.engine import PipelineEngine
 from smc.poi.base_model import most_recent_swing
 from smc.poi.model_registry import ModelRegistry, build_registry
+from smc.utils.atr import atr_series
 from smc.validation.validation_pipeline import ValidationResult
+from smc.validation.window_cache import WindowCache
 
 __all__ = ["DetectionDriver", "DetectionRun", "DriverResult"]
 
@@ -62,12 +65,20 @@ class DetectionRun:
 
     ``displacements`` pairs each sweep's candle index with its §3
     displacement result — the recency anchor for per-POI attribution.
+    ``fvgs`` is the window's once-computed FVG list (Phase C perf: the
+    per-sweep ``check_displacement`` calls read the SAME list the
+    in-place ``detect_fvgs`` recomputation produced — same inputs, same
+    output); ``atr_values`` is the window's full Wilder ATR series, from
+    which each displacement's pre-sweep reference is the sliced value
+    (fold identity — see ``check_displacement``).
     """
 
     swings: list[Swing]
     liquidity_levels: list[LiquidityLevel]
     sweeps: list[SweepResult]
     displacements: list[tuple[int, DisplacementResult]]
+    fvgs: list[FVG] | None = None
+    atr_values: list | None = None
 
 
 @dataclass(slots=True)
@@ -110,23 +121,40 @@ class DetectionDriver:
     # Stage 0/1 — raw detection
     # ------------------------------------------------------------------ #
     def stage0(self, candles: list[Candle]) -> DetectionRun:
-        """Swings → liquidity levels → sweeps → displacement (auto path)."""
+        """Swings → liquidity levels → sweeps → displacement (auto path).
+
+        Phase C perf: the window's FVG list and full ATR series are
+        computed ONCE here and handed to every ``check_displacement``
+        call — each was previously re-derived per sweep (O(window)
+        FVG detection + O(window) ATR rebuild). Both hoists are
+        exactly value-equivalent (same inputs → same list; Wilder-fold
+        identity for the sliced pre-sweep ATR); with ``fvgs``/``atr_values``
+        unset the run reproduces the legacy in-place computation.
+        """
         swings = detect_swings(candles, self.timeframe)
         levels = scan_liquidity(candles, self.timeframe, include=self.include_liquidity)
         sweeps = detect_sweeps(candles, levels)
+        fvgs = detect_fvgs(candles, self.timeframe)
+        atr_values = atr_series(candles, self.atr_period)
         displacements: list[tuple[int, DisplacementResult]] = []
         for sweep in sweeps:
-            result = self._displacement_for_sweep(candles, swings, sweep)
+            result = self._displacement_for_sweep(
+                candles, swings, sweep, fvgs=fvgs, atr_values=atr_values
+            )
             if result is not None:
                 displacements.append((sweep.candle_index, result))
         return DetectionRun(swings=swings, liquidity_levels=levels,
-                            sweeps=sweeps, displacements=displacements)
+                            sweeps=sweeps, displacements=displacements,
+                            fvgs=fvgs, atr_values=atr_values)
 
     def _displacement_for_sweep(
         self,
         candles: list[Candle],
         swings: list[Swing],
         sweep: SweepResult,
+        *,
+        fvgs: list[FVG] | None = None,
+        atr_values: list | None = None,
     ) -> DisplacementResult | None:
         """§3 displacement after one sweep (honest, never invented).
 
@@ -150,8 +178,18 @@ class DetectionDriver:
             )
         if prior is None:
             return None
+        # Phase C perf: pre-sweep ATR from the window's once-computed series
+        # (fold identity: the slice at sweep_index equals the prefix fold).
+        # The sweep index was just validated against this window's length by
+        # detect_sweeps, so the positional read is safe.
+        atr = (
+            atr_values[sweep.candle_index - 1]
+            if atr_values is not None and sweep.candle_index > 0
+            else None
+        )
         return check_displacement(
-            candles, direction, sweep.candle_index, prior.level, self.atr_period
+            candles, direction, sweep.candle_index, prior.level, self.atr_period,
+            atr=atr, fvgs=fvgs,
         )
 
     # ------------------------------------------------------------------ #
@@ -231,10 +269,14 @@ class DetectionDriver:
         raw = self.stage0(candles)
         swings = raw.swings if swings is None else swings
         levels = raw.liquidity_levels if liquidity_levels is None else liquidity_levels
+        if levels is raw.liquidity_levels:
+            sweeps = raw.sweeps  # same levels — the first pass IS the result
+        else:
+            sweeps = detect_sweeps(candles, levels)  # recompute on effective levels
         run = DetectionRun(
             swings=swings,
             liquidity_levels=levels,
-            sweeps=detect_sweeps(candles, levels),  # recompute on effective levels
+            sweeps=sweeps,
             displacements=raw.displacements,
         )
         pois, skipped = self.detect_pois(candles, swings, levels)
@@ -250,8 +292,24 @@ class DetectionDriver:
             displacement_map=displacement_map,
             merge_first=merge_first,
             atr_period=self.atr_period,
+            window_cache=self._window_cache(candles, raw),
         )
         return passed, results, run, skipped, pois
+
+    def _window_cache(
+        self, candles: list[Candle], run: DetectionRun
+    ) -> WindowCache | None:
+        """Per-window artifact cache for pillar reuse (Phase C perf).
+
+        Built only from stage0's own outputs, so the shared FVG list and
+        ATR series are exactly what the in-place per-POI recomputations
+        would produce (same candles → same list; same fold → same series);
+        the close-suffix arrays are pure window functions. Returns ``None``
+        when stage0 did not run its hoisted path (legacy construction).
+        """
+        if run.fvgs is None or run.atr_values is None:
+            return None
+        return WindowCache.build(candles, fvgs=run.fvgs, atr_values=run.atr_values)
 
     def run(
         self,

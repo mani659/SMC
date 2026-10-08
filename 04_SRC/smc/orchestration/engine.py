@@ -30,6 +30,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
+from enum import Enum
 from typing import Optional
 
 from smc.config.timeframe import Timeframe
@@ -53,7 +54,38 @@ from smc.validation.validation_pipeline import (
     ValidationResult,
 )
 
-__all__ = ["PipelineEngine", "ExecutionOutcome", "build_limit_request"]
+__all__ = [
+    "PipelineEngine",
+    "ExecutionOutcome",
+    "build_limit_request",
+    "SeekPosture",
+]
+
+
+class SeekPosture(str, Enum):
+    """Seek/scan contract redesign (Option B) — initial arm-bar posture.
+
+    Design: ``06_RESEARCH/SEEK_SCAN_CONTRACT_REDESIGN_DESIGN.md`` §3 R1.2
+    (DESIGN_LOCK accepted 2026-10-05). Classifies the arm bar's
+    relationship to the POI zone so the seek contract can treat the
+    arm-bar artifacts differently from live post-arm price action:
+
+    * ``CLEAN_ARM`` — arm bar neither touches the zone nor closes beyond
+      it adversely: today's behaviour, unchanged.
+    * ``IN_ZONE_AT_ARM`` — the arm bar's range intersects the zone
+      (inclusive, ``touches_zone`` semantics): the HTF-zone wick contact
+      is initial presence, NOT a §5 touch terminator; the scan opens at
+      arm (design R1.2a/R2.1/R2.2 — no re-entry gate).
+    * ``VIOLATION_AT_ARM`` — the arm bar closes beyond the zone on the
+      adverse side (design R1.2b): the §5-VIOLATED transition is DEFERRED
+      (design R4.2); the episode is in REVALIDATION and may route only
+      after a close back inside the zone (adapter gate via the existing
+      named rule ``market_reentered_zone``).
+    """
+
+    CLEAN_ARM = "CLEAN_ARM"
+    IN_ZONE_AT_ARM = "IN_ZONE_AT_ARM"
+    VIOLATION_AT_ARM = "VIOLATION_AT_ARM"
 
 
 @dataclass(slots=True)
@@ -71,6 +103,9 @@ class _PoiEpisode:
     """Engine bookkeeping per POI (in-memory V1 store)."""
 
     arm_bar: int
+    posture: SeekPosture = SeekPosture.CLEAN_ARM
+    arm_candle_ts: Optional[datetime] = None
+    revalidated_bar: Optional[int] = None
     fired: bool = False
     outcome: ExecutionOutcome | None = None
 
@@ -97,6 +132,26 @@ def build_limit_request(
         sl=route.signal.stop_reference,
         comment=f"{poi.id[:8]}:{route.signal.trigger.value}@{route.bar}",
     )
+
+
+def _classify_arm_posture(poi: POI, candle: Candle) -> SeekPosture:
+    """Design §3 R1.2 — classify the arm bar into its initial seek posture.
+
+    ``VIOLATION_AT_ARM`` wins over ``IN_ZONE_AT_ARM`` when the arm bar
+    both touches and closes through: the adverse close is the decisive
+    fact (the episode must revalidate), and a wick contact of a bar
+    closing beyond the zone is not a meaningful interaction.
+    """
+    zone = poi.zone
+    if zone.direction is Direction.LONG:
+        closed_through = candle.close < zone.bottom
+    else:
+        closed_through = candle.close > zone.top
+    if closed_through:
+        return SeekPosture.VIOLATION_AT_ARM
+    if POIStateMachine.touches_zone(poi, candle):
+        return SeekPosture.IN_ZONE_AT_ARM
+    return SeekPosture.CLEAN_ARM
 
 
 class PipelineEngine:
@@ -155,13 +210,16 @@ class PipelineEngine:
         merge_first: bool = True,
         dealing_range=None,
         atr_period: int = 14,
+        window_cache=None,
     ) -> tuple[list[POI], list[ValidationResult]]:
         """Merge (optional), validate each POI, return (passed, results).
 
         ``displacement_map`` maps each FINAL poi id (post-merge) to its Phase
         1 displacement result — the Pillar 2 injection contract. When a POI
         has no entry, Pillar 2 is UNAVAILABLE and the POI is rejected
-        (fail-fast — never a silent pass).
+        (fail-fast — never a silent pass). ``window_cache`` (Phase C perf)
+        carries the detection window's shared artifacts for pillar reuse;
+        ``None`` keeps the per-POI in-place computation.
         """
         if merge_first:
             pois = self.merge(pois)
@@ -177,6 +235,7 @@ class PipelineEngine:
                 dealing_range=dealing_range,
                 displacement=displacement_map.get(poi.id),
                 atr_period=atr_period,
+                window_cache=window_cache,
             )
             results.append(result)
             if result.passed:
@@ -186,17 +245,39 @@ class PipelineEngine:
     # ------------------------------------------------------------------ #
     # Stage 3 — arm bookkeeping
     # ------------------------------------------------------------------ #
-    def arm_at(self, poi: POI, arm_bar: int) -> None:
+    def arm_at(
+        self,
+        poi: POI,
+        arm_bar: int,
+        *,
+        arm_candle: Candle | None = None,
+    ) -> None:
         """Arm a CREATED POI (CREATED → FRESH) and record its arm bar.
 
         POIs validated through :meth:`validate` are already FRESH; this also
         accepts them. The arm bar anchors the §24 no-trigger give-up window.
+
+        Seek/scan redesign (Option B, design §3 R1.2): when ``arm_candle``
+        is supplied, the arm bar is classified into its initial seek
+        posture — ``IN_ZONE_AT_ARM`` (range intersects the zone, inclusive
+        §5 ``touches_zone`` semantics), ``VIOLATION_AT_ARM`` (closes beyond
+        the zone on the adverse side), or ``CLEAN_ARM``. Callers that do
+        not pass the arm candle keep today's behaviour exactly
+        (``CLEAN_ARM``): the posture never changes arming, the §5 state,
+        or the arm bar — it is engine bookkeeping the adapter reads to
+        apply the new scan contract.
         """
         if poi.state is POIState.CREATED:
             self.state_machine.arm(poi)
         if poi.state is not POIState.FRESH:
             raise ValueError("arm_at expects a CREATED or FRESH POI")
-        self._episodes[poi.id] = _PoiEpisode(arm_bar=arm_bar)
+        posture = SeekPosture.CLEAN_ARM
+        arm_candle_ts: Optional[datetime] = None
+        if arm_candle is not None:
+            posture = _classify_arm_posture(poi, arm_candle)
+            arm_candle_ts = arm_candle.timestamp
+        self._episodes[poi.id] = _PoiEpisode(
+            arm_bar=arm_bar, posture=posture, arm_candle_ts=arm_candle_ts)
         if poi.id not in {p.id for p in self._armed_order}:
             self._armed_order.append(poi)
 
@@ -220,10 +301,34 @@ class PipelineEngine:
 
         Returns the resulting state name. Only FRESH POIs move; a first
         touch → TESTED, a close beyond the zone without a touch → VIOLATED.
+
+        Seek/scan redesign (Option B, design §3 R1.2/R4.2): the ARM BAR
+        itself (matched by its stored candle timestamp) does not feed the
+        §5 machine for a non-CLEAN posture — the arming candle belongs to
+        the HTF candle that created the POI, so reading it as fresh LTF
+        price action would yield the measured zero-bar / two-bar seek
+        collapse. Post-arm bars feed with one REVALIDATION exception: a
+        ``VIOLATION_AT_ARM`` episode whose zone re-entry has not yet been
+        latched (``revalidated_bar`` set by the adapter's gate) treats a
+        close beyond the zone as the CONTINUATION of the arm-bar
+        condition (the episode retires at the give-up deadline if it
+        never re-enters — design R4.2), while a wick contact is still
+        recorded through the §5 machine. After re-entry, the standard §5
+        feed applies: an adverse close is terminal (R4.1b, unchanged).
         """
         current = self.state_machine.current(poi)
         if current is not POIState.FRESH:
             return current.value
+        episode = self._episodes.get(poi.id)
+        if episode is not None:
+            if (episode.posture is not SeekPosture.CLEAN_ARM
+                    and episode.arm_candle_ts is not None
+                    and candle.timestamp == episode.arm_candle_ts):
+                return POIState.FRESH.value  # initial presence / deferred
+            if (episode.posture is SeekPosture.VIOLATION_AT_ARM
+                    and episode.revalidated_bar is None
+                    and not self.state_machine.touches_zone(poi, candle)):
+                return POIState.FRESH.value  # pre-re-entry continuation
         if self.state_machine.touches_zone(poi, candle):
             return self.state_machine.on_touch(poi).value
         zone = poi.zone
@@ -243,21 +348,49 @@ class PipelineEngine:
         swings: list[Swing],
         from_bar: int | None = None,
         to_bar: int | None = None,
+        *,
+        scan_from: int | None = None,
+        evaluation_candles: list[Candle] | None = None,
+        evaluation_swings: list[Swing] | None = None,
+        hints=None,
     ) -> TriggerRoute | None:
         """Chronological trigger scan within the §24 give-up window.
 
         Returns the FIRST valid route (bar order, §12). The scan is bounded
         by ``arm_bar + poi_give_up_bars()`` (V1, documented — see
-        ``trigger_expiry.poi_give_up_bars``).        ``to_bar`` (M4) optionally
+        ``trigger_expiry.poi_give_up_bars``). ``to_bar`` (M4) optionally
         caps the scan at the CURRENT bar — the backtest adapter passes the
         bar-loop index so the scan never sees future candles (no lookahead).
+
+        ``scan_from`` (Phase B perf) resumes the ONE chronological scan at
+        the given bar instead of re-deriving already-evaluated bars. Only
+        safe when every trigger evaluation at bar b depends solely on
+        candles ≤ b (the engine's no-lookahead contract — true for all six
+        triggers A–F), in which case the returned first-fire route is
+        identical to a full re-scan from the arm bar. The evaluation
+        anchor stays at the arm bar — only the loop start moves.
+
+        ``evaluation_candles`` / ``evaluation_swings`` (Phase C perf) are
+        the adapter's incremental full-prefix artifacts handed to the
+        evaluations INSTEAD of prefix slices: every trigger read stays
+        bounded by the evaluated bar, so the values are identical to the
+        slices (see ``base_trigger.TriggerContext`` for the read contracts).
+        ``hints`` (Phase C perf) carries the same series' pre-computed
+        indicator/mirror/index artifacts for the per-evaluation hoists.
         """
         episode = self._episodes.get(poi.id)
-        start = episode.arm_bar if episode is not None else (from_bar or 0)
-        deadline = start + poi_give_up_bars()
+        arm = episode.arm_bar if episode is not None else (from_bar or 0)
+        deadline = arm + poi_give_up_bars()  # §24 window anchored at the ARM bar
         if to_bar is not None:
             deadline = min(deadline, to_bar)
-        return self.router.scan(poi, candles, swings, from_bar=start, to_bar=deadline)
+        # ``from_bar=arm`` keeps the evaluation ANCHOR at the arming bar
+        # (triggers A/D/E require the pattern to post-date arming) while
+        # ``scan_from`` only moves the bar loop's start.
+        return self.router.scan(
+            poi, candles, swings, from_bar=arm, to_bar=deadline, scan_from=scan_from,
+            evaluation_candles=evaluation_candles, evaluation_swings=evaluation_swings,
+            hints=hints,
+        )
 
     # ------------------------------------------------------------------ #
     # Stage 4 — route → order (news + session gates)

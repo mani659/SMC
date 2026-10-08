@@ -54,6 +54,9 @@ def check_displacement(
     sweep_index: int,
     bos_level: float,
     atr_period: int = 14,
+    *,
+    atr: float | None = None,
+    fvgs: list | None = None,
 ) -> DisplacementResult:
     """Evaluate displacement over the candles following a sweep.
 
@@ -73,13 +76,25 @@ def check_displacement(
         ``SHORT``).
     atr_period:
         ATR smoothing period for the pre-move reference value.
+    atr:
+        Pre-computed pre-sweep ATR — ``latest_atr(candles[:sweep_index],
+        atr_period)`` — supplied by batch callers that already hold the
+        window's ``atr_series`` (Wilder-fold identity: the fold over the
+        full window sliced at ``sweep_index`` equals the fold over the
+        prefix, so the value is identical; ``None`` input keeps the exact
+        in-place computation). The sweep-index bounds check below runs
+        BEFORE any use, so a supplied value cannot mask a bad index.
+    fvgs:
+        Pre-computed ``detect_fvgs(candles, ...)`` list for the SAME
+        candles (same inputs → same list; ``None`` recomputes).
     """
     if not 0 <= sweep_index < len(candles):
         raise IndexError(f"sweep_index {sweep_index} out of range")
 
     sweep = candles[sweep_index]
     # V1: ATR over bars BEFORE the sweep only (measurement definition).
-    atr = latest_atr(candles[:sweep_index], atr_period)
+    if atr is None:
+        atr = latest_atr(candles[:sweep_index], atr_period)
 
     def _first_bos() -> int | None:
         if direction is Direction.LONG:
@@ -112,7 +127,7 @@ def check_displacement(
 
     fvg = False
     if bos_index is not None:
-        for f in detect_fvgs(candles):
+        for f in (detect_fvgs(candles) if fvgs is None else fvgs):
             if (
                 f.start_index >= sweep_index
                 and f.start_index <= bos_index

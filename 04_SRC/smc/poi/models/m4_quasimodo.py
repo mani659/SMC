@@ -10,6 +10,7 @@ Bullish QML mirrors on lows: Left Shoulder low -> neck (swing high) -> Head
 
 from __future__ import annotations
 
+from smc.config.locked_constants import EQH_EQL_TOLERANCE
 from smc.config.model_type import ModelType
 from smc.core.candle import Candle
 from smc.core.enums import Direction
@@ -17,6 +18,7 @@ from smc.core.liquidity_level import LiquidityLevel
 from smc.core.poi import POI
 from smc.core.swing import Swing
 from smc.poi.base_model import POIModel, first_close_beyond, zone_for_swing
+from smc.utils.pips import pips_to_price
 
 __all__ = ["M4Quasimodo"]
 
@@ -34,6 +36,11 @@ class M4Quasimodo(POIModel):
     ) -> list[POI]:
         if not candles:
             return []
+        # FR-3 M4/M5 domain split: a head that exceeds its shoulder by no
+        # more than the frozen EQH tolerance is an equal-peaks structure
+        # (M5/M7 domain per §8), not a Quasimodo head sweep. Uses the frozen
+        # constant only — no new number.
+        head_excess_min = pips_to_price(EQH_EQL_TOLERANCE)
         end = len(candles) - 1
         for index in range(len(swings) - 3, -1, -1):
             a, b, c = swings[index], swings[index + 1], swings[index + 2]
@@ -41,7 +48,7 @@ class M4Quasimodo(POIModel):
             if (
                 a.is_high and not b.is_high and c.is_high
                 and a.is_valid and b.is_valid
-                and c.level > a.level
+                and c.level - a.level > head_excess_min
                 and a.candle_index < b.candle_index < c.candle_index <= end
             ):
                 if first_close_beyond(
@@ -53,7 +60,7 @@ class M4Quasimodo(POIModel):
             if (
                 not a.is_high and b.is_high and not c.is_high
                 and a.is_valid and b.is_valid
-                and c.level < a.level
+                and a.level - c.level > head_excess_min
                 and a.candle_index < b.candle_index < c.candle_index <= end
             ):
                 if first_close_beyond(

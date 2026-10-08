@@ -16,6 +16,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import TYPE_CHECKING
 
 from smc.core.candle import Candle
 from smc.core.liquidity_level import LiquidityLevel
@@ -23,6 +24,11 @@ from smc.core.poi import POI
 from smc.core.swing import Swing
 from smc.detection.displacement_checker import DisplacementResult
 from smc.poi.deal_range import DealingRange
+
+if TYPE_CHECKING:  # pragma: no cover - import cycle guard
+    from smc.validation.window_cache import WindowCache
+else:
+    from smc.validation.window_cache import WindowCache
 
 __all__ = [
     "Pillar",
@@ -82,6 +88,7 @@ class ValidationContext:
     dealing_range: DealingRange | None = None
     displacement: DisplacementResult | None = None
     atr_period: int = 14
+    window_cache: "WindowCache | None" = None
 
 
 class Pillar(ABC):

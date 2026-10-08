@@ -12,11 +12,19 @@ TRIGGER (R1 §7):
      its full wick range;
   3. Price retraces to the OB zone (first touch).
 
-ENTRY: LIMIT at the OB PROXIMAL edge (the edge the retracement reaches
-first — zone top when approaching a demand OB from above, zone bottom when
-approaching a supply OB from below; R1 allows the proximal edge or the 50%
-midpoint — V1 picks the proximal edge).
-STOP: beyond the OB DISTAL edge.
+ENTRY (FR-3.1): LIMIT anchored to the routed POI zone. The OB proximal
+edge remains the REFERENCE price, but the resting limit is
+``zone_anchored_entry(zone, reference)`` — an on-zone OB keeps the
+proximal-edge entry bit-exactly (pre-FR-3.1 behavior); an OB outside the
+routed thesis zone re-anchors to the nearest zone edge (the PROXIMAL edge
+for the reachable shapes: LONG with the OB above the zone -> top; SHORT
+with the OB below the zone -> bottom) so the HTF thesis still routes onto
+its zone instead of being silently rejected off-zone.
+STOP: beyond the OB DISTAL edge (0.3×ATR buffer) when the entry is the
+proximal edge (unchanged); for a RE-ANCHORED entry the stop reference is
+the zone's own DISTAL edge (same 0.3×ATR buffer) so the stop always sits
+on the protective side of the entry — a stop left on a detached OB would
+land on the wrong side of the re-anchored limit.
 EXPIRY: first touch only (TRIGGER_F_EXPIRY = 1) — a signal fires at the
 first retracement bar that reaches the OB and cannot be re-armed.
 """
@@ -26,14 +34,19 @@ from __future__ import annotations
 from smc.core.candle import Candle
 from smc.core.enums import Direction, TriggerType
 from smc.core.swing import Swing
-from smc.triggers.base_trigger import Trigger, TriggerContext, TriggerSignal
+from smc.triggers.base_trigger import (
+    Trigger, TriggerContext, TriggerSignal, context_atr, entry_within_zone,
+    structural_sl, zone_anchored_entry,
+)
 from smc.triggers.trigger_expiry import window_bars_for
 
 __all__ = ["BosObContinuationTrigger"]
 
 
 class BosObContinuationTrigger(Trigger):
-    """§R1-F trend continuation: limit at the OB proximal edge on first touch."""
+    """§R1-F trend continuation: first-touch OB signal, limit anchored to
+    the routed POI zone (FR-3.1 — proximal-edge reference, direction-aware
+    anchor; on-zone OBs keep the classic proximal-edge entry bit-exactly)."""
 
     type = TriggerType.F_BOS_OB
     name = "f_bos_ob"
@@ -67,10 +80,40 @@ class BosObContinuationTrigger(Trigger):
         if touched != bar:
             return None
 
+        # FR-3.1: the resting limit is anchored INTO the routed POI zone at
+        # the DIRECTION-PROXIMAL edge (LONG -> zone high, SHORT -> zone
+        # low). The OB proximal edge stays the reference (on-zone OBs are
+        # bit-identical to the pre-FR-3.1 rule); a detached OB re-anchors
+        # to the proximal edge and the stop reference moves to the zone's
+        # distal edge so the stop remains on the protective side.
+        atr = context_atr(context, bar)
         if is_long:
-            entry, stop = top, bottom
+            reference = top
+            entry = zone_anchored_entry(zone.direction, zone.bottom, zone.top, reference)
+            stop_reference = bottom if entry == top else zone.bottom
         else:
-            entry, stop = bottom, top
+            reference = bottom
+            entry = zone_anchored_entry(zone.direction, zone.bottom, zone.top, reference)
+            stop_reference = top if entry == bottom else zone.top
+        stop = structural_sl(stop_reference, zone.direction, atr)
+        # Degenerate-geometry guard: the stop must sit strictly on the
+        # protective side of the entry. A flat zone with unknowable ATR
+        # would yield stop == entry — a zero SL distance, which the sizing
+        # path (risk_lots) rejects with an exception; such a signal is not
+        # a trade. (With ATR present the 0.3×ATR buffer keeps the distance
+        # positive even for a flat zone.)
+        if zone.direction is Direction.LONG and not stop < entry:
+            return None
+        if zone.direction is not Direction.LONG and not stop > entry:
+            return None
+        # FR-3: the routed entry must belong to its POI thesis zone
+        # (±0.5×ATR locked tolerance). The gate stays the last line of
+        # defense — the anchor makes standard fixtures pass pre-gate;
+        # it does not widen what the gate accepts.
+        if not entry_within_zone(entry, zone, atr):
+            return None
+        re_anchored = entry != reference
+        anchor = "ob_proximal" if not re_anchored else "zone_edge_reanchor"
         return TriggerSignal(
             trigger=TriggerType.F_BOS_OB,
             direction=zone.direction,
@@ -78,8 +121,13 @@ class BosObContinuationTrigger(Trigger):
             stop_reference=stop,
             completion_index=bar,
             expiry_bars=window_bars_for(TriggerType.F_BOS_OB),
-            detail=f"BOS at bar {bos_index}; first touch of origin OB at bar {bar}",
-            data={"bos_index": bos_index, "ob_index": _ob_index(context, bos_index, is_long)},
+            detail=(
+                f"BOS at bar {bos_index}; first touch of origin OB at bar {bar}; "
+                f"entry anchor {anchor}"
+            ),
+            data={"bos_index": bos_index,
+                  "ob_index": _ob_index(context, bos_index, is_long),
+                  "entry_anchor": anchor},
         )
 
 
@@ -92,9 +140,17 @@ def _first_bos(context: TriggerContext, bar: int, is_long: bool) -> int | None:
     origin and the retracement scan stay anchored to one event. (Router
     scans chronologically; later continuation bars re-evaluating the same
     OB produce no new first-touch signal.)
+
+    Phase C perf: with the context's swing index supplied, each per-bar
+    "last valid swing" scan is a bisect lookup over the SAME selection.
     """
+    swing_index = getattr(context.hints, "swing_index", None)
+    original = swing_index.original if swing_index is not None else None
     for candidate in range(context.from_bar + 1, bar + 1):
-        swing = _last_valid_swing(context.swings, is_high=is_long, before=candidate)
+        if original is not None:
+            swing = original.last_valid(is_long, candidate)
+        else:
+            swing = _last_valid_swing(context.swings, is_high=is_long, before=candidate)
         if swing is None:
             continue
         close = context.candles[candidate].close

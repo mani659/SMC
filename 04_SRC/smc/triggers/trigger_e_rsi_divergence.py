@@ -34,6 +34,8 @@ from smc.triggers.base_trigger import (
     TriggerContext,
     TriggerSignal,
     atr_band_half_width,
+    context_atr,
+    structural_sl,
 )
 from smc.triggers.trigger_expiry import window_bars_for
 from smc.utils.pips import within_pip_tolerance
@@ -79,7 +81,11 @@ class RsiDivergenceTrigger(Trigger):
                 trigger=TriggerType.E_RSI_DIVERGENCE,
                 direction=Direction.SHORT,
                 entry_price=pattern.entry,
-                stop_reference=pattern.stop,
+                # R5: the pattern extreme is the structural reference (real
+                # space — the mirrored detection already resolved polarity).
+                stop_reference=structural_sl(
+                    pattern.stop, Direction.SHORT,
+                    context_atr(context, pattern.completion)),
                 completion_index=pattern.completion,
                 expiry_bars=window_bars_for(TriggerType.E_RSI_DIVERGENCE),
                 detail=(
@@ -91,15 +97,20 @@ class RsiDivergenceTrigger(Trigger):
                     "peak2_index": pattern.peak2_index,
                 },
             )
-        # Bullish: run the same detection in the mirrored space.
+        # Bullish: run the same detection in the mirrored space. Phase C
+        # perf: the context's pre-mirrored series/swings replace the
+        # per-evaluation inversions — value-identical (index-bounded reads).
         zone = context.poi.zone
         inverted_zone = Zone(
             top=-zone.bottom, bottom=-zone.top, direction=zone.direction
         )
+        hints = context.hints
+        inv_candles = getattr(hints, "inverted", None)
+        inv_swings = getattr(hints, "inverted_swings", None)
         pattern = _detect(
             context,
-            _invert_candles(context.candles),
-            _invert_swings(context.swings),
+            inv_candles if inv_candles is not None else _invert_candles(context.candles),
+            inv_swings if inv_swings is not None else _invert_swings(context.swings),
             bar,
             inverted_zone,
         )
@@ -108,8 +119,12 @@ class RsiDivergenceTrigger(Trigger):
         return TriggerSignal(
             trigger=TriggerType.E_RSI_DIVERGENCE,
             direction=Direction.LONG,
-            entry_price=-pattern.entry,
-            stop_reference=-pattern.stop,
+                entry_price=-pattern.entry,
+                # R5 in real space: negate first, then buffer beyond the
+                # structural extreme (mirrored-space buffering would flip).
+                stop_reference=structural_sl(
+                    -pattern.stop, Direction.LONG,
+                    context_atr(context, pattern.completion)),
             completion_index=pattern.completion,
             expiry_bars=window_bars_for(TriggerType.E_RSI_DIVERGENCE),
             detail=(
@@ -145,11 +160,25 @@ def _detect(
     if h2.candle_index < context.from_bar:
         return None
     # 2) Second peak at the POI zone (within the V1 0.5×ATR band).
-    band = atr_band_half_width(candles, bar)
+    band = atr_band_half_width(
+        candles,
+        bar,
+        atr_values=getattr(context.hints, "atr_values", None),
+    )
     if not (zone.bottom - band <= h2.level <= zone.top + band):
         return None
-    # 3) RSI divergence: lower RSI at the equal/higher second high.
-    rsi = rsi_series(candles)
+    # 3) RSI divergence: lower RSI at the equal/higher second high. Phase C
+    #    perf: the context's incremental RSI series (original or mirrored
+    #    space — the hint matches the space of the supplied candles) replaces
+    #    the per-evaluation O(prefix) rebuild; the indexed values are exactly
+    #    the series' entries (Wilder-fold identity).
+    rsi = (
+        getattr(context.hints, "rsi_values", None)
+        if candles is context.candles
+        else getattr(context.hints, "rsi_values_inverted", None)
+    )
+    if rsi is None:
+        rsi = rsi_series(candles)
     r1 = rsi[h1.candle_index] if h1.candle_index < len(rsi) else None
     r2 = rsi[h2.candle_index] if h2.candle_index < len(rsi) else None
     if r1 is None or r2 is None or not r2 < r1:

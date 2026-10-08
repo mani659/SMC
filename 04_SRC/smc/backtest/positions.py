@@ -38,6 +38,23 @@ class BacktestPosition:
     symbol: str = ""
     poi_id: str | None = None
     trigger: object | None = None
+    # Identity enrichment (logging only — copied verbatim on SL modifies).
+    model_tags: tuple | None = None
+    pillar_path: str | None = None
+    disp_magnitude_atr: float | None = None
+    # Placement-time geometry (logging only — modify_sl MUST copy these
+    # unchanged while moving sl; enforced by test).
+    original_sl: float | None = None
+    zone_low: float | None = None
+    zone_high: float | None = None
+    signal_data_json: str | None = None
+    # E1: trigger entry-anchor provenance (see CandidateEntry.entry_anchor);
+    # copied verbatim on SL modifies (same invariant as original_sl).
+    entry_anchor: str | None = None
+    # Structural TP provenance (see CandidateEntry.tp_source). Logging/audit
+    # only — never read by risk/fill/BE logic; copied verbatim on SL
+    # modifies (same invariant as entry_anchor).
+    tp_source: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,6 +99,15 @@ class PositionStore:
         symbol: str = "",
         poi_id: str | None = None,
         trigger=None,
+        model_tags: tuple | None = None,
+        pillar_path: str | None = None,
+        disp_magnitude_atr: float | None = None,
+        original_sl: float | None = None,
+        zone_low: float | None = None,
+        zone_high: float | None = None,
+        signal_data_json: str | None = None,
+        entry_anchor: str | None = None,
+        tp_source: str | None = None,
     ) -> BacktestPosition:
         """Open one position on a fill; returns it (ticket pre-assigned)."""
         if volume <= 0.0:
@@ -98,6 +124,15 @@ class PositionStore:
             symbol=symbol,
             poi_id=poi_id,
             trigger=trigger,
+            model_tags=model_tags,
+            pillar_path=pillar_path,
+            disp_magnitude_atr=disp_magnitude_atr,
+            original_sl=original_sl,
+            zone_low=zone_low,
+            zone_high=zone_high,
+            signal_data_json=signal_data_json,
+            entry_anchor=entry_anchor,
+            tp_source=tp_source,
         )
         self._next_ticket += 1
         self._open.append(position)
@@ -174,6 +209,17 @@ class PositionStore:
                     symbol=position.symbol,
                     poi_id=position.poi_id,
                     trigger=position.trigger,
+                    model_tags=position.model_tags,
+                    pillar_path=position.pillar_path,
+                    disp_magnitude_atr=position.disp_magnitude_atr,
+                    # Placement-time geometry rides along UNCHANGED while
+                    # only sl moves (the BE-preservation invariant).
+                    original_sl=position.original_sl,
+                    zone_low=position.zone_low,
+                    zone_high=position.zone_high,
+                    signal_data_json=position.signal_data_json,
+                    entry_anchor=position.entry_anchor,
+                    tp_source=position.tp_source,
                 )
                 self._open[index] = updated
                 return updated

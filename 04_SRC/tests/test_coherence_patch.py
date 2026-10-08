@@ -371,9 +371,12 @@ def test_adapter_keeps_workflow_live_and_touch_window_pois():
     assert adapter.prune_terminal_pois(set(), bar_index=5) == []
     assert engine.tracked_pois() == [poi]
 
-    # Workflow consumed + beyond the touch window (touch bar + 1) → pruned.
+    # Seek/scan redesign (R4.3): a §5 TESTED state inside the seek span no
+    # longer bounds routing, so the touched POI is NOT pruned on that basis
+    # any more — the I4 retention contract keeps it (FRESH-or-TESTED within
+    # the seek window are retained; the give-up retirement is what ends it).
     adapter._workflows.pop(poi.id)
     adapter._tested_bar[poi.id] = 1
-    assert adapter.prune_terminal_pois(set(), bar_index=3) == [poi.id]
-    assert engine.tracked_pois() == []
+    assert adapter.prune_terminal_pois(set(), bar_index=3) == []
+    assert engine.tracked_pois() == [poi]
     assert poi.id not in adapter._workflows

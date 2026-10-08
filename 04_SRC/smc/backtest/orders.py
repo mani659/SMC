@@ -53,6 +53,26 @@ class PendingOrder:
     comment: str = ""
     poi_id: str | None = None
     trigger: object | None = None  # TriggerType of the originating route
+    # Identity enrichment (logging only — carried order → fill → position).
+    model_tags: tuple | None = None
+    pillar_path: str | None = None
+    disp_magnitude_atr: float | None = None
+    # Placement-time geometry (logging only — never modified after place).
+    original_sl: float | None = None
+    zone_low: float | None = None
+    zone_high: float | None = None
+    signal_data_json: str | None = None
+    # E1: trigger entry-anchor provenance (see CandidateEntry.entry_anchor);
+    # None = unknown (never invented).
+    entry_anchor: str | None = None
+    # Structural TP provenance (see CandidateEntry.tp_source). Logging/audit
+    # only — never read by risk/fill logic. None = unknown/legacy.
+    tp_source: str | None = None
+    # FR fill-regime policy (R8): this order's pending lifetime in runner
+    # bars (§23 bars_open convention) + its detection-timeframe provenance.
+    # None = use the runner-timeframe §23 default (legacy orders, M3 seam).
+    rest_bars: int | None = None
+    detection_tf: object | None = None
 
 
 @dataclass(slots=True)
@@ -88,6 +108,17 @@ class PendingOrderBook:
         comment: str = "",
         poi_id: str | None = None,
         trigger=None,
+        model_tags: tuple | None = None,
+        pillar_path: str | None = None,
+        disp_magnitude_atr: float | None = None,
+        original_sl: float | None = None,
+        zone_low: float | None = None,
+        zone_high: float | None = None,
+        signal_data_json: str | None = None,
+        entry_anchor: str | None = None,
+        tp_source: str | None = None,
+        rest_bars: int | None = None,
+        detection_tf: object | None = None,
     ) -> PendingOrder:
         """Add one pending limit order; returns it (ticket pre-assigned)."""
         if volume <= 0.0:
@@ -107,6 +138,17 @@ class PendingOrderBook:
             comment=comment,
             poi_id=poi_id,
             trigger=trigger,
+            model_tags=model_tags,
+            pillar_path=pillar_path,
+            disp_magnitude_atr=disp_magnitude_atr,
+            original_sl=original_sl,
+            zone_low=zone_low,
+            zone_high=zone_high,
+            signal_data_json=signal_data_json,
+            entry_anchor=entry_anchor,
+            tp_source=tp_source,
+            rest_bars=rest_bars,
+            detection_tf=detection_tf,
         )
         self._next_ticket += 1
         self._orders.append(order)
@@ -137,22 +179,28 @@ class PendingOrderBook:
         return len(self._orders)
 
     def expired_by_section23(self, current_bar: int, timeframe: Timeframe) -> list[PendingOrder]:
-        """Cancel orders past the frozen §23 unfilled-order expiry.
+        """Cancel orders past the frozen §23 unfilled-order expiry (R8-aware).
 
-        M5 = 12 / M1 = 30 bars (``expiry_bars_for``); timeframes without a
-        frozen rule (H1+) NEVER auto-expire here — the runner decides (no
-        invented rule). ``bars_open`` uses the SAME convention as
+        Lifetime is PER ORDER: an R8-extended order carries its own
+        ``rest_bars`` (H1-detected 36 / H4, M8 or D1-detected 48 runner
+        bars); orders without one use the frozen execution-timeframe rule
+        (M5 = 12 / M1 = 30 bars, ``expiry_bars_for``). Timeframes without
+        a frozen rule (H1+) NEVER auto-expire by default — the runner
+        decides (no invented rule), but an explicit R8 ``rest_bars`` still
+        applies there (it is runner-bar units, not POI-timeframe units).
+        ``bars_open`` uses the SAME convention as
         ``POIStateMachine.expire_unfilled`` (expiry when ``bars_open >=
         limit``): the placement bar counts as the first open bar, so an
         order placed on bar N has been open 1 bar on N and 12 bars on
         N+11 (M5) — it expires once the 12th bar closes unfilled.
         Returns the cancelled orders.
         """
-        limit = expiry_bars_for(timeframe)
-        if limit is None:
-            return []
+        default_limit = expiry_bars_for(timeframe)
         cancelled: list[PendingOrder] = []
         for order in self._orders:
+            limit = order.rest_bars if order.rest_bars is not None else default_limit
+            if limit is None:
+                continue
             bars_open = current_bar - order.placed_bar + 1
             if bars_open >= limit:
                 cancelled.append(order)
@@ -163,17 +211,20 @@ class PendingOrderBook:
     def expired_by_give_up(self, current_bar: int) -> list[PendingOrder]:
         """Cancel orders resting past the POI-wide give-up window (§24 V1).
 
-        Uses ``poi_give_up_bars()`` (Trigger A's frozen 20 M5 bars) — a
-        defensive backstop for orders on timeframes without a §23 rule.
-        Same ``bars_open`` convention as :meth:`expired_by_section23`
-        (placement bar counts as the first open bar; expiry when
-        ``bars_open >= poi_give_up_bars()``).
+        Uses ``poi_give_up_bars()`` (Trigger A's frozen 20 M5 bars) as the
+        default backstop — never below an order's R8 ``rest_bars`` (an
+        R8-extended order is not silently shortened by the backstop; the
+        effective backstop is ``max(20, rest_bars)``). Same ``bars_open``
+        convention as :meth:`expired_by_section23` (placement bar counts
+        as the first open bar; expiry when ``bars_open >= backstop``).
         """
-        limit = poi_give_up_bars()
+        default_backstop = poi_give_up_bars()
         cancelled: list[PendingOrder] = []
         for order in self._orders:
+            backstop = (max(default_backstop, order.rest_bars)
+                        if order.rest_bars is not None else default_backstop)
             bars_open = current_bar - order.placed_bar + 1
-            if bars_open >= limit:
+            if bars_open >= backstop:
                 cancelled.append(order)
         for order in cancelled:
             self._orders.remove(order)

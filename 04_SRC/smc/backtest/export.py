@@ -39,15 +39,23 @@ def to_csv(report: BacktestReport, path) -> None:
 
     Fixed header: ticket, direction, symbol, volume, entry_price,
     exit_price, sl, tp, entry_bar, exit_bar, entry_at, exit_at,
-    close_kind, win, pnl, poi_id, trigger, route_id. Enums/datetimes are
-    ``str()``-normalized; ``None`` → empty cell. Metrics/breakdowns are
+    close_kind, win, pnl, poi_id, trigger, route_id, then the appended
+    identity columns model_tags, pillar_path, disp_magnitude_atr,
+    original_sl, zone_low, zone_high, signal_data_json, entry_anchor,
+    tp_source
+    (backward compatible: old columns keep their order; new columns are
+    appended; ``None`` → empty cell). Enums/datetimes are
+    ``str()``-normalized. Metrics/breakdowns are
     not serialized here — the trade list is the M5 CSV contract.
     """
     header = [
         "ticket", "direction", "symbol", "volume", "entry_price",
         "exit_price", "sl", "tp", "entry_bar", "exit_bar", "entry_at",
         "exit_at", "close_kind", "win", "pnl", "poi_id", "trigger",
-        "route_id",
+        "route_id", "model_tags", "pillar_path", "disp_magnitude_atr",
+        "original_sl", "zone_low", "zone_high", "signal_data_json",
+        "entry_anchor",
+        "tp_source",
     ]
     with open(path, "w", newline="", encoding="utf-8") as handle:
         writer = csv.writer(handle)
@@ -72,6 +80,15 @@ def to_csv(report: BacktestReport, path) -> None:
                 "" if trade.poi_id is None else trade.poi_id,
                 "" if trade.trigger is None else trade.trigger,
                 "" if trade.route_id is None else trade.route_id,
+                "" if trade.model_tags is None else "+".join(trade.model_tags),
+                "" if trade.pillar_path is None else trade.pillar_path,
+                "" if trade.disp_magnitude_atr is None else trade.disp_magnitude_atr,
+                "" if trade.original_sl is None else trade.original_sl,
+                "" if trade.zone_low is None else trade.zone_low,
+                "" if trade.zone_high is None else trade.zone_high,
+                "" if trade.signal_data_json is None else trade.signal_data_json,
+                "" if trade.entry_anchor is None else trade.entry_anchor,
+                "" if trade.tp_source is None else trade.tp_source,
             ])
 
 
@@ -118,6 +135,15 @@ def to_json(report: BacktestReport, path) -> None:
                 "poi_id": trade.poi_id,
                 "trigger": trade.trigger,
                 "route_id": trade.route_id,
+                "model_tags": list(trade.model_tags) if trade.model_tags is not None else None,
+                "pillar_path": trade.pillar_path,
+                "disp_magnitude_atr": trade.disp_magnitude_atr,
+                "original_sl": trade.original_sl,
+                "zone_low": trade.zone_low,
+                "zone_high": trade.zone_high,
+                "signal_data_json": trade.signal_data_json,
+                "entry_anchor": trade.entry_anchor,
+                "tp_source": trade.tp_source,
             }
             for trade in report.trades
         ],

@@ -186,7 +186,7 @@ def _m4_rows(close_below_neck: bool = True):
         (99.9, 100.2, 99.7, 100.0),
         (100.0, 100.5, 99.9, 100.4),
         (100.4, 101.0, 100.3, 100.9),
-        (100.9, 102.0, 100.7, 101.8),  # 12 head high 102.0 > LS
+        (100.9, 102.3, 100.7, 102.1),  # 12 head high 102.3 > LS (+0.7, clears EQH tol)
         (101.6, 101.9, 99.0, 99.2) if close_below_neck else (101.0, 101.4, 99.9, 100.2),
     ]
     return rows
@@ -197,10 +197,25 @@ def test_m4_quasimodo_acceptance(candle_factory, swing_factory):
     swings = _swings(
         candles,
         swing_factory,
-        [(4, True, 101.6, True), (8, False, 99.8, True), (12, True, 102.0, True)],
+        [(4, True, 101.6, True), (8, False, 99.8, True), (12, True, 102.3, True)],
     )
     poi = _only(M4Quasimodo(TF).detect(candles, swings, []))
     _assert_poi(poi, Direction.SHORT, ModelType.M4, 101.6, 100.8)
+
+
+def test_m4_quasimodo_decoy_marginal_head_is_m5_domain(
+    candle_factory, swing_factory
+):
+    """FR-3 M4/M5 domain split: a head exceeding its shoulder by no more
+    than the frozen EQH tolerance is an equal-peaks structure (M5/M7
+    domain per §8), not a Quasimodo sweep — M4 stays silent."""
+    candles = candle_factory(_m4_rows())
+    swings = _swings(
+        candles,
+        swing_factory,
+        [(4, True, 101.6, True), (8, False, 99.8, True), (12, True, 102.0, True)],
+    )
+    assert M4Quasimodo(TF).detect(candles, swings, []) == []
 
 
 def test_m4_quasimodo_decoy_no_neckline_break(candle_factory, swing_factory):

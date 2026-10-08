@@ -7,6 +7,7 @@ stack (PipelineEngine + PipelineAdapter + PaperRunner + DetectionDriver)
 over a scriptable fake connector.
 """
 
+import logging
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
@@ -259,6 +260,36 @@ def test_live_loop_refuses_to_start_when_connector_fails():
     assert connector.connected is False
     with pytest.raises(RuntimeError):
         loop.run_once()                          # never started
+
+
+def test_htf_permission_errors_are_rate_limited_and_recovery_is_logged(
+    tmp_path, caplog
+):
+    connector = LiveFakeConnector()
+    connector.fail_rates = True
+
+    def copy_rates(symbol, tf, start, count):
+        if connector.fail_rates:
+            raise PermissionError(13, "Access is denied")
+        return []
+
+    connector.copy_rates = copy_rates
+    loop, _runner, _heartbeat = _make_loop(tmp_path, connector)
+    expected_failures = len(loop.htf_timeframes)
+
+    with caplog.at_level(logging.DEBUG, logger="smc.live.loop"):
+        loop._fetch_htf_series()
+        loop._fetch_htf_series()
+        connector.fail_rates = False
+        loop._fetch_htf_series()
+
+    assert caplog.text.count("HTF fetch failed operation=copy_rates") == expected_failures
+    assert caplog.text.count(
+        "Repeated HTF fetch failure operation=copy_rates"
+    ) == expected_failures
+    assert caplog.text.count(
+        "HTF fetch recovered operation=copy_rates"
+    ) == expected_failures
 
 
 def test_live_loop_never_rearms_an_existing_poi(tmp_path):

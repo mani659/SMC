@@ -21,7 +21,9 @@ from __future__ import annotations
 
 from smc.core.enums import Direction, TriggerType
 from smc.poi.choch_classifier import classify_choch_at
-from smc.triggers.base_trigger import Trigger, TriggerContext, TriggerSignal
+from smc.triggers.base_trigger import (
+    Trigger, TriggerContext, TriggerSignal, context_atr, structural_sl,
+)
 from smc.triggers.trigger_expiry import window_bars_for
 
 __all__ = ["ChochReversalTrigger"]
@@ -37,7 +39,18 @@ class ChochReversalTrigger(Trigger):
         bar = context.current_bar
         if bar <= context.from_bar:
             return None
-        choch = classify_choch_at(context.candles, context.swings, bar)
+        # Phase C perf: the context's incremental artifacts (mirrored
+        # series + swing indexes) replace the per-evaluation inversions and
+        # O(S) scans — value-identical (see classify_choch_at).
+        hints = context.hints
+        choch = classify_choch_at(
+            context.candles,
+            context.swings,
+            bar,
+            inverted_candles=getattr(hints, "inverted", None),
+            inverted_swings=getattr(hints, "inverted_swings", None),
+            swing_index=getattr(hints, "swing_index", None),
+        )
         if choch is None:
             return None
         if choch.direction is not context.poi.zone.direction:
@@ -48,7 +61,11 @@ class ChochReversalTrigger(Trigger):
         if choch.sweep_index is not None and choch.sweep_index < context.from_bar:
             return None
 
-        stop = _sweep_extreme(context, choch)
+        # R5: the sweep extreme (Head) is the structural reference; the
+        # stop sits 0.3×ATR beyond it via the shared helper.
+        stop = structural_sl(
+            _sweep_extreme(context, choch), choch.direction,
+            context_atr(context, choch.break_index))
         return TriggerSignal(
             trigger=TriggerType.A_CHOCH,
             direction=choch.direction,

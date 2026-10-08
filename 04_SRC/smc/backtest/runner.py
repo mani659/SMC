@@ -40,11 +40,18 @@ from datetime import datetime
 from smc.backtest.bar_loop import BarHandler
 from smc.backtest.clock import BarClock
 from smc.backtest.fill_model import CloseKind
+from smc.backtest.intents import IntentBook
 from smc.backtest.orders import PendingOrderBook
 from smc.backtest.positions import ClosedPosition, PositionStore
 from smc.config.timeframe import Timeframe
 from smc.core.candle import Candle
 from smc.core.enums import Direction
+from smc.risk.fill_regime_policy import (
+    SKIP_PLACE_FAR_FROM_ZONE,
+    market_reentered_zone,
+    rest_bars_for,
+    zone_place_allowed,
+)
 from smc.risk.risk_engine import (
     BLOCK_NEWS,
     BLOCK_SESSION,
@@ -97,6 +104,33 @@ class CandidateEntry:
     # M4: zero-arg callable → FvgContext | None, bound by the pipeline bridge
     # at construction (frozen dataclass — never mutated after creation).
     fvg_provider: object | None = None
+    # Identity enrichment (logging only — never read by risk/fill/trigger
+    # decisions): POI model tags, validation pillar path, displacement
+    # magnitude in ATR units. None = unknown (never invented).
+    model_tags: tuple | None = None
+    pillar_path: str | None = None
+    disp_magnitude_atr: float | None = None
+    # Placement-time geometry (logging only — set once at creation, NEVER
+    # overwritten by BE modifies: original_sl is the stop intended at
+    # placement; zone bounds come from the route POI when available).
+    original_sl: float | None = None
+    zone_low: float | None = None
+    zone_high: float | None = None
+    signal_data_json: str | None = None
+    # E1: first-class entry-anchor provenance from the trigger signal
+    # (``signal.data["entry_anchor"]`` — e.g. "zone_edge_reanchor" /
+    # "ob_proximal"). Logging/audit only; never read by risk/fill logic.
+    # None = unknown (non-F triggers, legacy candidates — never invented).
+    entry_anchor: str | None = None
+    # Structural TP provenance (design lock 2026-10-05): "structural_swing"
+    # when the TP came from the first-swing selector, "atr_fallback" when
+    # the 4×ATR branch produced it, None = unknown/legacy. Logging/audit
+    # only — never read by risk/fill logic.
+    tp_source: str | None = None
+    # FR fill-regime policy (R8 provenance, set by the pipeline bridge;
+    # None = unknown/legacy → runner-timeframe §23 default applies).
+    detection_tf: object | None = None
+    is_m8: bool = False
 
     def fvg_context(self):
         """FVG context for this candidate (None when the signal supplies none).
@@ -134,11 +168,18 @@ class RunnerConfig:
 
 @dataclass(slots=True)
 class BlockedEntry:
-    """Log record for a gated-out candidate (KPI/report data)."""
+    """Log record for a gated-out candidate (KPI/report data).
+
+    Identity fields mirror the candidate (logging only — blocked reasons
+    are counted exactly as before; these fields never gate anything).
+    """
 
     bar_index: int
     now: datetime
     blocked_by: str
+    poi_id: str | None = None
+    trigger: object | None = None
+    route_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -170,6 +211,11 @@ class BacktestRunner(BarHandler):
         self.risk = risk_engine
         self.orders = order_book
         self.positions = position_store
+        # R9: deferred placements for R7-skipped candidates (see
+        # 00_LOCKED/R9_PLACE_ON_REENTRY_DESIGN.md) — armed when the market
+        # is far from the zone, placed on band re-entry or limit touch
+        # within an R8-sized clock from signal time.
+        self.intents = IntentBook()
         self.config = config if config is not None else RunnerConfig()
         # I2 (coherence patch): RUNNING equity — starts at the configured
         # value and moves with realized P/L (see _record_close). Sizing
@@ -208,6 +254,8 @@ class BacktestRunner(BarHandler):
         if self.risk.evaluate_friday_close(now):
             self._close_everything(bar, bar_index, reason="friday_eod")
             self._cancel_all_pending()
+            # R9: portfolio event — deferred placements die with it.
+            self.intents.drop_all(bar_index, "dropped_portfolio_friday")
             return
 
         # 3. §11 news hard-cancel of pending limits.
@@ -215,6 +263,8 @@ class BacktestRunner(BarHandler):
             now, self.config.news_events
         ):
             self._cancel_all_pending()
+            # R9: §11 kills resting orders — intents die with them.
+            self.intents.drop_all(bar_index, "dropped_portfolio_news")
 
         # 3b. I1: feed ATR + spread per bar so the ATR-dependent gates
         # (PureRunner BE, §28.5 spread, same-level) are never silently
@@ -231,21 +281,36 @@ class BacktestRunner(BarHandler):
         # order can never fill. Affected POIs go TESTED through the
         # state machine (engine authority).
         self._expire_orders(bar_index)
+        # 3c-i. R9: intent expiry — an intent whose R8 clock ends on this
+        # bar is dropped BEFORE the re-entry step (it can never place on
+        # its expiry bar; design §2a/§4).
+        self.intents.expire_due(bar_index)
 
         # 4. Per-position risk exits (FVG invalidation + PureRunner BE).
         self._manage_open_positions(bar, bar_index, now)
 
         # 5. M2 fills: pending limits, then physical SL/TP (SL first).
         self._apply_fills(bar, bar_index)
-        self._apply_physical_closes(bar, bar_index)        # 6. Entry path: the M4 pipeline adapter (real detection) when
+        self._apply_physical_closes(bar, bar_index)
+
+        # 6. Entry path: the M4 pipeline adapter (real detection) when
         #    attached, else the M3 candidate seam. Both end in the same
-        #    risk-gated pending-limit placement.
+        #    risk-gated pending-limit placement. Runs BEFORE the R9 intent
+        #    step so a same-bar in-band re-proposal places immediately and
+        #    SUPERSEDES the alive intent (REPLACED) — never two orders for
+        #    one route on the same bar (design §4).
         if self._pipeline_adapter is not None:
             # I4: retire terminal POIs (workflow-live + order/position-
             # tied ids retained by the adapter) before this bar's scan.
             self._prune_engine_state(bar_index)
             self._pipeline_adapter.generate_candidates(bar, bar_index, now)
         self._process_entries(bar, bar_index, now)
+
+        # 5.5/7. R9: intent re-entry placements — AFTER the candidate step
+        # (a re-proposal that placed immediately left nothing alive) and
+        # AFTER this bar's fills (a bar-B placement cannot fill on B:
+        # no lookahead, no retroactive fill). Insertion order.
+        self._place_due_intents(bar, bar_index, now)
 
     # ------------------------------------------------------------------ #
     # Steps
@@ -310,6 +375,7 @@ class BacktestRunner(BarHandler):
                 ),
                 now=now,
                 fvg_context=fvg_context,
+                trade_key=position.ticket,  # §28.1 one-shot is PER TRADE
             )
             if decision.action is RiskAction.EXIT:
                 record = self.positions.close(
@@ -331,7 +397,10 @@ class BacktestRunner(BarHandler):
                 )
                 if improves:
                     self.positions.modify_sl(position.ticket, decision.new_sl)
-                    self.risk.on_be_applied()  # latch ONLY after "acceptance"
+                    # Latch ONLY after "acceptance" — keyed by THIS trade's
+                    # ticket so concurrent positions never un-latch it
+                    # (Phase B fidelity fix 2026-09-12).
+                    self.risk.on_be_applied(position.ticket)
 
     def _apply_fills(self, bar: Candle, bar_index: int) -> None:
         from smc.backtest.fill_model import fill_price, limit_filled
@@ -352,6 +421,15 @@ class BacktestRunner(BarHandler):
                 symbol=order.symbol,
                 poi_id=order.poi_id,
                 trigger=order.trigger,
+                model_tags=order.model_tags,
+                pillar_path=order.pillar_path,
+                disp_magnitude_atr=order.disp_magnitude_atr,
+                original_sl=order.original_sl,
+                zone_low=order.zone_low,
+                zone_high=order.zone_high,
+                signal_data_json=order.signal_data_json,
+                entry_anchor=order.entry_anchor,
+                tp_source=order.tp_source,
             )
             # M4 identity/context capture at trade open: the pending order
             # carries the sweep level + FVG context its candidate was built
@@ -403,32 +481,122 @@ class BacktestRunner(BarHandler):
                 # PipelineAdapter.on_candidates: the episode is marked fired
                 # ONLY on an accepted placement).
                 self.blocked_log.append(
-                    BlockedEntry(bar_index=bar_index, now=now, blocked_by=decision.blocked_by or "unknown")
+                    BlockedEntry(bar_index=bar_index, now=now, blocked_by=decision.blocked_by or "unknown",
+                                 poi_id=candidate.poi_id, trigger=candidate.trigger,
+                                 route_id=candidate.route_id)
                 )
                 continue
-            order = self.orders.place(
-                direction=candidate.direction,
-                entry_price=candidate.entry_price,
-                sl=candidate.sl_price,
-                tp=candidate.tp_price,
-                volume=decision.lots,  # policy-sized (sized_lots) — no second path
-                placed_bar=bar_index,
-                placed_at=now,
-                poi_id=candidate.poi_id,
-                trigger=candidate.trigger,
-                comment=candidate.route_id or "",
-            )
-            # Identity/context ride along the order so the fill can attach
-            # them to the trade (see _apply_fills).
-            if candidate.sweep_level is not None:
-                self._sweep_by_order[order.ticket] = candidate.sweep_level
-            if candidate.route_id is not None:
-                self._route_by_order[order.ticket] = candidate.route_id
-            fvg_context = self._fvg_of_candidate(candidate)
-            if fvg_context is not None:
-                self._fvg_by_order[order.ticket] = fvg_context
-            self._notify_candidate_accepted(candidate)
+            # R7 fill-regime place guard: a risk-accepted candidate whose
+            # MARKET reference (this bar's close) has left the POI zone
+            # beyond the EXISTING FR-3 band is NOT placed — the limit is
+            # zone-anchored (FR-3.1), so the runaway signal is the market,
+            # not the order. Machine-readable skip, retryable candidate
+            # (the one-shot burns ONLY on accepted placement, so this
+            # behaves exactly like news/session blocks; documented in
+            # FR_FILL_REGIME_R7_R8_NOTE.md).
+            if not zone_place_allowed(
+                    candidate.direction, candidate.zone_low, candidate.zone_high,
+                    getattr(bar, "close", None), self._atr):
+                self.blocked_log.append(
+                    BlockedEntry(bar_index=bar_index, now=now,
+                                 blocked_by=SKIP_PLACE_FAR_FROM_ZONE,
+                                 poi_id=candidate.poi_id, trigger=candidate.trigger,
+                                 route_id=candidate.route_id)
+                )
+                # R9: the placement is deferred, not dropped — arm an
+                # intent carrying the FULL accepted placement (design
+                # 00_LOCKED/R9_PLACE_ON_REENTRY_DESIGN.md). Dedupe: one
+                # intent per route per run, clock never refreshed; the
+                # one-shot stays unburned until a real place.
+                self.intents.arm(
+                    candidate, decision.lots, bar_index,
+                    rest_bars_for(candidate.detection_tf, candidate.is_m8,
+                                  execution_tf=self.config.timeframe))
+                continue
+            order = self._place_accepted(
+                candidate, decision.lots, bar_index, now,
+                rest_bars=rest_bars_for(candidate.detection_tf,
+                                        candidate.is_m8,
+                                        execution_tf=self.config.timeframe))
+            # R9: an alive intent for this route is superseded by the real
+            # order — drop it (never two orders for one route; design §3).
+            intent = self.intents.find_alive(candidate)
+            if intent is not None:
+                self.intents.mark_replaced(intent, bar_index)
         self._pending_entries = []
+
+    def _place_accepted(self, candidate: CandidateEntry, lots: float,
+                        bar_index: int, now, *, rest_bars: int):
+        """Place ONE pending limit for an ACCEPTED candidate (single path).
+
+        The only placement path in the runner — used by the immediate
+        (in-band) route AND by R9 intent re-entries, so both produce
+        byte-identical orders, context maps, and one-shot consumption.
+        ``rest_bars`` is the R8 clock for an immediate placement or the
+        inherited remaining life for an intent placement (design §2a).
+        """
+        order = self.orders.place(
+            direction=candidate.direction,
+            entry_price=candidate.entry_price,
+            sl=candidate.sl_price,
+            tp=candidate.tp_price,
+            volume=lots,  # policy-sized (sized_lots) — no second path
+            placed_bar=bar_index,
+            placed_at=now,
+            poi_id=candidate.poi_id,
+            trigger=candidate.trigger,
+            comment=candidate.route_id or "",
+            model_tags=candidate.model_tags,
+            pillar_path=candidate.pillar_path,
+            disp_magnitude_atr=candidate.disp_magnitude_atr,
+            original_sl=candidate.original_sl,
+            zone_low=candidate.zone_low,
+            zone_high=candidate.zone_high,
+            signal_data_json=candidate.signal_data_json,
+            entry_anchor=candidate.entry_anchor,
+            tp_source=candidate.tp_source,
+            rest_bars=rest_bars,
+            detection_tf=candidate.detection_tf,
+        )
+        # Identity/context ride along the order so the fill can attach
+        # them to the trade (see _apply_fills).
+        if candidate.sweep_level is not None:
+            self._sweep_by_order[order.ticket] = candidate.sweep_level
+        if candidate.route_id is not None:
+            self._route_by_order[order.ticket] = candidate.route_id
+        fvg_context = self._fvg_of_candidate(candidate)
+        if fvg_context is not None:
+            self._fvg_by_order[order.ticket] = fvg_context
+        self._notify_candidate_accepted(candidate)
+        return order
+
+    # ------------------------------------------------------------------ #
+    # R9 — place-on-reentry intents (design: R9_PLACE_ON_REENTRY_DESIGN.md)
+    # ------------------------------------------------------------------ #
+    def _place_due_intents(self, bar: Candle, bar_index: int, now) -> None:
+        """R9 step 5.5: place resting limits for re-entered intents.
+
+        Runs AFTER this bar's fills (a bar-B placement cannot fill on B —
+        no lookahead, no retroactive fill) and BEFORE the candidate entry
+        step. Insertion order. A placement requires >= 3 remaining bars
+        (>= 1 fill-eligible bar under the frozen §23 convention — design
+        §2b: fewer would be a born-expired order, never fabricated).
+        Re-entry = band re-entry (R7 geometry on this bar's close) OR
+        limit touch (fill-model rule on this bar's range).
+        """
+        for intent in self.intents.alive_intents():
+            remaining = intent.remaining_bars(bar_index)
+            if remaining < 3:
+                continue  # born-expired placement is never fabricated
+            candidate = intent.candidate
+            if not market_reentered_zone(
+                    candidate.direction, candidate.zone_low,
+                    candidate.zone_high, candidate.entry_price,
+                    getattr(bar, "close", None), self._atr, bar=bar):
+                continue
+            order = self._place_accepted(candidate, intent.lots, bar_index,
+                                         now, rest_bars=remaining)
+            self.intents.mark_placed(intent, bar_index, order.ticket)
 
     # ------------------------------------------------------------------ #
     # M3 seams (replaced by real integration in M4+)
@@ -528,18 +696,21 @@ class BacktestRunner(BarHandler):
         """Inject the current spread in PRICE units (M4/paper feed this)."""
         self._spread_price = spread
 
-    def cancel_pending_for_poi(self, poi_id: str) -> int:
+    def cancel_pending_for_poi(self, poi_id: str, bar_index: int | None = None) -> int:
         """M4: cancel every resting limit minted from ``poi_id``.
 
         The pipeline adapter calls this when the POI's §5 state dies
         (VIOLATED): a violated zone is a dead thesis, so its unfilled
         limit must not linger and fill later. Returns the count cancelled.
+        R9: the POI's alive place-intent dies with it (``bar_index`` is
+        optional bookkeeping for the intent event log).
         """
         cancelled = 0
         for order in self.orders.active():
             if order.poi_id == poi_id:
                 self.orders.cancel(order.ticket)
                 cancelled += 1
+        self.intents.drop_for_poi(poi_id, bar_index if bar_index is not None else 0)
         return cancelled
 
     def set_fvg_context(self, ticket: int, fvg_context) -> None:
@@ -575,3 +746,4 @@ class BacktestRunner(BarHandler):
                 is_long=record.position.direction is Direction.LONG,
             )
         self._fvg_by_ticket.pop(record.position.ticket, None)
+        self.risk.on_trade_closed(record.position.ticket)  # release the BE key

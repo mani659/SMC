@@ -64,14 +64,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
-from smc.backtest.pipeline_bridge import candidate_from_route
+from smc.backtest.pipeline_bridge import candidate_from_route, structural_tp_target
 from smc.backtest.runner import CandidateEntry
+from smc.backtest.series_state import SeriesState
 from smc.config.timeframe import Timeframe
 from smc.core.candle import Candle
 from smc.core.enums import POIState
-from smc.detection.structural_swing_detector import detect_swings
-from smc.orchestration.engine import PipelineEngine
-from smc.triggers.trigger_expiry import signal_expired
+from smc.orchestration.engine import PipelineEngine, SeekPosture
+from smc.risk.fill_regime_policy import market_reentered_zone
+from smc.triggers.trigger_expiry import poi_give_up_bars, signal_expired
 
 __all__ = ["PipelineAdapter"]
 
@@ -108,8 +109,30 @@ class PipelineAdapter:
         # scan (re-scans would re-find the same route and could mint a
         # second candidate after the first was accepted).
         self._routed: set[str] = set()
-        # First §5 touch bar per POI (bounds the post-touch routing window).
+        # First §5 touch bar per POI (§5 freshness bookkeeping — recorded,
+        # no longer bounds the post-touch routing window: seek/scan redesign
+        # R4.3, a TESTED state inside the seek span does not close the scan).
         self._tested_bar: dict[str, int] = {}
+        # Perf (Phase B): next bar to evaluate per POI's ONE chronological
+        # trigger scan. A POI that never routes used to re-run its whole
+        # arm→now scan window EVERY bar (each evaluation rebuilding O(n)
+        # swings/RSI/ATR/inversions over the growing prefix) — quadratic in
+        # bar index. Since every trigger evaluation at bar b depends only on
+        # candles ≤ b (no-lookahead contract), evaluating each bar exactly
+        # once, when it is reached, returns the same first-fire route.
+        self._scan_cursor: dict[str, int] = {}
+        # Identity context (logging only — never read by scan/risk/fill):
+        # POI id → (displacement, pillar_path) noted by whoever validated
+        # the POI (live loop / research scripts via note_route_context) and
+        # attached to the routed candidate. Absent entries stay unknown.
+        self._route_context: dict[str, tuple] = {}
+        # Perf (Phase C): incremental full-prefix series state — ATR/RSI
+        # folds (both price spaces), §27 swings with §19 confirmations as
+        # monotone first-confirm events, mirrored candles/swings, and
+        # base-sorted swing indexes. Exactly value-equivalent to the O(n)
+        # prefix recomputations it replaces (per-piece arguments in the
+        # Phase C report; October golden replay pins it byte-for-byte).
+        self._state: SeriesState | None = None
 
     # ------------------------------------------------------------------ #
     # Runner adapter protocol
@@ -118,34 +141,85 @@ class PipelineAdapter:
         self, bar: Candle, bar_index: int, now: datetime
     ) -> None:
         """Per-bar pipeline step (called by the runner's entry step)."""
+        state = self._ensure_state(bar_index)
         for poi in self.engine.tracked_pois():
             # Pre-feed §5 state: governs whether a NEW route may be sought.
-            state = self.engine.state_machine.current(poi)
+            state_machine = self.engine.state_machine
             workflow = self._workflows.get(poi.id)
 
-            # 1. Trigger scan — only while the POI may still route and
-            #    only when no route was ever produced (§11 one-shot).
+            # §24 give-up backstop (R4.1a — EVERY posture): past arm_bar +
+            # poi_give_up_bars() the scan range is empty — retire the scan
+            # bookkeeping instead of re-deriving that fact with an O(n) swing
+            # detection per bar. (Only the SCAN retires; the §5 feed below
+            # runs for every tracked POI exactly as before; a workflow-live
+            # episode keeps its own §24 signal expiry.)
+            episode = self.engine.episode(poi)
             if (
                 workflow is None
                 and poi.id not in self._routed
-                and self._may_route(poi, state, bar_index)
+                and episode is not None
+                and bar_index > episode.arm_bar + poi_give_up_bars()
             ):
-                prefix = self._candles[: bar_index + 1]
+                self._routed.add(poi.id)
+                self._scan_cursor.pop(poi.id, None)
+
+            # 1. Trigger scan — only while the POI may still route and
+            #    only when no route was ever produced (§11 one-shot).
+            seek_route = (
+                workflow is None
+                and poi.id not in self._routed
+                and self._may_route(
+                    poi, state_machine.current(poi), bar_index, bar=bar)
+            )
+            if seek_route:
+                # Incremental state (Phase C): the scan reads the FULL series
+                # plus the SAME §27/§19 swing artifacts the prefix rebuild
+                # produced — evaluations stay prefix-bounded by ``bar`` via
+                # the cursor, so no evaluation ever reads a future candle.
                 route = self.engine.scan_route(
                     poi,
-                    prefix,
-                    detect_swings(prefix, self.timeframe),
+                    state.candles,
+                    state.swings,
                     to_bar=bar_index,  # cap: never a future bar
+                    scan_from=self._scan_cursor.get(poi.id),  # resume, not restart
+                    evaluation_candles=state.candles,
+                    evaluation_swings=state.swings,
+                    hints=state,
                 )
                 if route is not None:
+                    ctx_disp, ctx_path = self._route_context.pop(
+                        poi.id, (None, None))
                     workflow = _Workflow(
-                        candidate=candidate_from_route(route),
+                        candidate=candidate_from_route(
+                            route, displacement=ctx_disp,
+                            pillar_path=ctx_path,
+                            # FR-2 R4: honest-prefix ATR feeds the TP
+                            # fallback (4×ATR when no structural target).
+                            atr=self.current_atr(bar_index),
+                            # Structural TP feed (design lock 2026-10-05,
+                            # Architect-accepted): first-swing selector on
+                            # the SAME §19-confirmed place-time prefix the
+                            # scan just consumed. None → unchanged 4×ATR
+                            # fallback. Age bound = documented CPU/age cap
+                            # (NOT give-up semantics, Architect ruling 2).
+                            structural_target=structural_tp_target(
+                                state.swing_index.original.valid_highs
+                                + state.swing_index.original.valid_lows,
+                                route.signal.entry_price, route.signal.direction,
+                                self.current_atr(bar_index),
+                                placement_bar=bar_index,
+                                max_age_bars=poi_give_up_bars())),
                         created_bar=bar_index,
                         completion_index=route.signal.completion_index,
                         expiry_bars=route.signal.expiry_bars,
                     )
                     self._workflows[poi.id] = workflow
                     self._routed.add(poi.id)
+                    self._scan_cursor.pop(poi.id, None)
+                else:
+                    # Nothing fired up to and including this bar — resume the
+                    # ONE chronological scan at the next bar (never re-derive).
+                    self._scan_cursor[poi.id] = bar_index + 1
 
             # 2. Drive the active workflow: submit for THIS bar's risk
             #    verdict (accepted → consumed via on_candidate_accepted;
@@ -175,6 +249,31 @@ class PipelineAdapter:
         if candidate.poi_id is not None:
             self._workflows.pop(candidate.poi_id, None)
 
+    def active_workflows(self) -> dict:
+        """Public read-only snapshot: POI id → live CandidateEntry.
+
+        L1 structure console seam (2026-10-06): the console reads routed
+        candidates (trigger letter, entry/SL/TP plan) from here without
+        touching private bookkeeping. A COPY — mutating it never affects
+        the §11 one-shot workflow state.
+        """
+        return {
+            poi_id: workflow.candidate
+            for poi_id, workflow in self._workflows.items()
+        }
+
+    def note_route_context(self, poi_id: str, *, displacement=None,
+                           pillar_path: str | None = None) -> None:
+        """Retain route-time identity context for one POI (logging only).
+
+        Called by whoever validated the POI (live loop / research scripts)
+        with that POI's DisplacementResult (or None) and pillar-path summary
+        string (or None). Consumed once at the next route for this POI id
+        into the candidate; never read by scan, risk, or fill decisions.
+        Unknown stays unknown — nothing is invented here.
+        """
+        self._route_context[poi_id] = (displacement, pillar_path)
+
     def notify_order_expired(self, poi_id: str, bars_open: int) -> None:
         """C1: a resting limit for ``poi_id`` hit §23/§24 unfilled-order
         expiry (the runner already cancelled it) — retire the POI.
@@ -200,7 +299,7 @@ class PipelineAdapter:
             return
 
     def current_atr(self, bar_index: int) -> float:
-        """I1: ATR over the honest candle prefix ``[: bar_index + 1]``.
+        """I1: ATR at ``bar_index`` over the honest candle prefix.
 
         Capped at the current bar — never the future (same no-lookahead
         contract as the trigger scan). Returns 0.0 before the period
@@ -208,12 +307,39 @@ class PipelineAdapter:
         (never an exception). The runner feeds this to ``set_atr`` each
         bar; the paper runner computes the same value from its own
         growing series.
-        """
-        from smc.utils.atr import latest_atr
 
-        prefix = self._candles[: bar_index + 1]
-        atr = latest_atr(prefix, self.atr_period)
+        Phase C perf: read from the incremental Wilder fold — exactly the
+        ``latest_atr(prefix)`` value (fold identity), without the O(n)
+        prefix rebuild per bar.
+        """
+        state = self._ensure_state(min(bar_index, len(self._candles) - 1))
+        values = state.atr_values
+        if bar_index < len(values):
+            atr = values[bar_index]
+        elif values:
+            # Legacy slice clamp: ``candles[:bar_index+1]`` beyond the end
+            # yields the whole list, so the honest prefix is the full series.
+            atr = values[-1]
+        else:
+            atr = None
         return float(atr) if atr is not None else 0.0
+
+    def _ensure_state(self, bar_index: int) -> SeriesState:
+        """Extend the incremental state through ``bar_index`` (idempotent).
+
+        The runner may call ``current_atr`` (step 3b) before the entry step,
+        so extension happens at the FIRST per-bar touchpoint; every later
+        read in the same bar sees the same prefix. Re-running over an
+        already-extended bar is a no-op.
+        """
+        state = self._state
+        if state is None:
+            state = self._state = SeriesState(self.timeframe, self.atr_period)
+        candles = self._candles
+        target = bar_index + 1
+        while len(state.candles) < target and len(state.candles) < len(candles):
+            state.extend(candles[len(state.candles)])
+        return state
 
     def prune_terminal_pois(
         self, retain_ids: set[str] | None = None, bar_index: int | None = None
@@ -236,32 +362,106 @@ class PipelineAdapter:
         if bar_index is not None:
             for poi in self.engine.tracked_pois():
                 state = self.engine.state_machine.current(poi)
-                if self._may_route(poi, state, bar_index):
+                if self._may_route(poi, state, bar_index, bar=None):
                     retain.add(poi.id)
         pruned = self.engine.prune_terminal(retain)
         for poi_id in pruned:
             self._workflows.pop(poi_id, None)
             self._tested_bar.pop(poi_id, None)
             self._routed.discard(poi_id)
+            self._scan_cursor.pop(poi_id, None)
         return pruned
 
     # ------------------------------------------------------------------ #
     # Internals
     # ------------------------------------------------------------------ #
-    def _may_route(self, poi, state: POIState, bar_index: int) -> bool:
+    def _reentered_zone(self, poi, bar: Candle, bar_index: int) -> bool:
+        """Seek/scan redesign REVALIDATION gate (design §3 R2.3).
+
+        Reuses the EXISTING named rule ``market_reentered_zone`` — its R7
+        band path (a close within the frozen ``ZONE_REFINEMENT_ATR × ATR``
+        band of the POI zone, same inclusive bounds as the R7 place
+        guard) gates re-entry. The rule's limit-touch path is not
+        applicable pre-route (no limit exists — this gate runs BEFORE any
+        candidate), so ``limit_price=None`` disables it exactly as the
+        function's contract prescribes. ATR comes from the incremental
+        Phase C fold (honest prefix, capped at the current bar).
+
+        Fail-closed on degenerate ATR: ``zone_place_allowed``'s documented
+        dormancy (band undefined → allow) exists for the R7 PLACE guard;
+        here the band IS the revalidation evidence, so an uncomputable
+        band (ATR 0.0 / None in warm-up) must keep the gate CLOSED until
+        a real ATR exists — never a vacuous re-entry. No new threshold:
+        the band is the frozen ``ZONE_REFINEMENT_ATR`` multiplier.
+        """
+        episode = self.engine.episode(poi)
+        if episode is None:
+            return False  # not armed through the engine -> cannot revalidate
+        zone = poi.zone
+        atr = self.current_atr(bar_index)
+        if not atr > 0.0:
+            return False  # band uncomputable -> cannot verify -> fail closed
+        return market_reentered_zone(
+            zone.direction,
+            float(zone.bottom),
+            float(zone.top),
+            None,          # no limit pre-route: touch path off by contract
+            float(bar.close),
+            atr,
+        )
+
+    def _may_route(self, poi, state: POIState, bar_index: int,
+                   bar: Candle | None = None) -> bool:
         """True while a NEW route may still be sought for ``poi``.
 
-        FRESH: the normal case. TESTED: §5's "first touch OK" gives the
-        in-flight trigger workflow the touch bar itself plus one bar
-        (Trigger D's entry condition completes exactly there); after that
-        a touched POI is never routed again (1-touch rule).
+        Seek/scan redesign (Option B, design §3): the seek span is the
+        locked give-up window ``[arm, arm + poi_give_up_bars()]`` (R2.1/
+        R3.1 — the caller's unchanged give-up retirement enforces the
+        end); a §5 TESTED state inside that window no longer closes the
+        scan (R4.3 — the touch is bookkeeping, not a seek terminator;
+        Trigger D's next-bar contract is preserved by its own frozen
+        ``TRIGGER_D_EXPIRY``). The §5 state still governs identity: only
+        FRESH or TESTED episodes may route; VIOLATED is dead exactly as
+        before (R4.1b).
+
+        REVALIDATION (R2.3): a ``VIOLATION_AT_ARM`` episode — whose §5
+        violation was deferred at arm (engine ``feed_bar`` skips the arm
+        candle, so the POI stays FRESH) — routes only after a later close
+        back inside the zone band via the existing named rule
+        ``market_reentered_zone`` (adapter ATR, fail-closed on warm-up —
+        see ``_reentered_zone``). Until re-entry, FRESH is necessary but
+        NOT sufficient. The latch is written to the engine episode once
+        (``revalidated_bar``) so the §5 feed's pre-re-entry continuation
+        rule and this gate share one fact.
+
+        ``bar=None`` keeps the legacy two-argument contract for callers
+        without bar context (prune retention): such calls keep the
+        pre-redesign semantics (FRESH/TESTED may route) — the
+        REVALIDATION gate needs the bar to test re-entry geometry.
         """
+        if state not in (POIState.FRESH, POIState.TESTED):
+            return False  # CREATED / VIOLATED / terminal never route
+        if bar is None:
+            return True  # legacy no-bar contract (unchanged pre-redesign path)
+        episode = self.engine.episode(poi)
+        if (
+            episode is not None
+            and episode.posture is SeekPosture.VIOLATION_AT_ARM
+            and episode.revalidated_bar is None
+        ):
+            if not self._reentered_zone(poi, bar, bar_index):
+                return False
+            episode.revalidated_bar = bar_index  # latch once, never re-tested
+            # R2.3: a trigger completion BEFORE re-entry does not route — the
+            # chronological scan starts at the re-entry bar (the evaluation
+            # anchor stays at the arm bar; only the loop start moves).
+            self._scan_cursor[poi.id] = bar_index
         if state is POIState.FRESH:
             return True
-        if state is POIState.TESTED:
-            tested_bar = self._tested_bar.get(poi.id)
-            return tested_bar is not None and bar_index <= tested_bar + 1
-        return False  # CREATED / terminal states never route
+        # TESTED: seek continues to the give-up deadline (R4.3).
+        if episode is None:
+            return False
+        return bar_index <= episode.arm_bar + poi_give_up_bars()
 
     # ------------------------------------------------------------------ #
     # Wiring
@@ -275,6 +475,8 @@ class PipelineAdapter:
         """Point the adapter at the execution-TF series (scan input).
 
         The runner's own bars drive ``feed_bar``; this series is the scan
-        universe sliced per bar into honest prefixes.
+        universe — the incremental state extends through it bar by bar
+        (no per-bar prefix slices).
         """
         self._candles = candles
+        self._state = None

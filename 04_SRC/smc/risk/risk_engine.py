@@ -272,6 +272,7 @@ class RiskEngine:
         *,
         now: datetime,
         fvg_context: FvgContext | None = None,
+        trade_key=None,
     ) -> ExitDecision:
         """Exit verdict for ONE open position (per bar).
 
@@ -288,6 +289,11 @@ class RiskEngine:
              :meth:`on_be_applied` (the BE decision is a pure query and
              never latches by itself);
           4. call :meth:`on_trade_opened` when a new trade is opened.
+
+        ``trade_key`` (Phase B fix): the caller's per-trade identity for
+        the §28.1 one-shot BE latch — REQUIRED in multi-position books so
+        one trade's fill can never un-latch another's applied BE move.
+        Omitted (None) → the legacy v25 single-trade flag applies.
 
         The FVG check consumes ONLY ``position.closed_close`` (the
         just-closed bar's close, v25 ``iClose(..., 1)``) — never the live
@@ -309,6 +315,7 @@ class RiskEngine:
             atr=position.atr,
             current_price=position.current_price,
             current_sl=position.current_sl,
+            trade_key=trade_key,
         )
         if new_sl is not None:
             return ExitDecision(
@@ -344,15 +351,34 @@ class RiskEngine:
     def on_trade_opened(self) -> None:
         """Runner hook: a new trade was opened — re-arms per-trade exit
         state (resets the PureRunner BE latch so THIS trade gets its own
-        BE opportunity; v25 resets ``g_beMoved`` on every new position)."""
+        BE opportunity; v25 resets ``g_beMoved`` on every new position).
+
+        Deliberately does NOT clear other open trades' per-key latches —
+        a new fill must never un-latch an already-applied BE move on a
+        concurrent position (Phase B fidelity fix 2026-09-12).
+        """
         self.pure_runner.reset_trade()
 
-    def on_be_applied(self) -> None:
+    def on_trade_closed(self, trade_key) -> None:
+        """Runner hook: a trade closed — release its per-key BE latch.
+
+        Hygiene only (keys are never reused within a run); keeping the
+        release explicit mirrors the open/apply/close lifecycle and stops
+        the latch set from growing with the book.
+        """
+        self.pure_runner.forget_trade(trade_key)
+
+    def on_be_applied(self, trade_key=None) -> None:
         """Runner hook: the BE modify proposed by :meth:`evaluate_exit` was
         applied at the broker — sets the one-shot PureRunner latch so BE
         never moves twice for this trade (v25 sets ``g_beMoved`` only on a
-        successful ``PositionModify``)."""
-        self.pure_runner.mark_be_applied()
+        successful ``PositionModify``).
+
+        With ``trade_key`` the latch is recorded per trade (multi-position
+        safety, Phase B fix); without it the legacy single-trade flag is
+        set as before.
+        """
+        self.pure_runner.mark_be_applied(trade_key)
 
     # ------------------------------------------------------------------ #
     # State updates

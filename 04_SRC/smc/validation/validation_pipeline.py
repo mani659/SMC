@@ -38,6 +38,7 @@ from smc.detection.displacement_checker import DisplacementResult
 from smc.poi.confluence_scorer import score_poi
 from smc.poi.deal_range import DealingRange, compute_dealing_range
 from smc.validation.pillar import Pillar, PillarResult, PillarStatus, ValidationContext
+from smc.validation.window_cache import WindowCache
 from smc.validation.pillar_1_zone_refinement import ZoneRefinementPillar
 from smc.validation.pillar_2_displacement import DisplacementPillar
 from smc.validation.pillar_3_premium_discount import PremiumDiscountPillar
@@ -126,12 +127,15 @@ class ValidationPipeline:
         dealing_range: DealingRange | None = None,
         displacement: DisplacementResult | None = None,
         atr_period: int = 14,
+        window_cache: "WindowCache | None" = None,
     ) -> ValidationResult:
         """Validate one POI through the pillar chain.
 
         ``dealing_range`` defaults to ``compute_dealing_range(swings)``
         (Phase 2 helper) when not supplied; pass ``None``-forcing swing sets
-        to exercise the Pillar 3 UNAVAILABLE path.
+        to exercise the Pillar 3 UNAVAILABLE path. ``window_cache`` (Phase C
+        perf) carries the detection window's once-computed shared artifacts
+        for pillar reuse — ``None`` keeps the per-POI in-place computation.
         """
         context = ValidationContext(
             poi=poi,
@@ -145,6 +149,7 @@ class ValidationPipeline:
             ),
             displacement=displacement,
             atr_period=atr_period,
+            window_cache=window_cache,
         )
         return self.run(context)
 

@@ -22,7 +22,9 @@ from __future__ import annotations
 from smc.config.locked_constants import TRIGGER_D_ENGULFING_FILL
 from smc.core.candle import Candle
 from smc.core.enums import Direction, TriggerType
-from smc.triggers.base_trigger import Trigger, TriggerContext, TriggerSignal
+from smc.triggers.base_trigger import (
+    Trigger, TriggerContext, TriggerSignal, context_atr, structural_sl,
+)
 from smc.triggers.trigger_expiry import window_bars_for
 
 __all__ = ["TwoBarReversalTrigger"]
@@ -57,7 +59,11 @@ class TwoBarReversalTrigger(Trigger):
 
         mid = (engulfer.open + engulfer.close) / 2.0
         entry = mid  # 50% of the engulfing body (frozen §10)
-        stop = _pattern_extreme(engulfer, engulfed, direction)
+        # R5: the pattern extreme is the structural reference; the stop
+        # sits 0.3×ATR beyond it via the shared helper.
+        stop = structural_sl(
+            _pattern_extreme(engulfer, engulfed, direction), direction,
+            context_atr(context, bar))
         return TriggerSignal(
             trigger=TriggerType.D_TWO_BAR_REVERSAL,
             direction=direction,

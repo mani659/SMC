@@ -15,7 +15,7 @@ relied on for box-drawing glyphs.
 
 from __future__ import annotations
 
-__all__ = ["render_status_board", "render_startup_banner"]
+__all__ = ["render_status_board", "render_startup_banner", "render_alive_line"]
 
 
 def _fmt(value, fmt: str = "{}", na: str = "n/a") -> str:
@@ -116,6 +116,23 @@ def render_status_board(s: dict) -> str:
     return "\n".join(lines)
 
 
+def render_alive_line(s: dict) -> str:
+    """Render the ONE-LINE event-mode alive ping (ASCII-only, no full board).
+
+    Expected keys (all optional — missing keys render ``n/a``): now_utc,
+    hb_seq, bars_processed, htf_armed, errors (list), polls.
+    """
+    errors = s.get("errors")
+    n_errors = len(errors) if isinstance(errors, list) else _fmt(s.get("errors"))
+    return (
+        f"[alive] utc={_fmt(s.get('now_utc'))}"
+        f" hb_seq={_fmt(s.get('hb_seq'))}"
+        f" processed={_fmt(s.get('bars_processed'))}"
+        f" armed={_fmt(s.get('htf_armed'))}"
+        f" errors={n_errors}"
+    )
+
+
 _BANNER_TITLE = (
     "  ____  __  __  ___     ____   ___  _____",
     " / ___||  \\/  |/ ___|  | __ ) / _ \\|_   _|",
@@ -145,6 +162,8 @@ def render_startup_banner(
     timeframe: str = "n/a",
     console_refresh_s=None,
     log_dir: str | None = None,
+    console_mode: str = "board",
+    alive_interval_s=None,
 ) -> str:
     """Render the one-shot session startup banner (ASCII-only).
 
@@ -181,9 +200,22 @@ def render_startup_banner(
         f"  magic: {_fmt(facts.get('magic'))}"
         f"  timeframe: {_fmt(timeframe)}"
     )
-    push(
-        f" console  : live board now, then {_cadence_text(console_refresh_s)}"
-    )
+    if str(console_mode).strip().lower() == "event":
+        alive_txt = ""
+        try:
+            alive_s = float(alive_interval_s) if alive_interval_s is not None else 300.0
+        except (TypeError, ValueError):
+            alive_s = 300.0
+        if alive_s > 0:
+            alive_txt = f" + alive line every {alive_s:g}s"
+        push(
+            f" console  : event-driven - prints on bars, batches, POIs, "
+            f"orders, errors{alive_txt}"
+        )
+    else:
+        push(
+            f" console  : live board now, then {_cadence_text(console_refresh_s)}"
+        )
     push(
         f" backend  : events.log + console_mirror.log + kpi_records.jsonl"
         f"  ({_fmt(log_dir)})"

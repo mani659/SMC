@@ -59,11 +59,20 @@ class ZoneRefinementPillar(Pillar):
         half = ZONE_REFINEMENT_ATR * atr
         level = poi.zone.midpoint
         band_lo, band_hi = level - half, level + half
+        # Phase C perf: per-window shared artifacts (identical values to
+        # the per-POI recomputations — see ``window_cache.WindowCache``).
+        cache = context.window_cache
+        fvgs = cache.fvgs if cache is not None and cache.fvgs is not None else detect_fvgs(candles, poi.zone.timeframe)
+        min_close_suffix = cache.min_close_suffix if cache is not None else None
+        max_close_suffix = cache.max_close_suffix if cache is not None else None
 
         found: list[str] = []
-        for fvg in detect_fvgs(candles, poi.zone.timeframe):
+        for fvg in fvgs:
             active = fvg.start_index + 2  # third candle of the triplet (R1 §3.1)
-            if not _mitigated(fvg.zone, candles, active) and _overlaps_band(
+            if not _mitigated(
+                fvg.zone, candles, active,
+                min_close_suffix=min_close_suffix, max_close_suffix=max_close_suffix,
+            ) and _overlaps_band(
                 fvg.zone.top, fvg.zone.bottom, band_lo, band_hi
             ):
                 found.append("fvg")
@@ -72,7 +81,10 @@ class ZoneRefinementPillar(Pillar):
                 continue
             ob = candles[ob_index]
             ob_zone = zone_for_candle(ob, fvg.zone.direction, poi.zone.timeframe)
-            if not _mitigated(ob_zone, candles, ob_index) and _overlaps_band(
+            if not _mitigated(
+                ob_zone, candles, ob_index,
+                min_close_suffix=min_close_suffix, max_close_suffix=max_close_suffix,
+            ) and _overlaps_band(
                 ob_zone.top, ob_zone.bottom, band_lo, band_hi
             ):
                 found.append("ob")
@@ -102,15 +114,29 @@ def _overlaps_band(
     return zone_top >= band_lo and zone_bottom <= band_hi
 
 
-def _mitigated(zone, candles: list[Candle], active_index: int) -> bool:
+def _mitigated(
+    zone,
+    candles: list[Candle],
+    active_index: int,
+    *,
+    min_close_suffix: list[float] | None = None,
+    max_close_suffix: list[float] | None = None,
+) -> bool:
     """True when price closed beyond the zone's opposite extreme after it formed.
 
     Demand (LONG) zones are mitigated by a close below the zone bottom;
-    supply (SHORT) zones by a close above the zone top.
+    supply (SHORT) zones by a close above the zone top. With the window's
+    close-suffix arrays supplied, the per-candidate re-scan becomes two
+    O(1) reads over the SAME comparison set (see ``window_cache``).
     """
-    for candle in candles[active_index + 1 :]:
-        if zone.direction is Direction.LONG and candle.close < zone.bottom:
-            return True
-        if zone.direction is Direction.SHORT and candle.close > zone.top:
-            return True
-    return False
+    if zone.direction is Direction.LONG:
+        if min_close_suffix is not None:
+            return min_close_suffix[active_index + 1] < zone.bottom
+        return any(
+            candle.close < zone.bottom for candle in candles[active_index + 1 :]
+        )
+    if max_close_suffix is not None:
+        return max_close_suffix[active_index + 1] > zone.top
+    return any(
+        candle.close > zone.top for candle in candles[active_index + 1 :]
+    )

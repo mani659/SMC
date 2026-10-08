@@ -152,6 +152,7 @@ class LiveLoop:
         self.sweep_links: dict[str, dict] = {}
         self._last_htf_close: datetime | None = None
         self._legacy_warned = False
+        self._active_htf_fetch_errors: dict[Timeframe, tuple[str, str]] = {}
 
     # ------------------------------------------------------------------ #
     # Lifecycle
@@ -353,10 +354,33 @@ class LiveLoop:
         out: dict = {}
         for tf in self.htf_timeframes:
             try:
-                out[tf] = self._fetch_htf(tf, self.htf_window_bars)
+                bars = self._fetch_htf(tf, self.htf_window_bars)
             except Exception as exc:  # noqa: BLE001 — decision lives in the runtime
-                logger.error("HTF fetch failed for %s: %r", tf.name, exc)
+                signature = (type(exc).__name__, str(exc))
+                if self._active_htf_fetch_errors.get(tf) != signature:
+                    logger.error(
+                        "HTF fetch failed operation=copy_rates timeframe=%s "
+                        "error=%r",
+                        tf.name,
+                        exc,
+                        exc_info=True,
+                    )
+                else:
+                    logger.debug(
+                        "Repeated HTF fetch failure operation=copy_rates "
+                        "timeframe=%s error=%r",
+                        tf.name,
+                        exc,
+                    )
+                self._active_htf_fetch_errors[tf] = signature
                 out[tf] = []
+            else:
+                if self._active_htf_fetch_errors.pop(tf, None) is not None:
+                    logger.info(
+                        "HTF fetch recovered operation=copy_rates timeframe=%s",
+                        tf.name,
+                    )
+                out[tf] = bars
         return out
 
     def _fetch_htf(self, tf: Timeframe, count: int) -> list[Candle]:

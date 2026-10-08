@@ -31,7 +31,7 @@ price/ATR/position state (:class:`PureRunnerState` may be injected).
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from smc.config.locked_constants import (
     PURE_RUNNER_BE_ATR,
@@ -44,9 +44,20 @@ __all__ = ["PureRunner", "PureRunnerState"]
 
 @dataclass(slots=True)
 class PureRunnerState:
-    """Synthetic per-trade state (replayable / unit-testable)."""
+    """Synthetic per-trade state (replayable / unit-testable).
+
+    ``be_moved`` is the v25 single-trade latch (``g_beMoved``). ``latched``
+    extends the same one-shot guarantee to CONCURRENT trades (Phase B
+    fidelity finding 2026-09-12): v25 was single-position, so the shared
+    flag was safe there — a multi-position book must key the latch per
+    trade (the runner supplies the position ticket as ``trade_key``) or a
+    later fill's ``reset_trade()`` would un-latch an already-moved trade
+    and its SL could be BE-modified twice. Keys persist for the trade's
+    life; ``forget_trade`` releases them on close (hygiene, not safety).
+    """
 
     be_moved: bool = False  # v25 g_beMoved latch — BE moved once per trade
+    latched: set = field(default_factory=set)  # trade_key per BE-moved trade
 
 
 class PureRunner:
@@ -79,6 +90,7 @@ class PureRunner:
         atr: float,
         current_price: float,
         current_sl: float,
+        trade_key=None,
     ) -> float | None:
         """New SL price when the BE move fires, else ``None`` (pure query).
 
@@ -88,11 +100,20 @@ class PureRunner:
         when the confirmed latch is set, ATR is non-positive, the move
         threshold is unmet, or the BE price does not improve the SL.
 
+        ``trade_key`` (Phase B fix): the caller's per-trade identity (e.g.
+        the position ticket). When supplied, the one-shot latch is checked
+        per key so concurrent trades never un-latch each other; without it
+        the legacy v25 single-trade flag applies (unchanged behaviour for
+        existing callers/tests).
+
         This call does NOT latch — repeated calls before the broker applies
         return the same price (idempotent). After a successful modify the
         runner must invoke :meth:`mark_be_applied`.
         """
-        if self._state.be_moved:
+        if trade_key is None:
+            if self._state.be_moved:
+                return None
+        elif trade_key in self._state.latched:
             return None
         if atr <= 0.0:
             return None
@@ -111,15 +132,32 @@ class PureRunner:
     # ------------------------------------------------------------------ #
     # Lifecycle (runner-confirmed handshake)
     # ------------------------------------------------------------------ #
-    def mark_be_applied(self) -> None:
+    def mark_be_applied(self, trade_key=None) -> None:
         """Confirm the BE modify was applied at the broker — sets the
         one-shot latch (v25 sets ``g_beMoved`` only after a successful
         ``PositionModify``). Until then, :meth:`be_moved_sl` re-proposes
-        the same BE price on every evaluation (retry-friendly)."""
+        the same BE price on every evaluation (retry-friendly).
+
+        With ``trade_key`` the latch is recorded per trade so a concurrent
+        book keeps every trade's one-shot intact (Phase B fix).
+        """
         self._state.be_moved = True
+        if trade_key is not None:
+            self._state.latched.add(trade_key)
 
     def reset_trade(self) -> None:
         """Re-arm the BE latch for a NEW trade (v25 resets ``g_beMoved`` on
         every new position) — otherwise trade 2+ would never receive a BE
-        move."""
+        move.
+
+        Deliberately does NOT touch ``latched``: a new fill must never
+        un-latch another open trade's already-applied BE move (Phase B
+        fix — the v25 single-position assumption does not hold for a
+        portfolio of concurrent trades).
+        """
         self._state.be_moved = False
+
+    def forget_trade(self, trade_key) -> None:
+        """Release a closed trade's latch key (hygiene on close; keys are
+        never reused within a run, so this is bookkeeping, not safety)."""
+        self._state.latched.discard(trade_key)

@@ -89,12 +89,24 @@ def _invert_swings(swings: list[Swing]) -> list[Swing]:
     return inverted
 
 
-def _last_two(swings: list[Swing], before_index: int) -> tuple[Swing | None, Swing | None]:
+def _last_two(
+    swings: list[Swing],
+    before_index: int,
+    swing_index=None,
+) -> tuple[Swing | None, Swing | None]:
     """Most recent §19-VALID swing low & swing high strictly before a bar.
 
     The main-trend last swing (Rule 1) must be structural; unconfirmed
     swings are treated as INTERMEDIATE (minor) levels for Rule 2/3.
+
+    With ``swing_index`` supplied (Phase C perf), the linear scans become
+    bisect lookups over the SAME selection (last §19-valid low / high
+    strictly before the bar — creation order on equal bases).
     """
+    if swing_index is not None:
+        last_low = swing_index.last_valid(False, before_index)
+        last_high = swing_index.last_valid(True, before_index)
+        return last_low, last_high
     lows = [
         s for s in swings if not s.is_high and s.is_valid and s.candle_index < before_index
     ]
@@ -107,9 +119,18 @@ def _last_two(swings: list[Swing], before_index: int) -> tuple[Swing | None, Swi
 
 
 def _minor_lows(
-    swings: list[Swing], after_index: int, before_index: int
+    swings: list[Swing],
+    after_index: int,
+    before_index: int,
+    swing_index=None,
 ) -> list[Swing]:
-    """Unconfirmed (is_valid=False) swing lows inside (after, before)."""
+    """Unconfirmed (is_valid=False) swing lows inside (after, before).
+
+    With ``swing_index`` supplied (Phase C perf): bisect slice over the
+    SAME selection (open interval, creation order on equal bases).
+    """
+    if swing_index is not None:
+        return swing_index.minor_lows_between(after_index, before_index)
     return [
         s
         for s in swings
@@ -123,10 +144,11 @@ def _bearish_classify(
     candles: list[Candle],
     swings: list[Swing],
     bar_index: int,
+    swing_index=None,
 ) -> ChochBreak | None:
     """Rule 1/2/3 for a bearish break at ``bar_index`` (uptrend reversal)."""
     bar = candles[bar_index]
-    last_low, last_high = _last_two(swings, bar_index)
+    last_low, last_high = _last_two(swings, bar_index, swing_index)
     if last_low is None or last_high is None:
         return None
     # Up-leg context: the most recent high must come after the last low.
@@ -160,7 +182,7 @@ def _bearish_classify(
         )
 
     # Rule 2: body close below an intermediate minor low, last low NOT broken.
-    minors = _minor_lows(swings, last_low.candle_index, bar_index)
+    minors = _minor_lows(swings, last_low.candle_index, bar_index, swing_index)
     broken = [
         m
         for m in minors
@@ -208,12 +230,24 @@ def classify_choch_at(
     candles: list[Candle],
     swings: list[Swing],
     bar_index: int | None = None,
+    *,
+    inverted_candles: list[Candle] | None = None,
+    inverted_swings: list[Swing] | None = None,
+    swing_index=None,
 ) -> ChochBreak | None:
     """Classify the CHOCH completed at ``bar_index`` (default: last bar).
 
     Bearish is evaluated directly; bullish is evaluated on price-inverted
     candles/swings and mirrored back. Returns ``None`` when no CHOCH
     completes at the given bar (no sweep, no break, or geometry mismatch).
+
+    Phase C perf hints (all optional, value-identical to the per-call
+    rebuilds): ``inverted_candles`` / ``inverted_swings`` are the full
+    series' price-mirrored copies (every mirrored read is index-bounded,
+    so the mirror evaluates identically on prefix or full series), and
+    ``swing_index`` carries the base-sorted indexes for both spaces —
+    its bisect answers equal the linear scans exactly. With no hints the
+    legacy in-place construction runs.
     """
     if not candles:
         return None
@@ -221,13 +255,17 @@ def classify_choch_at(
     if not 0 <= index < len(candles):
         raise IndexError(f"bar_index {index} out of range")
 
-    bearish = _bearish_classify(candles, swings, index)
+    original_index = swing_index.original if swing_index is not None else None
+    bearish = _bearish_classify(candles, swings, index, original_index)
     if bearish is not None:
         return bearish
 
-    inverted_candles = _invert_candles(candles)
-    inverted_swings = _invert_swings(swings)
-    bullish = _bearish_classify(inverted_candles, inverted_swings, index)
+    if inverted_candles is not None and inverted_swings is not None:
+        inv_candles, inv_swings = inverted_candles, inverted_swings
+    else:
+        inv_candles, inv_swings = _invert_candles(candles), _invert_swings(swings)
+    inverted_index = swing_index.inverted if swing_index is not None else None
+    bullish = _bearish_classify(inv_candles, inv_swings, index, inverted_index)
     if bullish is not None:
         return ChochBreak(
             direction=Direction.LONG,

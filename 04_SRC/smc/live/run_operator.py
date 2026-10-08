@@ -19,6 +19,17 @@ Safety behavior:
     * dedicated magic only (single terminal, single symbol per session);
     * Ctrl+C → clean stop → heartbeat ``shutdown`` marker (existing design).
 
+Operational hardening (2026-10-08, PERMISSION ERROR(13) INVESTIGATION):
+    * Startup diagnostics include the configured terminal path and Python PID.
+      One active Python owner per terminal is operational guidance; MetaQuotes'
+      initialize documentation does not state a formal process exclusivity rule.
+    * MT5 failures include operation, terminal path, PID, and last_error where
+      available. Repeated transient poll errors are deduplicated and recovery
+      is logged; identity failures remain fatal.
+    * Heartbeat writes target the terminal data-folder MQL5/Files path first.
+      Unwritable candidates are logged, no writable target aborts startup, and
+      a runtime write failure stops the session instead of claiming freshness.
+
 Usage:
     python 04_SRC/smc/live/run_operator.py --config config/live_demo.json
 """
@@ -28,6 +39,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import sys
 import time
 from datetime import datetime, timezone
@@ -45,6 +57,7 @@ from smc.live.operator_config import (                      # noqa: E402
     load_operator_config,
 )
 from smc.live.operator_console import (                      # noqa: E402
+    render_alive_line,
     render_startup_banner,
     render_status_board,
 )
@@ -66,15 +79,36 @@ class OperatorSession:
     def __init__(self, config: OperatorConfig) -> None:
         self.config = config
         self.log_dir = Path(config.log_dir)
-        self.log_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            self.log_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            raise PermissionError(
+                f"operator log directory create failed path={self.log_dir}: {exc}"
+            ) from exc
         self._logger = self._make_logger()
         self._mt5 = None                 # bound lazily in identity_check()
+        self._connector = None
         self._identity: dict | None = None
         self._loop = None
         self._runner = None
         self._adapter = None
         self._heartbeat = None
+        self._heartbeat_ea_readable: bool | None = None
         self._armed_total = 0            # C1: cumulative newly-armed POIs
+        self._console_force = False      # batch change → repaint board NOW
+        # Event-driven console (2026-10-07): "event" mode stays mostly silent
+        # and prints the full board only on major events; "board" keeps the
+        # legacy timed full refresh. See _maybe_print_console / _maybe_alive.
+        self._console_mode = getattr(config, "console_mode", "event")
+        self._event_reason: str | None = None   # set by _on_poll when an event fired
+        self._last_flow_sig: tuple | None = None  # flow/KPI signature for event detection
+        self._last_err_count = 0
+        self._last_alive_mono = time.monotonic()
+        # PermissionError(13) hardening (2026-10-08): de-duplicate identical
+        # MT5-call failures across polls so a persistent IPC blip does not
+        # inflate state["errors"] every tick, and surface it loudly when new.
+        self._active_mt5_err_signatures: dict[str, tuple] = {}
+        self._last_poll_error_signature: tuple | None = None
         # Live board state (mutated by the poll hook, read by the renderer).
         self.state: dict = {
             "session_started_utc": None,
@@ -114,7 +148,13 @@ class OperatorSession:
         logger.setLevel(logging.INFO)
         logger.propagate = False
         if not logger.handlers:
-            fh = logging.FileHandler(self.log_dir / "events.log", encoding="utf-8")
+            path = self.log_dir / "events.log"
+            try:
+                fh = logging.FileHandler(path, encoding="utf-8")
+            except OSError as exc:
+                raise PermissionError(
+                    f"operator events log open failed path={path}: {exc}"
+                ) from exc
             fh.setFormatter(logging.Formatter(
                 "%(asctime)sZ %(levelname)s %(message)s", datefmt="%Y-%m-%dT%H:%M:%S"
             ))
@@ -124,22 +164,70 @@ class OperatorSession:
     def _log(self, msg: str) -> None:
         self._logger.info(msg)
 
+    def _write_text(self, path: Path, text: str, operation: str) -> None:
+        try:
+            path.write_text(text, encoding="utf-8")
+        except OSError as exc:
+            self._logger.error(
+                "FILE WRITE FAILED operation=%s path=%s python_pid=%s error=%r",
+                operation,
+                path,
+                os.getpid(),
+                exc,
+                exc_info=True,
+            )
+            raise
+
+    def _append_console_mirror(self, text: str) -> None:
+        path = self.log_dir / "console_mirror.log"
+        try:
+            with path.open("a", encoding="utf-8") as fh:
+                fh.write(text + "\n")
+        except OSError as exc:
+            self._logger.error(
+                "FILE WRITE FAILED operation=append_console_mirror "
+                "path=%s python_pid=%s error=%r",
+                path,
+                os.getpid(),
+                exc,
+                exc_info=True,
+            )
+            raise
+
     # ------------------------------------------------------------------ #
     # Identity gate (before anything else)
     # ------------------------------------------------------------------ #
     def identity_check(self) -> dict:
         """Bind to the configured terminal and prove identity; abort on mismatch."""
-        import MetaTrader5 as mt5
+        from smc.data.mt5_connector import MT5CallError, MT5Connector
 
         cfg = self.config
-        if not mt5.initialize(path=cfg.terminal_path):
-            raise SystemExit(
-                f"ABORT: mt5.initialize(path={cfg.terminal_path!r}) failed: {mt5.last_error()}"
-            )
-        term = mt5.terminal_info()
-        acct = mt5.account_info()
+        self._log(
+            f"MT5 STARTUP terminal_path={cfg.terminal_path!r} "
+            f"python_pid={os.getpid()}; use one active Python owner per terminal"
+        )
+        connector = MT5Connector(
+            symbol=cfg.symbol,
+            magic=cfg.magic,
+            terminal_path=cfg.terminal_path,
+        )
+        try:
+            if not connector.connect():
+                raise SystemExit(
+                    f"ABORT: mt5.initialize(path={cfg.terminal_path!r}) failed: "
+                    f"{connector.last_error()}"
+                )
+            term = connector.terminal_info()
+            acct = connector.account_info()
+            mt5_version = connector.version()
+        except MT5CallError as exc:
+            self._log(f"IDENTITY FAILED: {exc}")
+            raise SystemExit(f"ABORT: terminal identity call failed: {exc}") from exc
         if term is None or acct is None:
-            raise SystemExit(f"ABORT: terminal/account info unavailable: {mt5.last_error()}")
+            raise SystemExit(
+                "ABORT: terminal/account info unavailable: "
+                f"{connector.last_error()}"
+            )
 
         live_dir = normalize_terminal_dir(str(term.path or ""))
         required_dir = normalize_terminal_dir(cfg.terminal_path)
@@ -150,6 +238,9 @@ class OperatorSession:
             "checked_at_utc": _utcnow().isoformat(),
             "terminal_dir_configured": required_dir,
             "terminal_dir_live": live_dir,
+            # EA FileOpen sandbox for installed terminals — the authoritative
+            # heartbeat target (see heartbeat_path.data_folder_heartbeat_path).
+            "terminal_data_path": str(getattr(term, "data_path", "") or ""),
             "connected": bool(term.connected),
             "trade_allowed": bool(term.trade_allowed),
             "login": int(acct.login),
@@ -162,10 +253,12 @@ class OperatorSession:
             "magic": cfg.magic,
             "dry_run": cfg.dry_run,
             "require_demo": cfg.require_demo,
-            "mt5_python_version": str(mt5.version()),
+            "mt5_python_version": str(mt5_version),
+            "mt5_python_pid": os.getpid(),
         }
+        self._connector = connector
+        self._mt5 = connector._mt5()
         if live_dir != required_dir:
-            self._mt5 = mt5
             self._log(f"IDENTITY MISMATCH: {facts}")
             raise SystemExit(
                 f"ABORT: connected terminal dir {live_dir!r} != required {required_dir!r}"
@@ -174,18 +267,25 @@ class OperatorSession:
             raise SystemExit(
                 f"ABORT: require_demo=true but account trade_mode={mode}"
             )
-        if not mt5.symbol_select(cfg.symbol, True):
+        try:
+            selected = connector.symbol_select(cfg.symbol, True)
+        except MT5CallError as exc:
+            self._log(f"IDENTITY FAILED: {exc}")
+            raise SystemExit(f"ABORT: symbol_select({cfg.symbol}) failed: {exc}") from exc
+        if not selected:
             raise SystemExit(
-                f"ABORT: symbol_select({cfg.symbol}) failed: {mt5.last_error()}"
+                f"ABORT: symbol_select({cfg.symbol}) failed: "
+                f"{connector.last_error()}"
             )
-        self._mt5 = mt5
         self._identity = facts
         self.state["terminal_dir"] = live_dir
         self.state["server"] = facts["server"]
         self.state["account"] = facts["login"]
         self.state["is_demo"] = is_demo
-        (self.log_dir / "identity.json").write_text(
-            json.dumps(facts, indent=2), encoding="utf-8"
+        self._write_text(
+            self.log_dir / "identity.json",
+            json.dumps(facts, indent=2),
+            "write_identity",
         )
         self._log("IDENTITY OK: " + json.dumps(facts))
         # Console gets the one-line human summary; the full facts live in
@@ -207,6 +307,10 @@ class OperatorSession:
         from smc.execution.order_manager import OrderManager
         from smc.execution.position_manager import PositionManager
         from smc.live.heartbeat import HeartbeatPublisher
+        from smc.live.heartbeat_path import (
+            heartbeat_path_candidates,
+            probe_writable,
+        )
         from smc.live.loop import LiveLoop
         from smc.orchestration.engine import PipelineEngine
         from smc.orchestration.multi_tf_runtime import MultiTFProductRuntime
@@ -226,8 +330,9 @@ class OperatorSession:
             detection_timeframes=detection_tfs,
             allow_single_tf_degraded=cfg.allow_single_tf_degraded,
         )
-        connector = MT5Connector(symbol=cfg.symbol, magic=cfg.magic,
-                                 terminal_path=cfg.terminal_path)
+        connector = self._connector or MT5Connector(
+            symbol=cfg.symbol, magic=cfg.magic, terminal_path=cfg.terminal_path
+        )
         sessions = None
         if cfg.allowed_sessions:
             sessions = [Session[name] for name in cfg.allowed_sessions]
@@ -246,8 +351,67 @@ class OperatorSession:
             ),
             runtime=runtime,
         )
+        # The watchdog EA reads MQL5/Files/smc_heartbeat.txt in its FileOpen
+        # sandbox. For an INSTALLED (non-portable) terminal that sandbox is the
+        # terminal DATA folder (mt5.terminal_info().data_path — captured at
+        # identity check), not the install dir. Policy: live data_path >
+        # install-dir derivation > config path > logs. Each candidate is
+        # write-probed at startup so a Program-Files ACL degrades gracefully
+        # (loud) instead of crashing or silently never updating the file.
+        data_path = (self._identity or {}).get("terminal_data_path") or ""
+        candidates = heartbeat_path_candidates(
+            cfg.terminal_path, cfg.heartbeat_path,
+            terminal_data_path=data_path,
+        )
+        heartbeat_source, heartbeat_path = candidates[0]
+        for source, cand in candidates:
+            if probe_writable(cand):
+                heartbeat_source, heartbeat_path = source, cand
+                break
+            self._logger.warning(
+                "HEARTBEAT PATH UNWRITABLE: %s (%s) - trying next candidate "
+                "(Program Files ACL or missing permissions?)", cand, source,
+            )
+        else:
+            self._logger.error(
+                "HEARTBEAT PATH ALL CANDIDATES UNWRITABLE - refusing to start; "
+                "the watchdog would treat the session as stale."
+            )
+            raise SystemExit(
+                "ABORT: no writable heartbeat target; see events.log for "
+                "candidate paths and probe failures"
+            )
+        if heartbeat_source != "terminal_data_path":
+            self._heartbeat_ea_readable = False
+            self._logger.warning(
+                "HEARTBEAT PATH FALLBACK IS NOT CONFIRMED EA-READABLE: "
+                f"heartbeat writes to {heartbeat_path}; the watchdog EA reads "
+                "MQL5/Files/smc_heartbeat.txt under its terminal data folder "
+                "and may NOT see it."
+            )
+        else:
+            self._heartbeat_ea_readable = True
+        self._log(
+            f"HEARTBEAT PATH RESOLVED: {heartbeat_path} "
+            f"(source: {heartbeat_source})"
+        )
+        try:
+            heartbeat_path.parent.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            self._logger.critical(
+                "HEARTBEAT PATH CREATE FAILED operation=mkdir path=%s "
+                "python_pid=%s error=%r",
+                heartbeat_path.parent,
+                os.getpid(),
+                exc,
+                exc_info=True,
+            )
+            raise SystemExit(
+                f"ABORT: cannot create heartbeat directory "
+                f"{heartbeat_path.parent}: {exc}"
+            ) from exc
         heartbeat = HeartbeatPublisher(
-            Path(cfg.heartbeat_path), interval_seconds=cfg.heartbeat_interval_s
+            heartbeat_path, interval_seconds=cfg.heartbeat_interval_s
         )
         self._loop = LiveLoop(
             connector=connector, runner=runner, heartbeat=heartbeat,
@@ -263,6 +427,58 @@ class OperatorSession:
     # ------------------------------------------------------------------ #
     # Poll hook — board state + KPI folding
     # ------------------------------------------------------------------ #
+    def _mt5_call(self, name: str, fn, *args, **kwargs):
+        """Call one MT5 function; on PermissionError(13) or other IPC/OS blips,
+
+        log the function + last_error loudly WITHOUT breaking the poll, and
+        de-duplicate the same logical failure across polls so it does not inflate
+        state["errors"] every tick. Returns the MT5 return value, or None on a
+        non-fatal IPC blip so callers can continue.
+
+        Any NEW failure is also appended to state["errors"] once (via the normal
+        poll event path) — but identical repeated signatures are suppressed.
+        """
+        if fn is None or self._mt5 is None:
+            return None
+        try:
+            result = fn(*args, **kwargs)
+        except (OSError, ValueError) as exc:
+            sig = (type(exc).__name__, str(exc))
+            self._log_mt5_error(name, exc, sig)
+            return None
+        previous = self._active_mt5_err_signatures.pop(name, None)
+        if previous is not None:
+            self._logger.info(
+                "MT5 CALL RECOVERED operation=mt5.%s terminal_path=%r "
+                "python_pid=%s",
+                name,
+                self.config.terminal_path,
+                os.getpid(),
+            )
+        return result
+
+    def _log_mt5_error(self, name: str, exc: BaseException, sig: tuple) -> None:
+        """Log one MT5-call failure per operation/signature until recovery."""
+        try:
+            err = self._mt5.last_error() if self._mt5 is not None else None
+        except (OSError, ValueError) as last_error_exc:
+            err = f"unavailable: {last_error_exc!r}"
+        detail = (
+            f"MT5 CALL FAILED operation=mt5.{name} "
+            f"terminal_path={self.config.terminal_path!r} "
+            f"python_pid={os.getpid()} error={exc!r} last_error={err!r}"
+        )
+        if self._active_mt5_err_signatures.get(name) == sig:
+            self._logger.debug("%s (repeated; suppressed)", detail)
+        else:
+            self.state["errors"].append(detail)
+            self._logger.error(
+                "%s",
+                detail,
+                exc_info=(type(exc), exc, exc.__traceback__),
+            )
+            self._active_mt5_err_signatures[name] = sig
+
     def _on_poll(self, new_bars: int, connector) -> None:
         cfg = self.config
         self.state["polls"] = self.state["polls"] + 1
@@ -292,10 +508,53 @@ class OperatorSession:
         # L1 structure console: refresh on a new execution bar and/or HTF
         # batch, rate-limited so the console stays readable.
         self._maybe_refresh_structure(new_bars, batch_changed)
+        # Display-only: an arming event must be VISIBLE on the prompt within
+        # one poll, not at the next cadence tick (completes the 2026-10-06
+        # console-mismatch fix — that fix rebuilt the snapshot immediately but
+        # left printing bound to console_refresh_s, so with a 900 s cadence an
+        # armed POI still stayed invisible for up to 15 min).
+        if batch_changed:
+            self._console_force = True
 
-        tick = self._mt5.symbol_info_tick(cfg.symbol)
+        # Event-driven console: decide WHY this poll should print (if at all).
+        # Reasons, in directive order: new bar, HTF batch, flow/KPI change,
+        # new error + new MT5-call permission/OS failure (loud once, deduped).
+        # A pure-timer poll with no change sets NO reason, so event mode prints
+        # nothing (the alive ping covers liveness).
+        reasons: list[str] = []
+        if batch_changed:
+            reasons.append("HTF batch completed")
+        if new_bars:
+            reasons.append(f"new bar(s) processed: {new_bars}")
+        if self._runner is not None:
+            self._fold_flow_counters()
+            kpi = self._runner.kpi.counters()
+            sig = (
+                self.state.get("candidates"), self.state.get("blocked"),
+                self.state.get("placed"), self.state.get("cancelled"),
+                self.state.get("rejects"),
+                tuple(sorted(kpi.items())) if isinstance(kpi, dict) else (),
+            )
+            if self._last_flow_sig is not None and sig != self._last_flow_sig:
+                reasons.append("flow/KPI counters changed")
+            self._last_flow_sig = sig
+        err_count = len(self.state["errors"])
+        if err_count != self._last_err_count:
+            reasons.append(f"new error (total {err_count})")
+            self._last_err_count = err_count
+        if reasons:
+            self._event_reason = "; ".join(reasons) if len(reasons) > 1 else reasons[0]
+
+        # MT5 market-state reads wrapped for IPC/permission resilience
+        # (2026-10-08): on PermissionError(13) the poll continues and the
+        # failure is loud once + de-duplicated (see _mt5_call).
+        tick = self._mt5_call(
+            "symbol_info_tick", self._mt5.symbol_info_tick, cfg.symbol
+        )
         if tick is not None and tick.bid and tick.ask:
             self.state["spread"] = float(tick.ask) - float(tick.bid)
+        elif tick is None:
+            self.state["spread"] = None
 
         candles = getattr(self._adapter, "_candles", None)
         if candles:
@@ -303,8 +562,12 @@ class OperatorSession:
                 atr = self._adapter.current_atr(len(candles) - 1)
                 self.state["atr"] = atr if atr > 0 else None
                 self.state["last_bar_utc"] = candles[-1].timestamp.isoformat()
-            except Exception:                     # noqa: BLE001 — board must not die
-                pass
+            except Exception as exc:              # noqa: BLE001 — board must not die
+                self._logger.warning(
+                    "BOARD READ FAILED operation=current_atr error=%r",
+                    exc,
+                    exc_info=True,
+                )
 
         spread, atr = self.state["spread"], self.state["atr"]
         if spread is not None and atr:
@@ -318,11 +581,17 @@ class OperatorSession:
                 f"B<={ceilings['B']:.3f} C<={ceilings['C']:.3f}"
             )
 
-        try:
-            positions = connector.positions_get(cfg.symbol)
-            self.state["open_positions"] = len(positions) if positions else 0
-        except Exception:                          # noqa: BLE001
-            pass
+        if connector is not None:
+            positions = self._mt5_call(
+                "positions_get",
+                self._mt5.positions_get,
+                symbol=cfg.symbol,
+            )
+        else:
+            positions = None
+        self.state["open_positions"] = (
+            None if positions is None else len(positions)
+        )
 
     def _maybe_refresh_structure(self, new_bars: int, batch_changed: bool) -> None:
         """L1: rebuild the read-only structure snapshot.
@@ -360,7 +629,12 @@ class OperatorSession:
             )
         except Exception as exc:               # noqa: BLE001 — board must not die
             self.state["errors"].append(f"structure snapshot: {exc!r}")
-            self._logger.error("structure snapshot failed: %r", exc)
+            self._logger.error(
+                "STRUCTURE SNAPSHOT FAILED operation=build_structure_snapshot "
+                "error=%r",
+                exc,
+                exc_info=True,
+            )
 
     def _fold_flow_counters(self) -> None:
         """Fold the KPI decision/management records into board flow fields."""
@@ -389,8 +663,7 @@ class OperatorSession:
         ``max_seconds`` bounds the session for controlled ops windows and
         smoke tests (graceful stop + artifacts); None runs until Ctrl+C.
         """
-        import MetaTrader5 as mt5  # noqa: F401 — bound by identity_check()
-
+        from smc.live.heartbeat import HeartbeatWriteError
         cfg = self.config
         self.identity_check()
         connector = self._build_stack()
@@ -402,22 +675,29 @@ class OperatorSession:
             "SESSION START "
             + json.dumps({"symbol": cfg.symbol, "magic": cfg.magic,
                           "dry_run": cfg.dry_run, "tf": cfg.timeframe,
+                          "terminal_path": cfg.terminal_path,
+                          "python_pid": os.getpid(),
                           "detection_tfs": list(cfg.detection_timeframes),
                           "allow_single_tf_degraded":
                               cfg.allow_single_tf_degraded})
         )
         print(f"[session] running — Ctrl+C to stop (dry_run={cfg.dry_run})")
-        # One-shot startup banner (first board still prints immediately —
-        # last_console starts at 0.0 — then every console_refresh_s).
+        # One-shot startup banner (identity/terminal/symbol/dry_run/paths).
         banner = render_startup_banner(
             self._identity or {},
             timeframe=cfg.timeframe,
             console_refresh_s=cfg.console_refresh_s,
             log_dir=cfg.log_dir,
+            console_mode=self._console_mode,
+            alive_interval_s=cfg.alive_interval_s,
         )
         print(banner)
-        with open(self.log_dir / "console_mirror.log", "a", encoding="utf-8") as fh:
-            fh.write(banner + "\n")
+        self._append_console_mirror(banner)
+        # Event 1 (session start): the first full board prints immediately in
+        # BOTH modes — event mode via a queued reason, board mode via the
+        # legacy last_console=0.0 anchor.
+        if self._console_mode == "event":
+            self._event_reason = self._event_reason or "session start"
 
         last_console = 0.0
         deadline = time.monotonic() + max_seconds if max_seconds else None
@@ -425,17 +705,59 @@ class OperatorSession:
             while deadline is None or time.monotonic() < deadline:
                 try:
                     new_bars = self._loop.run_once()
+                except HeartbeatWriteError as exc:
+                    detail = f"HEARTBEAT WRITE FAILED: {exc}"
+                    if detail not in self.state["errors"]:
+                        self.state["errors"].append(detail)
+                    self._logger.critical(
+                        "%s; terminating because watchdog liveness is "
+                        "unavailable",
+                        detail,
+                        exc_info=True,
+                    )
+                    raise SystemExit(
+                        f"ABORT: heartbeat publication failed: {exc}"
+                    ) from exc
                 except Exception as exc:           # noqa: BLE001 — log, keep polling
-                    self.state["errors"].append(repr(exc))
-                    self._logger.error("poll error: %r", exc)
+                    signature = (type(exc).__name__, str(exc))
+                    if signature != self._last_poll_error_signature:
+                        self.state["errors"].append(
+                            f"{type(exc).__name__}: {exc}"
+                        )
+                        self._logger.error(
+                            "POLL FAILED terminal_path=%r python_pid=%s "
+                            "error=%r",
+                            cfg.terminal_path,
+                            os.getpid(),
+                            exc,
+                            exc_info=True,
+                        )
+                        self._last_poll_error_signature = signature
+                    else:
+                        self._logger.debug(
+                            "Repeated poll failure suppressed: %s", exc
+                        )
                     time.sleep(1.0)
                     continue
+                if self._last_poll_error_signature is not None:
+                    self._logger.info(
+                        "POLL RECOVERED terminal_path=%r python_pid=%s",
+                        cfg.terminal_path,
+                        os.getpid(),
+                    )
+                    self._last_poll_error_signature = None
                 self._on_poll(new_bars, connector)
 
                 now_mono = time.monotonic()
-                if now_mono - last_console >= cfg.console_refresh_s:
-                    last_console = now_mono
-                    self._publish_console()
+                if self._console_mode == "event":
+                    self._maybe_print_console(now_mono)
+                    self._maybe_alive(now_mono)
+                else:
+                    if self._console_force or \
+                            now_mono - last_console >= cfg.console_refresh_s:
+                        self._console_force = False
+                        last_console = now_mono
+                        self._publish_console()
                 time.sleep(cfg.poll_interval_s)
         except KeyboardInterrupt:
             print("\n[session] Ctrl+C — clean shutdown…")
@@ -447,37 +769,116 @@ class OperatorSession:
     # ------------------------------------------------------------------ #
     # Console + artifacts
     # ------------------------------------------------------------------ #
-    def _publish_console(self) -> None:
+    def _maybe_print_console(self, now_mono: float) -> bool:
+        """Event mode: print the full board ONLY on a queued event reason.
+
+        A poll with no state change queues no reason → no print, no matter
+        how long since the last print (the alive ping covers liveness).
+        Returns True when a board was printed.
+        """
+        reason = self._event_reason
+        if not reason:
+            return False
+        self._event_reason = None
+        self._publish_console(reason=reason)
+        return True
+
+    def _maybe_alive(self, now_mono: float) -> bool:
+        """Event mode: at most ONE short alive line per ``alive_interval_s``.
+
+        Never a full board. ``alive_interval_s=0`` disables the ping.
+        Returns True when a ping was printed.
+        """
+        interval = float(getattr(self.config, "alive_interval_s", 300.0) or 0.0)
+        if interval <= 0:
+            return False
+        if now_mono - self._last_alive_mono < interval:
+            return False
+        self._last_alive_mono = now_mono
+        hb = self._heartbeat
+        line = render_alive_line({
+            "now_utc": _utcnow().isoformat(timespec="seconds"),
+            "hb_seq": hb.sequence if hb is not None else None,
+            "bars_processed": self.state.get("bars_processed"),
+            "htf_armed": self.state.get("htf_armed"),
+            "errors": self.state.get("errors"),
+        })
+        print(line)
+        self._append_console_mirror(line)
+        return True
+
+    def _publish_console(self, reason: str | None = None) -> None:
+        if reason:
+            header = f">>> event: {reason}"
+            print(header)
+            self._append_console_mirror(header)
         self.state["now_utc"] = _utcnow().isoformat(timespec="seconds")
         hb = self._heartbeat
         self.state["hb_seq"] = hb.sequence
         self.state["hb_age_s"] = max(0.0, _utcnow().timestamp() - hb._last_unix) \
             if hb._last_unix is not None else None
-        self.state["hb_state"] = hb.state
+        self.state["hb_state"] = (
+            hb.state
+            if self._heartbeat_ea_readable is not False
+            else f"{hb.state} (EA path unconfirmed)"
+        )
         self._fold_flow_counters()
         self.state["kpi"] = self._runner.kpi.counters()
         board = render_status_board(self.state)
         print(board)
-        with open(self.log_dir / "console_mirror.log", "a", encoding="utf-8") as fh:
-            fh.write(board + "\n")
+        self._append_console_mirror(board)
         # L1 structure console (read-only): appended to the same board +
         # mirror so POIS/SWEEPS/SEEKING/PLAN share the refresh cadence.
         structure = self.state.get("structure")
         if structure is not None:
             structure_board = render_structure_console(structure)
             print(structure_board)
-            with open(self.log_dir / "console_mirror.log", "a",
-                      encoding="utf-8") as fh:
-                fh.write(structure_board + "\n")
+            self._append_console_mirror(structure_board)
         # Periodic KPI JSONL rewrite (append-friendly snapshot of the session).
-        self._runner.kpi.write_jsonl(self.log_dir / "kpi_records.jsonl")
+        kpi_path = self.log_dir / "kpi_records.jsonl"
+        try:
+            self._runner.kpi.write_jsonl(kpi_path)
+        except OSError as exc:
+            self._logger.error(
+                "FILE WRITE FAILED operation=write_kpi_jsonl path=%s "
+                "python_pid=%s error=%r",
+                kpi_path,
+                os.getpid(),
+                exc,
+                exc_info=True,
+            )
+            raise
 
     def _shutdown(self, connector) -> None:
+        from smc.live.heartbeat import HeartbeatWriteError
+
         try:
             self._loop.stop()   # writes the heartbeat shutdown marker
-        except Exception:       # noqa: BLE001
-            pass
-        self._runner.kpi.write_jsonl(self.log_dir / "kpi_records.jsonl")
+        except HeartbeatWriteError as exc:
+            self._logger.critical(
+                "HEARTBEAT SHUTDOWN WRITE FAILED: %s",
+                exc,
+                exc_info=True,
+            )
+            print(f"[critical] heartbeat shutdown marker failed: {exc}")
+        except Exception as exc:       # noqa: BLE001 — shutdown must finish
+            self._logger.error(
+                "SESSION SHUTDOWN FAILED operation=loop.stop error=%r",
+                exc,
+                exc_info=True,
+            )
+        kpi_path = self.log_dir / "kpi_records.jsonl"
+        try:
+            self._runner.kpi.write_jsonl(kpi_path)
+        except OSError as exc:
+            self._logger.error(
+                "SHUTDOWN FILE WRITE FAILED operation=write_kpi_jsonl path=%s "
+                "python_pid=%s error=%r",
+                kpi_path,
+                os.getpid(),
+                exc,
+                exc_info=True,
+            )
         summary = {
             "stopped_utc": _utcnow().isoformat(),
             "session_started_utc": self.state.get("session_started_utc"),
@@ -487,14 +888,37 @@ class OperatorSession:
             "kpi_counters": self._runner.kpi.counters(),
             "identity": self._identity,
         }
-        (self.log_dir / "session_summary.json").write_text(
-            json.dumps(summary, indent=2, default=str), encoding="utf-8"
-        )
+        summary_path = self.log_dir / "session_summary.json"
+        try:
+            summary_path.write_text(
+                json.dumps(summary, indent=2, default=str), encoding="utf-8"
+            )
+        except OSError as exc:
+            self._logger.error(
+                "SHUTDOWN FILE WRITE FAILED operation=write_session_summary "
+                "path=%s python_pid=%s error=%r",
+                summary_path,
+                os.getpid(),
+                exc,
+                exc_info=True,
+            )
         self._log("SESSION STOP " + json.dumps(
             {"polls": summary["polls"], "bars": summary["bars_processed"]}))
         shutdown = getattr(connector, "shutdown", None)
         if callable(shutdown):
             shutdown()
+        # Event 8 (shutdown): the stop line always prints; in event mode the
+        # final full board rides along so the operator sees the end state.
+        if self._console_mode == "event" and self._runner is not None:
+            try:
+                self._publish_console(reason="session shutdown (clean stop)")
+            except Exception as exc:            # noqa: BLE001 — shutdown must finish
+                self._logger.error(
+                    "SHUTDOWN CONSOLE PUBLISH FAILED path=%s error=%r",
+                    self.log_dir / "console_mirror.log",
+                    exc,
+                    exc_info=True,
+                )
         print(f"[session] stopped — artifacts in {self.log_dir}")
 
 
@@ -516,12 +940,31 @@ def main(argv: list[str] | None = None) -> int:
 
     # Archive the raw config for auditability (no secrets are ever stored).
     log_dir = Path(config.log_dir)
-    log_dir.mkdir(parents=True, exist_ok=True)
-    (log_dir / "config_effective.json").write_text(
-        json.dumps(config.raw, indent=2, sort_keys=True), encoding="utf-8"
-    )
+    try:
+        log_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        print(
+            f"FILE OPERATION FAILED: create log directory {log_dir}: {exc}",
+            file=sys.stderr,
+        )
+        return 2
+    config_path = log_dir / "config_effective.json"
+    try:
+        config_path.write_text(
+            json.dumps(config.raw, indent=2, sort_keys=True), encoding="utf-8"
+        )
+    except OSError as exc:
+        print(
+            f"FILE OPERATION FAILED: write config snapshot {config_path}: {exc}",
+            file=sys.stderr,
+        )
+        return 2
 
-    session = OperatorSession(config)
+    try:
+        session = OperatorSession(config)
+    except OSError as exc:
+        print(f"OPERATOR STARTUP FILE ERROR: {exc}", file=sys.stderr)
+        return 2
     try:
         session.run(max_seconds=args.max_seconds)
     except SystemExit as exc:

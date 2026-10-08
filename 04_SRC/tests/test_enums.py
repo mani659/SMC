@@ -16,6 +16,7 @@ from smc.core.enums import (
 
 def test_timeframe_members_and_mt5_values():
     # Values must equal MetaTrader5 TIMEFRAME_* constants (mapping by int).
+    # W1 added 2026-10-06 (weekly-provisioning directive) as PERIOD_W1.
     assert list(Timeframe) == [
         Timeframe.M1,
         Timeframe.M5,
@@ -24,6 +25,7 @@ def test_timeframe_members_and_mt5_values():
         Timeframe.H1,
         Timeframe.H4,
         Timeframe.D1,
+        Timeframe.W1,
     ]
     assert int(Timeframe.M1) == 1
     assert int(Timeframe.M5) == 5
@@ -32,6 +34,10 @@ def test_timeframe_members_and_mt5_values():
     assert int(Timeframe.H1) == 16385
     assert int(Timeframe.H4) == 16388
     assert int(Timeframe.D1) == 16408
+    # MT5 TIMEFRAME_W1 is 32769 (0x8001) — 32768 is rejected by
+    # copy_rates_from_pos with "Invalid params" (caught live on the
+    # EXNESS Copy terminal, dry-run fix 2026-10-06).
+    assert int(Timeframe.W1) == 32769          # MT5 TIMEFRAME_W1
 
 
 def test_timeframe_minutes_and_lookup():
@@ -40,15 +46,19 @@ def test_timeframe_minutes_and_lookup():
     assert Timeframe.H1.minutes == 60
     assert Timeframe.H4.minutes == 240
     assert Timeframe.D1.minutes == 1440
+    assert Timeframe.W1.minutes == 10080
     assert Timeframe.from_minutes(30) is Timeframe.M30
     assert Timeframe.from_minutes(60) is Timeframe.H1
+    assert Timeframe.from_minutes(10080) is Timeframe.W1
     with pytest.raises(ValueError):
         Timeframe.from_minutes(7)
 
 
 def test_timeframe_htf_ltf_per_section_27():
     # §27: HTF class = D1/H4/H1 (N=5); LTF class = M30/M15/M5/M1 (N=3).
-    for tf in (Timeframe.D1, Timeframe.H4, Timeframe.H1):
+    # W1 (weekly context tier, 2026-10-06 directive) shares the HTF class
+    # and its N=5 confirmation count; N_BAR_HTF itself is unchanged.
+    for tf in (Timeframe.W1, Timeframe.D1, Timeframe.H4, Timeframe.H1):
         assert tf.is_htf() and not tf.is_ltf()
         assert Timeframe.n_bar_confirmation(tf) == N_BAR_HTF == 5
     for tf in (Timeframe.M30, Timeframe.M15, Timeframe.M5, Timeframe.M1):

@@ -33,6 +33,9 @@ timeout. Both are config-overridable (``smc.live.config.LiveConfig``).
 
 from __future__ import annotations
 
+import logging
+import os
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -41,6 +44,7 @@ __all__ = [
     "HEARTBEAT_INTERVAL_SECONDS",
     "WATCHDOG_STALE_TIMEOUT_SECONDS",
     "HeartbeatRecord",
+    "HeartbeatWriteError",
     "HeartbeatPublisher",
     "WatchdogDecision",
     "write_heartbeat",
@@ -52,9 +56,24 @@ __all__ = [
 
 HEARTBEAT_INTERVAL_SECONDS = 1.0
 WATCHDOG_STALE_TIMEOUT_SECONDS = 5.0
+# Windows coexistence (2026-10-08): the watchdog EA opens the heartbeat file
+# briefly each timer tick (open → read → close). If that read overlaps the
+# Python atomic rename, ``os.replace`` fails with a transient sharing
+# violation ([WinError 5] Access is denied). Retry the rename a few times
+# before falling back to an in-place overwrite (which needs only write
+# sharing, not delete sharing). Operational timing only — not a trading
+# constant.
+HEARTBEAT_REPLACE_ATTEMPTS = 5
+HEARTBEAT_REPLACE_BACKOFF_SECONDS = 0.02
 
 STATE_RUNNING = "running"
 STATE_SHUTDOWN = "shutdown"
+logger = logging.getLogger(__name__)
+_read_failures: dict[str, tuple[str, str]] = {}
+
+
+class HeartbeatWriteError(PermissionError):
+    """Heartbeat publication failed and watchdog liveness is no longer assured."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,14 +101,91 @@ class WatchdogDecision:
 # ---------------------------------------------------------------------- #
 # File format
 # ---------------------------------------------------------------------- #
-def write_heartbeat(path, unix_ts: float, sequence: int, state: str = STATE_RUNNING) -> None:
-    """Write one heartbeat record (atomic-ish: temp file + rename)."""
+def write_heartbeat(
+    path,
+    unix_ts: float,
+    sequence: int,
+    state: str = STATE_RUNNING,
+    *,
+    replace_attempts: int = HEARTBEAT_REPLACE_ATTEMPTS,
+    backoff_seconds: float = HEARTBEAT_REPLACE_BACKOFF_SECONDS,
+) -> None:
+    """Write one heartbeat record so the EA can read it WHILE we write.
+
+    Strategy (Windows coexistence — 2026-10-08):
+
+    1. Write the full payload to ``<target>.tmp``.
+    2. Atomically rename it over the target (``os.replace``); if that raises
+       a transient sharing violation (the EA is mid-read), retry a few times
+       with a short backoff.
+    3. If the rename still fails, fall back to an IN-PLACE overwrite of the
+       target (open + truncate + write + flush). In-place writes need only
+       write sharing, not delete sharing, so they survive a read lock that
+       blocks the rename.
+
+    Only when the temp write, every rename attempt, AND the in-place fallback
+    all fail does this raise :class:`HeartbeatWriteError` — a single transient
+    'Access is denied' collision must NOT fail the session closed. Operators
+    still get the real call site (target + temp) in the message/events.log.
+    """
     target = Path(path)
     tmp = target.with_name(target.name + ".tmp")
-    tmp.write_text(
-        f"{int(unix_ts)} {sequence}\nstate={state}\n", encoding="ascii"
-    )
-    tmp.replace(target)
+    payload = f"{int(unix_ts)} {sequence}\nstate={state}\n"
+    try:
+        tmp.write_text(payload, encoding="ascii")
+    except OSError as exc:
+        raise HeartbeatWriteError(
+            f"heartbeat write temporary file failed target={target} "
+            f"temp={tmp}: {exc}"
+        ) from exc
+
+    attempts = max(1, int(replace_attempts))
+    last_replace_exc: OSError | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            os.replace(tmp, target)
+            return
+        except OSError as exc:
+            last_replace_exc = exc
+            if attempt < attempts:
+                time.sleep(max(0.0, float(backoff_seconds)))
+
+    # Rename blocked (EA read lock / sharing violation). Fall back to an
+    # in-place overwrite: needs write sharing only, so it coexists with an
+    # active reader. Logged as a recovery, never a fail-closed.
+    try:
+        _write_in_place(target, payload)
+        try:
+            tmp.unlink(missing_ok=True)
+        except OSError:
+            pass
+        logger.warning(
+            "heartbeat atomic replace blocked after %d attempts; wrote in "
+            "place target=%s temp=%s last_replace_error=%r",
+            attempts,
+            target,
+            tmp,
+            last_replace_exc,
+        )
+        return
+    except OSError as exc:
+        raise HeartbeatWriteError(
+            f"heartbeat publish failed after {attempts} replace attempts and "
+            f"in-place fallback target={target} temp={tmp}: "
+            f"replace_error={last_replace_exc!r} inplace_error={exc!r}"
+        ) from exc
+
+
+def _write_in_place(target: Path, payload: str) -> None:
+    """Overwrite ``target`` in place (open + truncate + write + fsync).
+
+    Needs only write sharing, so it coexists with an EA that holds the file
+    open for reading — unlike an atomic rename, which needs delete sharing.
+    """
+    with target.open("w", encoding="ascii") as fh:
+        fh.write(payload)
+        fh.flush()
+        os.fsync(fh.fileno())
 
 
 def read_heartbeat(path) -> HeartbeatRecord | None:
@@ -99,10 +195,31 @@ def read_heartbeat(path) -> HeartbeatRecord | None:
     cannot positively confirm as stale (a dead Python cannot write a fresh
     heartbeat, and a corrupted file is no safer to trust).
     """
+    target = Path(path)
+    key = str(target)
     try:
-        text = Path(path).read_text(encoding="ascii")
-    except (OSError, ValueError):
+        text = target.read_text(encoding="ascii")
+    except OSError as exc:
+        signature = (type(exc).__name__, str(exc))
+        if _read_failures.get(key) != signature:
+            logger.error(
+                "heartbeat read failed operation=open path=%s error=%r",
+                target,
+                exc,
+                exc_info=True,
+            )
+        _read_failures[key] = signature
         return None
+    except ValueError as exc:
+        logger.error(
+            "heartbeat read failed operation=decode path=%s error=%r",
+            target,
+            exc,
+            exc_info=True,
+        )
+        return None
+    if _read_failures.pop(key, None) is not None:
+        logger.info("heartbeat read recovered operation=open path=%s", target)
     lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
     if not lines:
         return None

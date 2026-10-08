@@ -113,6 +113,7 @@ def merge_overlapping(pois: list[POI]) -> list[POI]:
             )
         tags = sorted({m for poi in group for m in poi.models})
         earliest = min(group, key=lambda p: p.created_at)
+        kinds = sorted({p.m8_kind for p in group if p.m8_kind is not None})
         merged.append(
             POI(
                 zone=zone,
@@ -120,6 +121,7 @@ def merge_overlapping(pois: list[POI]) -> list[POI]:
                 created_at=earliest.created_at,
                 htf_overlap=any(p.htf_overlap for p in group),
                 id=earliest.id,
+                m8_kind="+".join(kinds) if kinds else None,
             )
         )
     return merged
