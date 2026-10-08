@@ -1,0 +1,17 @@
+{
+  "terminal_path": "C:\\Program Files\\MetaTrader 5 EXNESS - Copy\\terminal64.exe",
+  "symbol": "XAUUSDm",
+  "magic": 20260919,
+  "dry_run": true,
+  "require_demo": true,
+  "risk_fraction": 0.01,
+  "timeframe": "M5",
+  "allowed_sessions": null,
+  "heartbeat_path": "logs/phase_d/heartbeat.txt",
+  "heartbeat_interval_s": 1.0,
+  "poll_interval_s": 0.5,
+  "console_refresh_s": 30.0,
+  "console_mode": "event",
+  "alive_interval_s": 300.0,
+  "log_dir": "logs/phase_d"
+}
