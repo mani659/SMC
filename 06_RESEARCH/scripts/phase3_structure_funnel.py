@@ -42,6 +42,7 @@ sys.path.insert(0, str(REPO_ROOT / "04_SRC"))
 
 from smc.backtest.bar_loop import BarLoop  # noqa: E402
 from smc.backtest.data_feed import CandleSeries  # noqa: E402
+from smc.backtest.cost_model import CostConfig  # noqa: E402
 from smc.backtest.export import to_csv, to_json  # noqa: E402
 from smc.backtest.orders import PendingOrderBook  # noqa: E402
 from smc.backtest.pipeline_adapter import PipelineAdapter  # noqa: E402
@@ -133,10 +134,11 @@ def run(args) -> dict:
           flush=True)
 
     # ---- Stack: engine + PRODUCT seam + FR-4 arm/scan/risk wiring ------ #
-    engine = PipelineEngine()
+    episode_store = getattr(args, "episode_store", None)
+    engine = PipelineEngine(episode_store=episode_store)
     adapter = PipelineAdapter(engine, timeframe=TF)
     adapter.set_candles(m5)
-    runtime = MultiTFProductRuntime()  # product seam (C1): H4+H1 detect, D1→M8
+    runtime = MultiTFProductRuntime(episode_store=episode_store)  # product seam (C1): H4+H1 detect, D1→M8
     order_book = CountingOrderBook()
     position_store = PositionStore()
     runner = BacktestRunner(
@@ -146,7 +148,13 @@ def run(args) -> dict:
             equity=10_000.0, risk_fraction=0.01, pip_value_per_lot=10.0,
             min_lots=0.01, lot_step=0.01, spread_price=0.0, news_events=[],
             allowed_sessions=(Session.ASIA, Session.LONDON, Session.NEW_YORK),
-            timeframe=TF),
+            timeframe=TF,
+            # Optional measurement-only cost hook (Tier-1 pilot): an
+            # explicitly passed CostConfig prices closes; absent (None)
+            # reproduces the legacy zero-cost path exactly. Never a
+            # strategy change — fills, prices, gates, and sizing are
+            # untouched either way.
+            cost=getattr(args, "cost_config", None) or CostConfig()),
     )
     adapter.attach(runner)
 
@@ -314,7 +322,16 @@ def run(args) -> dict:
 
     # ---- Post-run: routes/placements from the adapter + runner --------- #
     result = runner.result()
-    report = build_report(result)
+    # Track-B harness (Tier-1, research measurement only): annotate closed
+    # trades with the frozen timing labels + post-exit classes over the
+    # run's own loaded series (M1 slice carries warm-up for ATR seed +
+    # trailing windows). Unresolvable geometry -> "unknown" / DATA_GAP,
+    # never invented. Never a filter; never read by any decision logic
+    # (fields ride TradeRecord into trades.csv / report.json only).
+    import f_selectivity_post_exit as track_b_annotations
+    annotations = track_b_annotations.annotate_product_trades(
+        result.closed, m1=m1, m5=CandleSeries(m5, TF))
+    report = build_report(result, annotations=annotations)
     routes_by_poi: dict[str, dict] = {}
     for trade in report.trades:
         routes_by_poi[trade.poi_id] = {
@@ -449,6 +466,21 @@ def run(args) -> dict:
         "spread 0.0 / news dormant / all sessions — machine-completeness "
         "config identical to FR-4, NOT cost realism",
     ]
+    notes.append(
+        f"{track_b_annotations.TRACK_B_BANNER} "
+        f"({len(annotations)} closes annotated; "
+        "unresolvable -> unknown / DATA_GAP)")
+    _cost_cfg = getattr(args, "cost_config", None)
+    if _cost_cfg is not None:
+        notes.append(
+            "costs ON explicit (Tier-1 V1 ledger, fill-only, prices "
+            "unchanged): commission_usd_per_lot_per_side="
+            f"{_cost_cfg.commission_usd_per_lot_per_side}, "
+            f"slippage_points={_cost_cfg.slippage_points}, "
+            f"apply_half_spread={_cost_cfg.apply_half_spread}, "
+            f"spread_fallback_price={_cost_cfg.spread_fallback_price}, "
+            "swap=deferred(0.0, bars_held logged)"
+        )
     if args.exec_to:
         notes.append(f"exec_to overridden: {args.exec_to} (locked primary is "
                      f"{EXEC_TO.date().isoformat()})")

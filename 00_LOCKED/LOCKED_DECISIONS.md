@@ -658,7 +658,7 @@ for the Phase 5 risk layer (`smc/risk/`); they are transcribed verbatim into
 |----------|-------|-------------------|-------|
 | `SPREAD_MAX_ATR` | 0.15 | `InpMaxSpreadATR = 0.15` | Max spread as a fraction of ATR, in points. |
 | `SPREAD_GRADE_MULTIPLIERS` | A+: 1.5, A: 1.0, B: 0.7, C: 0.5 | v19.7 header | Spread tolerance multiplier by grade over the base `SPREAD_MAX_ATR`. **Semantics are score-tier multipliers, NOT the point bands once listed in DEVELOPMENT_PLAN (to be corrected there).** |
-| `SPREAD_GRADE_SCORE_THRESHOLDS` | A+: ≥8, A: ≥5, B: ≥3, C: <3 | v19.7 header | Minimum score per grade; C = below 3. |
+| `SPREAD_GRADE_SCORE_THRESHOLDS` | A+: ≥3, A: ≥2, B: ≥1, C: <1 | v19.7 header as scale origin; **amended 2026-10-11 (Architect ruling, Option MAP)** | Minimum **confluence tag-count** per grade; C = below 1. **Superseded map (0–10 style): A+: ≥8, A: ≥5, B: ≥3, C: <3** — recorded here so the old scale is never restored by accident. Rationale: `score_poi` returns tag counts (~1..n), under which A/A+ were unreachable and every spread-sensitivity conclusion sat a tier too strict. No new 0–10 scorer was built (banned in this ruling). |
 
 ### 28.6 Sweep / Failed-Sweep Re-Entry Guard
 

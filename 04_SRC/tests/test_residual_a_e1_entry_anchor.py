@@ -44,7 +44,10 @@ def _metrics():
     return SimpleNamespace(
         n_trades=1, n_wins=0, n_losses=1, win_rate=0.0, gross_profit=0.0,
         gross_loss=0.01, profit_factor=0.0, net_pnl=-0.01, max_drawdown=0.01,
-        avg_win=None, avg_loss=-0.01)
+        avg_win=None, avg_loss=-0.01,
+        total_commission_usd=0.0, total_spread_cost_usd=0.0,
+        total_slippage_usd=0.0, total_swap_usd=0.0, total_cost_usd=0.0,
+        net_pnl_after_cost=-0.01)
 
 
 def test_bridge_extracts_entry_anchor_first_class():
@@ -152,8 +155,11 @@ def test_export_csv_appends_entry_anchor_column(tmp_path):
     path = tmp_path / "trades.csv"
     to_csv(report, path)
     lines = path.read_text(encoding="utf-8").splitlines()
-    assert lines[0].endswith("signal_data_json,entry_anchor,tp_source")  # appended, compat (structural TP col after E1)
-    assert lines[1].endswith(",zone_edge_reanchor,")  # anchor cell + empty tp_source cell
+    assert lines[0].endswith("signal_data_json,entry_anchor,tp_source,"  # appended, compat (structural TP col after E1; V1 costs + Track-B after)
+                             "commission_usd,spread_cost_usd,slippage_usd,"
+                             "swap_usd,cost_usd,pnl_net,bars_held,"
+                             "f_timing_label,post_exit_class")
+    assert lines[1].endswith(",zone_edge_reanchor,,0.0,0.0,0.0,0.0,0.0,,,,")  # anchor cell + empty tp_source cell + zero cost legs + empty annotation cells
 
 
 def test_export_json_carries_entry_anchor_key(tmp_path):
@@ -165,7 +171,8 @@ def test_export_json_carries_entry_anchor_key(tmp_path):
         entry_anchor="zone_edge_reanchor",
     )
     report = SimpleNamespace(metrics=_metrics(), by_trigger={}, by_poi={},
-                             blocked_by_reason={}, trades=[rec])
+                             blocked_by_reason={}, trades=[rec],
+                             by_timing_label={}, by_post_exit_class={})
     path = tmp_path / "report.json"
     to_json(report, path)
     trade = json.loads(path.read_text(encoding="utf-8"))["trades"][0]
