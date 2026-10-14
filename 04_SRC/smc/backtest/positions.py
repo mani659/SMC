@@ -17,6 +17,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from smc.backtest.fill_model import BarClose, evaluate_position_bar
+from smc.backtest.cost_model import (
+    CostBreakdown,
+    CostModel,
+    normalize_spread,
+)
 from smc.core.candle import Candle
 from smc.core.enums import Direction
 
@@ -55,6 +60,12 @@ class BacktestPosition:
     # only — never read by risk/fill/BE logic; copied verbatim on SL
     # modifies (same invariant as entry_anchor).
     tp_source: str | None = None
+    # Entry-leg spread (PRICE units) known at fill time — cost input only
+    # (never read by risk/fill logic). Normalized: None = unknown (the
+    # legacy spread_price=0.0 means "gate off", never "zero spread"), so a
+    # non-positive value is stored as None and falls back per CostConfig.
+    # Copied verbatim on SL modifies (same invariant as entry_anchor).
+    entry_spread_price: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,6 +79,20 @@ class ClosedPosition:
     kind: str                # CloseKind.STOP_LOSS / TAKE_PROFIT
     win: bool
     realized_pnl: float      # price units × volume × direction sign (V1 raw)
+    # V1 cost ledger (Tier-1, 2026-10-11): additive per-close attribution.
+    # Gross ``realized_pnl`` is NEVER rewritten — consumers net it as
+    # ``realized_pnl - cost_ledger`` (see cost_model.net_ledger). All USD
+    # legs default 0.0 (legacy zero-cost path reproduces exactly).
+    commission_usd: float = 0.0
+    spread_cost_usd: float = 0.0
+    slippage_usd: float = 0.0
+    swap_usd: float = 0.0    # always 0.0 in V1 (deferred by ruling)
+    cost_usd: float = 0.0    # sum of the four legs above
+    cost_ledger: float = 0.0  # cost_usd / pip_value_per_lot
+    # Holding duration in execution bars (exit_bar - entry_bar). None =
+    # unknown/legacy (never invented) — recorded so deferred swap stays
+    # backfillable without a re-run.
+    bars_held: int | None = None
 
 
 @dataclass(slots=True)
@@ -78,6 +103,16 @@ class PositionStore:
     _open: list[BacktestPosition] = field(default_factory=list)
     _closed: list[ClosedPosition] = field(default_factory=list)
     _next_ticket: int | None = None
+    # Bound V1 cost pricer (None = unbound → every close prices at zero
+    # cost, the legacy path). The runner binds this from RunnerConfig at
+    # construction; store-level tests stay unbound by default. Excluded
+    # from repr/compare — bookkeeping, not trade state.
+    _cost_model: CostModel | None = field(default=None, init=False,
+                                          repr=False, compare=False)
+
+    def bind_cost_model(self, model: CostModel | None) -> None:
+        """Bind (or unbind, with None) the V1 cost pricer for new closes."""
+        self._cost_model = model
 
     def __post_init__(self) -> None:
         if self._next_ticket is None:
@@ -108,6 +143,7 @@ class PositionStore:
         signal_data_json: str | None = None,
         entry_anchor: str | None = None,
         tp_source: str | None = None,
+        entry_spread_price: float | None = None,
     ) -> BacktestPosition:
         """Open one position on a fill; returns it (ticket pre-assigned)."""
         if volume <= 0.0:
@@ -133,6 +169,7 @@ class PositionStore:
             signal_data_json=signal_data_json,
             entry_anchor=entry_anchor,
             tp_source=tp_source,
+            entry_spread_price=normalize_spread(entry_spread_price),
         )
         self._next_ticket += 1
         self._open.append(position)
@@ -141,11 +178,15 @@ class PositionStore:
     # ------------------------------------------------------------------ #
     # Per-bar management
     # ------------------------------------------------------------------ #
-    def apply_bar(self, bar: Candle, bar_index: int) -> list[ClosedPosition]:
+    def apply_bar(self, bar: Candle, bar_index: int,
+                  *, exit_spread_price: float | None = None
+                  ) -> list[ClosedPosition]:
         """Evaluate SL/TP for every open position over ``bar``.
 
         Uses :func:`fill_model.evaluate_position_bar` (SL-first on same-bar
         conflicts). Closes are applied in fill order — deterministic.
+        ``exit_spread_price`` is the spread known on this bar (cost input
+        only; None = unknown → fallback per CostConfig).
         Returns the closed positions for this bar (possibly empty).
         """
         closed: list[ClosedPosition] = []
@@ -155,7 +196,8 @@ class PositionStore:
             )
             if not decision.closed:
                 continue
-            closed.append(self._close(position, decision, bar, bar_index))
+            closed.append(self._close(position, decision, bar, bar_index,
+                                      exit_spread_price=exit_spread_price))
         return closed
 
     def close(
@@ -167,18 +209,22 @@ class PositionStore:
         exit_at,
         kind: str,
         win: bool | None = None,
+        exit_spread_price: float | None = None,
     ) -> ClosedPosition:
         """Explicitly close one position (runner-driven close, e.g. a risk
         exit). ``win`` may be omitted for price-symmetric kinds — it is
         then derived from the exit direction relative to entry (LONG:
-        ``exit_price > entry_price``). Raises ``KeyError`` for an unknown
-        ticket."""
+        ``exit_price > entry_price``). ``exit_spread_price`` is the spread
+        known on the exit bar (cost input only). Raises ``KeyError`` for an
+        unknown ticket."""
         for index, position in enumerate(self._open):
             if position.ticket == ticket:
                 if win is None:
                     win = self._derive_win(position, exit_price)
                 decision = BarClose(closed=True, kind=kind, price=exit_price, win=win)
-                return self._close(position, decision, None, exit_bar, exit_at=exit_at)
+                return self._close(position, decision, None, exit_bar,
+                                   exit_at=exit_at,
+                                   exit_spread_price=exit_spread_price)
         raise KeyError(f"no open position with ticket {ticket}")
 
     @staticmethod
@@ -220,6 +266,7 @@ class PositionStore:
                     signal_data_json=position.signal_data_json,
                     entry_anchor=position.entry_anchor,
                     tp_source=position.tp_source,
+                    entry_spread_price=position.entry_spread_price,
                 )
                 self._open[index] = updated
                 return updated
@@ -254,12 +301,27 @@ class PositionStore:
         bar: Candle | None,
         exit_bar: int,
         exit_at=None,
+        *,
+        exit_spread_price: float | None = None,
     ) -> ClosedPosition:
         self._open.remove(position)
         if exit_at is None:
             exit_at = bar.timestamp if bar is not None else position.entry_at
         direction_sign = 1.0 if position.direction is Direction.LONG else -1.0
         realized = (decision.price - position.entry_price) * direction_sign * position.volume
+        # V1 cost ledger: both legs priced here (entry leg from the spread
+        # recorded at fill, exit leg from this bar). Unbound store (legacy
+        # path, incl. store-level tests) prices at zero — gross untouched.
+        model = self._cost_model
+        if model is None:
+            costs = CostBreakdown.zero()
+        else:
+            costs = model.quote_close(
+                lots=position.volume,
+                entry_spread=position.entry_spread_price,
+                exit_spread=normalize_spread(exit_spread_price),
+                exit_kind=decision.kind,
+            )
         record = ClosedPosition(
             position=position,
             exit_price=decision.price,
@@ -268,6 +330,13 @@ class PositionStore:
             kind=decision.kind,
             win=bool(decision.win),
             realized_pnl=realized,
+            commission_usd=costs.commission_usd,
+            spread_cost_usd=costs.spread_cost_usd,
+            slippage_usd=costs.slippage_usd,
+            swap_usd=costs.swap_usd,
+            cost_usd=costs.cost_usd,
+            cost_ledger=costs.cost_ledger,
+            bars_held=exit_bar - position.entry_bar,
         )
         self._closed.append(record)
         return record

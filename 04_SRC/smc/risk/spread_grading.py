@@ -3,10 +3,13 @@ to Python).
 
 LOCKED_DECISIONS §28.5: tiered spread tolerance by signal-quality score:
 
-    A+ (score >= 8): 1.5 × base   A (score >= 5): 1.0 × base
-    B  (score >= 3): 0.7 × base   C (score  < 3): 0.5 × base
+    A+ (tag-count >= 3): 1.5× base   A (tag-count >= 2): 1.0× base
+    B  (tag-count >= 1): 0.7× base   C (tag-count  < 1): 0.5× base
 
 where the base max spread is ``SPREAD_MAX_ATR`` (0.15) × ATR (in points).
+Scale amendment 2026-10-11: thresholds sit on the confluence tag-count
+scale (score_poi returns tag counts ~1..n), NOT a 0–10 quality model —
+the old 8/5/3 map is superseded (it made A/A+ unreachable).
 
 v25 semantics preserved verbatim: the grade is picked from the frozen
 ``SPREAD_GRADE_SCORE_THRESHOLDS`` (highest tier whose threshold is met) and
@@ -40,11 +43,12 @@ class SpreadGrade(Enum):
 
 
 def grade_for_score(score: float) -> SpreadGrade:
-    """Map a signal-quality score to its frozen grade.
+    """Map a confluence tag-count score to its frozen grade.
 
-    Thresholds come from ``SPREAD_GRADE_SCORE_THRESHOLDS`` (A+ ≥ 8, A ≥ 5,
-    B ≥ 3, C < 3); the highest tier whose threshold is met wins. Scores
-    below the B threshold grade as C.
+    Thresholds come from ``SPREAD_GRADE_SCORE_THRESHOLDS`` (A+ ≥ 3, A ≥ 2,
+    B ≥ 1, C < 1 — tag-count scale per the 2026-10-11 amendment);
+    the highest tier whose threshold is met wins. Scores below the B
+    threshold grade as C.
     """
     for grade_name, threshold in (
         ("A+", SPREAD_GRADE_SCORE_THRESHOLDS["A+"]),

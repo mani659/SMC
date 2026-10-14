@@ -19,5 +19,23 @@ from smc.orchestration.engine import (
     PipelineEngine,
     build_limit_request,
 )
+from smc.orchestration.episode_store import (
+    EpisodeEvent,
+    EpisodeEventKind,
+    EpisodeIdentityKey,
+    EpisodeRecord,
+    EpisodeState,
+    EpisodeStore,
+)
 
-__all__ = ["ExecutionOutcome", "PipelineEngine", "build_limit_request"]
+__all__ = [
+    "ExecutionOutcome",
+    "PipelineEngine",
+    "build_limit_request",
+    "EpisodeEvent",
+    "EpisodeEventKind",
+    "EpisodeIdentityKey",
+    "EpisodeRecord",
+    "EpisodeState",
+    "EpisodeStore",
+]

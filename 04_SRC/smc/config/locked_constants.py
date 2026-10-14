@@ -211,7 +211,7 @@ FRIDAY_EOD_CLOSE_HOUR_UTC = 20  # Force-close all positions at 20:00 UTC Friday 
 # --- Spread grading (ATR-relative, score-tiered — v25 semantics, not point bands) ---
 SPREAD_MAX_ATR = 0.15  # Max spread as fraction of ATR, in points (InpMaxSpreadATR)
 SPREAD_GRADE_MULTIPLIERS = {"A+": 1.5, "A": 1.0, "B": 0.7, "C": 0.5}  # × base spread by grade (v19.7)
-SPREAD_GRADE_SCORE_THRESHOLDS = {"A+": 8, "A": 5, "B": 3, "C": 0}  # Min score per grade (C = below 3)
+SPREAD_GRADE_SCORE_THRESHOLDS = {"A+": 3, "A": 2, "B": 1, "C": 0}  # Min TAG-COUNT score per grade (C = below 1; amended 2026-10-11: confluence tag-count scale, not a 0-10 quality model — supersedes A+:8/A:5/B:3)
 
 # --- Sweep / failed-sweep re-entry guard ---
 SWEEP_GUARD_ZONE_ATR = 0.5  # ATR radius to consider the same sweep level (InpFailedSweepZone)

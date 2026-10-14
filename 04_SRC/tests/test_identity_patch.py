@@ -140,9 +140,13 @@ def test_export_csv_appends_identity_columns(tmp_path):
     lines = path.read_text(encoding="utf-8").splitlines()
     assert lines[0].endswith("model_tags,pillar_path,disp_magnitude_atr,"
                              "original_sl,zone_low,zone_high,signal_data_json,"
-                             "entry_anchor,tp_source")  # appended: E1 + structural TP
+                             "entry_anchor,tp_source,commission_usd,"
+                             "spread_cost_usd,slippage_usd,swap_usd,cost_usd,"
+                             "pnl_net,bars_held,"
+                             "f_timing_label,post_exit_class")  # appended: E1 + structural TP + V1 costs + Track-B
     assert lines[0].startswith("ticket,direction,symbol")  # old order kept
-    assert lines[1].endswith("M1+M5,PASS:1+2+3+4+5;inducement=1.0,1.3,,,,,,")
+    assert lines[1].endswith("M1+M5,PASS:1+2+3+4+5;inducement=1.0,1.3,,,,,,,"
+                             "0.0,0.0,0.0,0.0,0.0,,,,")
 
 
 def test_export_csv_unknown_identity_is_empty_cells(tmp_path):
@@ -155,7 +159,11 @@ def test_export_csv_unknown_identity_is_empty_cells(tmp_path):
     report = SimpleNamespace(trades=[blank])
     path = tmp_path / "trades.csv"
     to_csv(report, path)
-    assert path.read_text(encoding="utf-8").splitlines()[1].endswith(",,,")
+    # Unknown identity cells stay empty; V1 cost legs price at measured
+    # zeros (0.0) with empty net/hold cells on hand-built records; Track-B
+    # fields stay empty (unannotated).
+    assert path.read_text(encoding="utf-8").splitlines()[1].endswith(
+        "0.0,0.0,0.0,0.0,0.0,,,,")
 
 
 def test_bridge_original_sl_equals_placement_sl_and_zone_bounds():
@@ -210,9 +218,14 @@ def test_export_appends_geometry_columns(tmp_path):
     metrics = SimpleNamespace(n_trades=1, n_wins=0, n_losses=1, win_rate=0.0,
                               gross_profit=0.0, gross_loss=0.01, profit_factor=0.0,
                               net_pnl=-0.01, max_drawdown=0.01, avg_win=None,
-                              avg_loss=-0.01)
+                              avg_loss=-0.01,
+                              total_commission_usd=0.0,
+                              total_spread_cost_usd=0.0,
+                              total_slippage_usd=0.0, total_swap_usd=0.0,
+                              total_cost_usd=0.0, net_pnl_after_cost=-0.01)
     full = SimpleNamespace(metrics=metrics, by_trigger={}, by_poi={},
-                           blocked_by_reason={}, trades=[rec])
+                           blocked_by_reason={}, trades=[rec],
+                           by_timing_label={}, by_post_exit_class={})
     to_json(full, jpath)
     trade = json.loads(jpath.read_text(encoding="utf-8"))["trades"][0]
     assert trade["original_sl"] is None  # _trade_record predates geometry
@@ -245,9 +258,14 @@ def test_export_json_carries_identity_keys(tmp_path):
     metrics = SimpleNamespace(n_trades=1, n_wins=0, n_losses=1, win_rate=0.0,
                               gross_profit=0.0, gross_loss=0.01, profit_factor=0.0,
                               net_pnl=-0.01, max_drawdown=0.01, avg_win=None,
-                              avg_loss=-0.01)
+                              avg_loss=-0.01,
+                              total_commission_usd=0.0,
+                              total_spread_cost_usd=0.0,
+                              total_slippage_usd=0.0, total_swap_usd=0.0,
+                              total_cost_usd=0.0, net_pnl_after_cost=-0.01)
     report = SimpleNamespace(metrics=metrics, by_trigger={}, by_poi={},
-                             blocked_by_reason={}, trades=[_trade_record()])
+                             blocked_by_reason={}, trades=[_trade_record()],
+                             by_timing_label={}, by_post_exit_class={})
     path = tmp_path / "report.json"
     to_json(report, path)
     import json

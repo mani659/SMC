@@ -58,7 +58,7 @@ RISK_FROZEN = {
     "FRIDAY_EOD_CLOSE_HOUR_UTC": 20,                # §28.4
     "SPREAD_MAX_ATR": 0.15,                         # §28.5
     "SPREAD_GRADE_MULTIPLIERS": {"A+": 1.5, "A": 1.0, "B": 0.7, "C": 0.5},  # §28.5
-    "SPREAD_GRADE_SCORE_THRESHOLDS": {"A+": 8, "A": 5, "B": 3, "C": 0},    # §28.5
+    "SPREAD_GRADE_SCORE_THRESHOLDS": {"A+": 3, "A": 2, "B": 1, "C": 0},    # §28.5 (tag-count scale, amended 2026-10-11; supersedes 8/5/3)
     "SWEEP_GUARD_ZONE_ATR": 0.5,                    # §28.6
     "SWEEP_GUARD_COOLDOWN_BARS": 4,                 # §28.6
     "RISK_PCT_MIN": 0.5,                            # §28.7

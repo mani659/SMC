@@ -13,7 +13,10 @@ from unittest.mock import Mock, patch
 import pytest
 
 from smc.data.mt5_connector import MT5CallError, MT5Connector
+from smc.live import heartbeat as heartbeat_write
 from smc.live.heartbeat import (
+    HEARTBEAT_PUBLISH_CYCLES,
+    HEARTBEAT_REPLACE_ATTEMPTS,
     HeartbeatWriteError,
     read_heartbeat,
     write_heartbeat,
@@ -348,6 +351,37 @@ def test_heartbeat_persistent_replace_lock_falls_back_in_place(
     assert not (target.parent / "smc_heartbeat.txt.tmp").exists()
 
 
+def test_heartbeat_transient_inplace_lock_recovers_via_retry(
+    tmp_path, monkeypatch, caplog
+):
+    """Regression for the 2026-10-13 live abort: a transient EXTERNAL lock
+    (AV/indexer) blocks both the rename AND the first in-place open, then
+    clears. The in-place retry must recover instead of fail-closing."""
+    target = tmp_path / "MQL5" / "Files" / "smc_heartbeat.txt"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    real_inplace = heartbeat_write._write_in_place
+    calls = {"n": 0}
+
+    def flaky_inplace(t, payload):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise PermissionError(13, "Permission denied")
+        return real_inplace(t, payload)
+
+    monkeypatch.setattr(os, "replace", lambda s, d: (_ for _ in ()).throw(
+        PermissionError(13, "Access is denied")))
+    monkeypatch.setattr(heartbeat_write, "_write_in_place", flaky_inplace)
+    monkeypatch.setattr(time, "sleep", lambda _s: None)
+    with caplog.at_level(logging.WARNING, logger="smc.live.heartbeat"):
+        write_heartbeat(target, 1_000_222, 9)
+
+    assert calls["n"] >= 2                      # first denied, retry won
+    text = target.read_text(encoding="ascii")
+    assert "1000222 9" in text
+    assert "state=running" in text
+    assert "wrote in place" in caplog.text
+
+
 def test_heartbeat_total_publish_failure_raises_after_all_strategies(
     tmp_path, monkeypatch
 ):
@@ -357,7 +391,10 @@ def test_heartbeat_total_publish_failure_raises_after_all_strategies(
     def always_denied(src, dst):
         raise PermissionError(13, "Access is denied")
 
+    inplace_calls = {"n": 0}
+
     def inplace_denied(_target, _payload):
+        inplace_calls["n"] += 1
         raise PermissionError(13, "Access is denied")
 
     monkeypatch.setattr(os, "replace", always_denied)
@@ -368,7 +405,12 @@ def test_heartbeat_total_publish_failure_raises_after_all_strategies(
     with pytest.raises(HeartbeatWriteError) as caught:
         write_heartbeat(target, 1_000_000, 1)
 
+    # in-place now retries the same budget as replace, across full cycles.
+    assert inplace_calls["n"] == (
+        HEARTBEAT_REPLACE_ATTEMPTS * HEARTBEAT_PUBLISH_CYCLES
+    )
     message = str(caught.value)
     assert str(target) in message
     assert "replace_error" in message
     assert "inplace_error" in message
+    assert "publish cycles" in message

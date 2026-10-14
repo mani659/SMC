@@ -39,6 +39,7 @@ from datetime import datetime
 
 from smc.backtest.bar_loop import BarHandler
 from smc.backtest.clock import BarClock
+from smc.backtest.cost_model import CostConfig, CostModel
 from smc.backtest.fill_model import CloseKind
 from smc.backtest.intents import IntentBook
 from smc.backtest.orders import PendingOrderBook
@@ -164,6 +165,12 @@ class RunnerConfig:
     # gate off — a caller enabling spread grading must configure it here).
     timeframe: Timeframe = Timeframe.M5
     spread_price: float = 0.0
+    # V1 cost model (Tier-1, 2026-10-11): measurement configuration, NOT
+    # strategy law — intentionally NOT a locked constant. Default prices
+    # every close at zero cost (legacy zero-cost path reproduces exactly);
+    # research runs set nonzero values explicitly. See
+    # 06_RESEARCH/COST_MODEL_DESIGN.md.
+    cost: CostConfig = field(default_factory=CostConfig)
 
 
 @dataclass(slots=True)
@@ -217,6 +224,13 @@ class BacktestRunner(BarHandler):
         # within an R8-sized clock from signal time.
         self.intents = IntentBook()
         self.config = config if config is not None else RunnerConfig()
+        # V1 cost model (Tier-1, 2026-10-11): bind the position store to a
+        # pricer built from the run's cost config + ledger divisor. Fill
+        # prices are untouched — costs are an additive close ledger only.
+        self.positions.bind_cost_model(
+            CostModel(config=self.config.cost,
+                      pip_value_per_lot=self.config.pip_value_per_lot)
+        )
         # I2 (coherence patch): RUNNING equity — starts at the configured
         # value and moves with realized P/L (see _record_close). Sizing
         # reads this, never the static config, after the first close.
@@ -331,6 +345,7 @@ class BacktestRunner(BarHandler):
                     exit_bar=bar_index,
                     exit_at=bar.timestamp,
                     kind=reason,
+                    exit_spread_price=self._spread_price,
                 ),
                 bar_index=bar_index,
             )
@@ -384,6 +399,7 @@ class BacktestRunner(BarHandler):
                     exit_bar=bar_index,
                     exit_at=bar.timestamp,
                     kind=decision.reason or "risk_exit",
+                    exit_spread_price=self._spread_price,
                 )
                 self._record_close(record, bar_index=bar_index)
             elif decision.action is RiskAction.MOVE_SL:
@@ -430,6 +446,7 @@ class BacktestRunner(BarHandler):
                 signal_data_json=order.signal_data_json,
                 entry_anchor=order.entry_anchor,
                 tp_source=order.tp_source,
+                entry_spread_price=self._spread_price,
             )
             # M4 identity/context capture at trade open: the pending order
             # carries the sweep level + FVG context its candidate was built
@@ -451,7 +468,9 @@ class BacktestRunner(BarHandler):
             self.risk.on_trade_opened()  # re-arm the BE latch for THIS trade
 
     def _apply_physical_closes(self, bar: Candle, bar_index: int) -> None:
-        for record in self.positions.apply_bar(bar, bar_index):
+        for record in self.positions.apply_bar(
+            bar, bar_index, exit_spread_price=self._spread_price
+        ):
             self._record_close(record, bar_index=bar_index)
 
     def _process_entries(self, bar: Candle, bar_index: int, now: datetime) -> None:
@@ -724,7 +743,10 @@ class BacktestRunner(BarHandler):
         self.risk.record_result(win=record.win, at=record.exit_at)
         # I2: running equity moves with realized P/L (currency conversion:
         # raw price×volume × pip value per lot — see current_equity).
-        self._equity += record.realized_pnl * self.config.pip_value_per_lot
+        # V1 costs (Tier-1): equity moves with the NET ledger — gross minus
+        # the close's cost ledger. Identical to legacy when costs are zero.
+        self._equity += ((record.realized_pnl - record.cost_ledger)
+                         * self.config.pip_value_per_lot)
         if record.kind == CloseKind.STOP_LOSS:
             self.risk.record_sl_close(sl_level=record.exit_price, bar_index=bar_index)
         # M4 sweep plumbing: a losing close on a trade whose candidate

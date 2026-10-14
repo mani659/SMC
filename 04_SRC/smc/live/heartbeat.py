@@ -63,8 +63,17 @@ WATCHDOG_STALE_TIMEOUT_SECONDS = 5.0
 # before falling back to an in-place overwrite (which needs only write
 # sharing, not delete sharing). Operational timing only — not a trading
 # constant.
+#
+# Transient external locks (2026-10-13): a lock that is NOT the EA — e.g. an
+# antivirus/indexer scan holding the file for a few hundred ms to ~2s — can
+# block BOTH the rename and the in-place open. Live abort that day: 5 replace
+# attempts + a single-shot in-place open all hit PermissionError, then the
+# clean-shutdown write 1–2s later succeeded. Both strategies therefore retry
+# the same way, and the whole publish is retried a few cycles so a lock that
+# outlasts one strategy still cannot fail-closed a healthy session.
 HEARTBEAT_REPLACE_ATTEMPTS = 5
 HEARTBEAT_REPLACE_BACKOFF_SECONDS = 0.02
+HEARTBEAT_PUBLISH_CYCLES = 3
 
 STATE_RUNNING = "running"
 STATE_SHUTDOWN = "shutdown"
@@ -115,18 +124,20 @@ def write_heartbeat(
     Strategy (Windows coexistence — 2026-10-08):
 
     1. Write the full payload to ``<target>.tmp``.
-    2. Atomically rename it over the target (``os.replace``); if that raises
+2. Atomically rename it over the target (``os.replace``); if that raises
        a transient sharing violation (the EA is mid-read), retry a few times
        with a short backoff.
     3. If the rename still fails, fall back to an IN-PLACE overwrite of the
        target (open + truncate + write + flush). In-place writes need only
        write sharing, not delete sharing, so they survive a read lock that
-       blocks the rename.
-
-    Only when the temp write, every rename attempt, AND the in-place fallback
-    all fail does this raise :class:`HeartbeatWriteError` — a single transient
-    'Access is denied' collision must NOT fail the session closed. Operators
-    still get the real call site (target + temp) in the message/events.log.
+       blocks the rename. The in-place path retries the same way (2026-10-13),
+       and the whole publish is retried a few cycles, so a brief external
+       lock (AV/indexer) still cannot fail-closed a healthy session.
+    4. Only when both strategies are denied for the full retry budget does
+       this raise :class:`HeartbeatWriteError` — a single transient
+       'Access is denied' collision must NOT fail the session closed.
+       Operators still get the real call site (target + temp) in the
+       message/events.log.
     """
     target = Path(path)
     tmp = target.with_name(target.name + ".tmp")
@@ -141,39 +152,60 @@ def write_heartbeat(
 
     attempts = max(1, int(replace_attempts))
     last_replace_exc: OSError | None = None
-    for attempt in range(1, attempts + 1):
-        try:
-            os.replace(tmp, target)
-            return
-        except OSError as exc:
-            last_replace_exc = exc
-            if attempt < attempts:
-                time.sleep(max(0.0, float(backoff_seconds)))
+    inplace_attempts = attempts
+    last_inplace_exc: OSError | None = None
+    cycles = max(1, int(HEARTBEAT_PUBLISH_CYCLES))
+    for _cycle in range(1, cycles + 1):
+        # --- Strategy 1: atomic replace (rename), retried --- #
+        for attempt in range(1, attempts + 1):
+            try:
+                os.replace(tmp, target)
+                return
+            except OSError as exc:
+                last_replace_exc = exc
+                if attempt < attempts:
+                    time.sleep(max(0.0, float(backoff_seconds)))
 
-    # Rename blocked (EA read lock / sharing violation). Fall back to an
-    # in-place overwrite: needs write sharing only, so it coexists with an
-    # active reader. Logged as a recovery, never a fail-closed.
-    try:
-        _write_in_place(target, payload)
-        try:
-            tmp.unlink(missing_ok=True)
-        except OSError:
-            pass
-        logger.warning(
-            "heartbeat atomic replace blocked after %d attempts; wrote in "
-            "place target=%s temp=%s last_replace_error=%r",
-            attempts,
-            target,
-            tmp,
-            last_replace_exc,
-        )
-        return
-    except OSError as exc:
-        raise HeartbeatWriteError(
-            f"heartbeat publish failed after {attempts} replace attempts and "
-            f"in-place fallback target={target} temp={tmp}: "
-            f"replace_error={last_replace_exc!r} inplace_error={exc!r}"
-        ) from exc
+        # --- Strategy 2: in-place overwrite, ALSO retried --- #
+        # The rename needs delete sharing; in-place needs only write sharing,
+        # so it coexists with an active reader. A transient external lock
+        # (AV/indexer, ~0.2–2s) can block both, so this retries the same way
+        # rather than single-shot raising.
+        for attempt in range(1, inplace_attempts + 1):
+            try:
+                _write_in_place(target, payload)
+            except OSError as exc:
+                last_inplace_exc = exc
+                if attempt < inplace_attempts:
+                    time.sleep(max(0.0, float(backoff_seconds)))
+                continue
+            try:
+                tmp.unlink(missing_ok=True)
+            except OSError:
+                pass
+            logger.warning(
+                "heartbeat atomic replace blocked after %d attempts; wrote "
+                "in place (attempt %d/%d) target=%s temp=%s "
+                "last_replace_error=%r",
+                attempts,
+                attempt,
+                inplace_attempts,
+                target,
+                tmp,
+                last_replace_exc,
+            )
+            return
+        # Both strategies were denied for a full retry budget this cycle:
+        # pause briefly and re-try the whole publish before failing closed.
+        if _cycle < cycles:
+            time.sleep(max(0.0, float(backoff_seconds)) * 5)
+
+    raise HeartbeatWriteError(
+        f"heartbeat publish failed after {cycles} publish cycles "
+        f"({attempts} replace + {inplace_attempts} in-place attempts each) "
+        f"target={target} temp={tmp}: "
+        f"replace_error={last_replace_exc!r} inplace_error={last_inplace_exc!r}"
+    ) from last_inplace_exc
 
 
 def _write_in_place(target: Path, payload: str) -> None:

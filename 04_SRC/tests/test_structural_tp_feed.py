@@ -296,7 +296,13 @@ class TestTpSourceThreading:
         to_csv(report, csv_path)
         to_json(report, json_path)
         header = csv_path.read_text(encoding="utf-8").splitlines()[0]
-        assert header.endswith("entry_anchor,tp_source")  # appended column
+        # Appended-column contract: old columns keep order, new columns land
+        # at the tail (V1 cost ledger appended after tp_source, Track-B
+        # annotations after costs).
+        assert "entry_anchor,tp_source," in header
+        assert header.endswith(
+            "commission_usd,spread_cost_usd,slippage_usd,swap_usd,"
+            "cost_usd,pnl_net,bars_held,f_timing_label,post_exit_class")
         import json as _json
         payload = _json.loads(json_path.read_text(encoding="utf-8"))
         assert payload["trades"][0]["tp_source"] == "structural_swing"

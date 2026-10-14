@@ -166,6 +166,7 @@ class PipelineEngine:
         order_manager: OrderManager | None = None,
         matrix: CompatibilityMatrix = DEFAULT_MATRIX,
         symbol: str = "XAUUSD.x",
+        episode_store=None,
     ) -> None:
         # I1 (coherence patch): ONE §5 state machine instance. The pipeline
         # and the engine must share the same machine — no dual-machine
@@ -189,6 +190,7 @@ class PipelineEngine:
         self.router = router if router is not None else TriggerRouter(matrix=matrix)
         self.order_manager = order_manager
         self.symbol = symbol
+        self.episode_store = episode_store
         self._episodes: dict[str, _PoiEpisode] = {}
         self._armed_order: list[POI] = []  # M4: arm-order registry for tracked_pois()
 
@@ -280,6 +282,32 @@ class PipelineEngine:
             arm_bar=arm_bar, posture=posture, arm_candle_ts=arm_candle_ts)
         if poi.id not in {p.id for p in self._armed_order}:
             self._armed_order.append(poi)
+        if self.episode_store is not None:
+            try:
+                self.episode_store.record_event(
+                    "armed",
+                    poi=poi,
+                    ts=arm_candle_ts,
+                    bar_index=arm_bar,
+                    data={
+                        "poi_id": poi.id,
+                        "zone_low": poi.zone.bottom,
+                        "zone_high": poi.zone.top,
+                        "posture": posture.value if hasattr(posture, "value") else str(posture),
+                    },
+                )
+                self.episode_store.record_event(
+                    "posture_classified",
+                    poi=poi,
+                    ts=arm_candle_ts,
+                    bar_index=arm_bar,
+                    data={
+                        "poi_id": poi.id,
+                        "posture": posture.value if hasattr(posture, "value") else str(posture),
+                    },
+                )
+            except Exception:  # noqa: BLE001 — observability must never break product decision
+                pass
 
     def episode(self, poi: POI) -> _PoiEpisode | None:
         """Engine bookkeeping for a POI (None when not armed through this engine)."""

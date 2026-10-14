@@ -1,5 +1,430 @@
 # SESSION HANDOFF — SMC BOT
 
+## 2026-10-14 — Mode A LTF-return selection-breadth amendment locked (docs-only; pending Architect acceptance)
+
+**Status: COMPLETE — the ONE permitted amendment before one final offline feasibility measure, per the amendment directive. Docs only: `00_LOCKED/MODE_A_LTF_RETURN_SELECTION_BREADTH_AMENDMENT.md`; no `04_SRC/smc` edit, no test change, no `locked_constants.py` edit, no frozen artifact touched, product wiring NOT started, `LOGIC_CHANGED: NO`. The prior measure's INCONCLUSIVE verdict is NOT reinterpreted.**
+
+- **What it changes (design only):** the singular-nearest §4b/§4c selection rule is replaced by ONE deterministic broadened representation: **candidate set → filter → rank → exactly ONE selection**. Candidate set = ALL M5 FVGs of the product's own detector (validity verbatim, no new maturity rule/constant), direction-matched, formation completed by the true proof close, wholly inside the FIXED [proof−48, proof] window (no wider span exists). Filter = the chosen near edge strictly protected-side of the true proof-bar close (existing semantics). Rank = R1 smallest completed-formation bar distance → R2 smallest |near edge − close(proof)| → R3 more recent formation end → R4 stable detector/source order. If no candidate survives → `STRUCT_UNAVAILABLE`. At most one concurrent candidate/order/ticket per episode.
+- **Origin OB unchanged in role:** clearly separated, REPORT-ONLY alternate under the product's own R1 §3.1 pairing applied to the SELECTED FVG; never a fallback limit, never stacked/blended, never in any verdict or kill computation.
+- **Verdict redesign (frozen numeric gates, BEFORE any script):** the old generic `STRUCT_UNAVAILABLE` path is split — TRUE data/provenance gap (`DATA_GAP_PROVENANCE`) vs representation-coverage failure (`NO_STRUCTURE_SELECTED`, named terminal reasons a–e). First-fired gates: control-evaluability < 3 → INCONCLUSIVE; true-gap rate > 0.10 → INCONCLUSIVE; coverage < 0.70 → FAIL_COVERAGE; near-mass (≤ 1.0 ATR over full P1) < 0.50 → FAIL_NO_NEAR_MASS; structured median > 2.0 ATR → FAIL_STILL_FAR; retention 0 with 3 evaluable → FAIL_BASELINE; paper-expires > 0.85 at n ≥ 20 → FAIL_UNFILLABLE; else PASS_FEASIBILITY (Architect discussion only, never a ship decision). A failure retires active Mode A LTF-return representation work ONLY — Mode A, SMC detection, POI/sweep/proof evidence and the project are NOT declared invalid.
+- **Frozen non-changes + recorded impurity:** HTF context label-only (no HTF-edge limit input), FR-2 distal stop, engine §5, rest lifetime, FR-3/R7/session/§28, trigger/pillar/POI/routing, no market orders; the possible coexistence of the selected M5 limit with FR-2/HTF-oriented stop geometry is recorded as a measure impurity — entry-representation assessment only, no stop redesign authorized.
+- **Prohibitions (binding, §7):** no 48-bar widening, no sequential fallback, no post-hoc threshold tuning, no HTF-edge limit under a new name, no multi-candidate per episode, no hybrid FVG/OB, no stop-logic change in this measure, no product/live/paper wiring from pass OR fail. Self-audit (§8): one bounded final selection-breadth experiment, not a new strategy family.
+- **NEXT ACTION: Architect acceptance → ONE final offline feasibility measure per this amendment (its own dated read-only task; NO further amendment before that measure runs as-is; re-frozen kills are in the amendment, not a future decision).**
+
+## 2026-10-14 — LTF-return feasibility measure executed (frozen verdict: INCONCLUSIVE; read-only research)
+
+**Status: COMPLETE — the accepted design's §6 gate run as instructed (PRIMARY = M5 displacement-FVG singular-nearest; OB = report-only alternate, no hybrid; strict protected-side rule or STRUCT_UNAVAILABLE; no HTF-edge input; intersection LABEL only; FR-2/§5/rest-lifetime reused exactly). Read-only; 8 new tests; full suite green; dual-run byte-identical; `locked_constants.py` diff = only the pre-existing dated spread-grade amendment; no production file changed; `LOGIC_CHANGED: NO`; no post-hoc parameter change.**
+
+- **Method (frozen per design + acceptance):** base rows reused row-for-row from the entry-rep artifacts (true frame +6018 asserted); structure detection via the product's OWN FVG detector (`smc.detection.fvg_detector.detect_fvgs`, locked §3 semantics) + the product's R1 §3.1 origin-OB pairing, imported read-only; selection = THE singular nearest-the-proof direction-matched FVG inside the reused [proof−48, proof] window, limit = near edge IFF strictly on the protected side of the true proof close, else the same-formation OB report-only, else STRUCT_UNAVAILABLE (fail-closed, never inferred); retest = product rest lifetime, touch-only paper (SL/TP never invented); HTF-zone intersection = label column only (114 True / 33 False on the found rows; no filter).
+- **Build-time defect caught by tests before final artifacts:** the first draft fell through to the NEXT-nearest FVG when the nearest failed strict side — the frozen design fixes the primary as the SINGULAR nearest formation; corrected (implementation fixed, tests passed 8/8) before the finalists were written; two corrected runs byte-identical.
+- **Results (frozen first-fired order):** STRUCT_FOUND 147/268 (54.9%: FVG 119 + OB-alt 28); **STRUCT_UNAVAILABLE 121 (45.1%)** → `data_gap_rate_p1` 0.451 → **kill 1 (INCONCLUSIVE) FIRED** — the verdict denominator is the full frozen P1 population and 45.1% of it has no honest geometry under the frozen selection rule; kill 3 also fires in the record (≤1.0 ATR over all P1 = 34.7% < 50%). On the readable subset the story works: median gap **0.638 ATR** at proof (63.3% ≤ 1.0 over the 147 found rows), the OB-alternate subset even tighter (median 0.26), and the retired control baseline reproduced (median 8.275, 4.1% ≤ 1) — an order-of-magnitude representation improvement ON THE READABLE SUBSET, honestly unreadable on the full population. Gap at the arm bar deepens again (median 15.62 ATR — waiting loses the structure, consistent with prior studies). Paper (touch-only): 126 FILLED_NO_RESOLVE / 21 EXPIRED (14.3% of 147 path rows) / 121 DATA_GAP. **Fills: 1/2 evaluable retained (poi-014146 via OB-alternate, gap 0.39); poi-073511 FVG expired; poi-047805 (C-trigger ending-diagonal leg) STRUCT_UNAVAILABLE — kill 4's 3-evaluable gate unsatisfiable → the kill is UNPROVABLE on this window, disclosed rather than forced.**
+- **Verdict (exact first-fired): INCONCLUSIVE** (`[INCONCLUSIVE (0.451 > 0.30), FAIL_NO_NEAR_MASS (0.347 < 0.50)]`) — NOT PASS_FEASIBILITY and NOT a family kill: the near-market representation demonstrably works where geometry is honestly readable; the §4b singular-selection rule cannot read 45.1% of rows, and neither substituting geometry nor widening the window was permitted by the acceptance.
+- **Artifacts:** `06_RESEARCH/scripts/ltf_return_feasibility_measure.py` · note `06_RESEARCH/LTF_RETURN_FEASIBILITY_NOTE.md` · data `06_RESEARCH/results/ltf_return_feasibility/{rows.csv, summary.json}` (278 rows; + `_run2` determinism mirror) · tests `04_SRC/tests/test_ltf_return_feasibility_measure.py`.
+- **NEXT ACTION: Architect review of the feasibility result** — re-rating §4b selection breadth / re-pinning the window / stopping are ALL design-amendment decisions for a dated follow-up with re-frozen kills; none proposed or authorized by this measure.
+
+## 2026-10-14 — OWNER RULING + Mode A LTF-return entry design locked (docs-only; pending Architect acceptance)
+
+**Status: COMPLETE — owner ruling (binding) + one dated design lock per the tightened directive. Docs only: `00_LOCKED/MODE_A_LTF_RETURN_ENTRY_DESIGN.md`; no `04_SRC/smc` edit, `locked_constants.py` untouched, product wiring NOT started, `LOGIC_CHANGED: NO`.**
+
+- **Owner ruling recorded:** Mode A entry identity = **HTF (H4/H1) thesis + location CONTEXT → M5 LTF proof (TIMING) → entry from a deliberately defined LTF RETURN STRUCTURE** — NOT a price derived from the HTF zone proximal edge. **Proximal-edge family RETIRED from active experimentation** (FR-3.1 edge limits, RL-1/2/3, prior reactive-admission R1–R6) — control-evidence only; no parameter retune of any retired family.
+- **Design lock (one family, not a menu):** PRIMARY structure = the nearest **M5 displacement FVG of the proof leg** (3-candle gap, all bars within the reused H_PROOF=48 lookback, nearest-the-proof formation); clearly-secondary ALTERNATE = the leg's origin OB (product's own Trigger-F shape, read-only import). **Limit rule (one line): limit = the near edge of the chosen M5 return structure, iff strictly on the protected side of the true proof-bar close; else `STRUCT_UNAVAILABLE` (fail-closed, no market-order fallback).** Stop = structure's far edge via the unchanged FR-2 `structural_sl` path; invalidation = engine §5 semantics; retest window = the product's own rest lifetime (reused, no new constant); expiry = no touch in-window. Episode identity/one-shot: attributes only, one candidate per first proof, the one-shot consumes at first placement; episode store stays observability-only.
+- **Pre-registered feasibility measure (frozen now, §6):** same P1(268)/P0(10)/P2 + verified frame; metrics = structure mass, near-market presentation (gap_atr vs proof/arm; ≤1.0/≤2.0 report bands), FVG/OB strata, DATA_GAP, fill overlap, optional touch-only paper EXPIRED; CONTROL proximal-edge column scored identically. **Frozen kills (first-fired):** DATA_GAP>30% → INCONCLUSIVE; median gap_atr>2.0 → FAIL_STILL_FAR; share≤1.0<50% → FAIL_NO_NEAR_MASS; 0/3 fill-retained (evaluable) → FAIL_BASELINE; paper EXPIRED>85% at n≥20 → FAIL_UNFILLABLE; else PASS_FEASIBILITY (discussion unlock only).
+- **Compatibility:** FR-3 zone gate / R7 / session / §28 unchanged — NOT quietly carved: if ever wired, the zone-membership gate carve-out for HTF-context is an explicit Architect ruling (§8 Q1). Retired family appears only as the frozen control baseline.
+- **Open questions (5):** gate/R7 carve-out scope; FVG-first vs OB-first precedence; FVG maturity rule (mitigation test or not); M5-only confirmation; rest-lifetime coupling.
+- **NEXT ACTION: Architect acceptance → the offline LTF-return feasibility measure (its own dated read-only task, kill criteria frozen above; no ship on PASS alone).**
+
+## 2026-10-14 — Entry-representation offline measure executed (verdicts: RL-1/RL-3 FAIL_STILL_FAR, RL-2 FAIL_NO_NEAR_MASS; research only)
+
+**Status: COMPLETE — the accepted design's §5 measurement gate run as instructed (PRIMARY under test: RL-1 pullback_shelf; RL-2/RL-3 side-by-side; no stacking; TP/SL unchanged — limit only). Read-only counterfactual limits on the frozen 6m populations; 8 new tests; full suite green; dual-run byte-identical; `locked_constants.py` diff = only the pre-existing dated spread-grade amendment; `LOGIC_CHANGED: NO` (no `04_SRC/smc` decision-path edit — the only `04_SRC` addition is the test file; **no rule earns PASS_MEASURE — no implement discussion unlocked**).**
+
+- **Method (frozen per design §5 + measure pins):** reused the true-frame entry-rep artifacts (P1 = 268; P0 = 10) + the reactive module's grid/ATR/edge helpers (never forked); per row × rule {CONTROL, RL-1, RL-2, RL-3}: counterfactual limit, gap_atr vs true proof close (primary) + arm close (secondary), ≤1.0/≤2.0 reporting bands (never gate), RL-3 present-condition (NAMED `market_reentered_zone` + ≤1.0-ATR proximity within the R8 lifetime), paper paths (P0 recorded SL/TP via near-miss semantics; P1 touch-only, SL/TP never invented). k=1.0, the 50% transform, the 96-bar leg lookback, and all kill thresholds frozen in the script header BEFORE the run and test-pinned; no post-hoc tuning.
+- **Results:** CONTROL baseline reproduced (median 8.27, 4.1% ≤ 1 ATR, 2/3 fills retained, 13.1% expired). **RL-1: FAIL_STILL_FAR (median 7.73; 12.3% ≤ 1 ATR)** — its own guard rails bind: 235/268 fallback to the CONTROL edge (194 × guard3 proof-extreme overflow, 41 × guard2 tunneling), so the frozen rule barely moves the geometry. **RL-2: FAIL_NO_NEAR_MASS (FIRST-FIRED; 3.4% ≤ 1 ATR)** — but the evaluation is INCONCLUSIVE-grade: **73.5% DATA_GAP** (197/268 rows have no proximal-edge touch inside the 96-bar lookback — the displacement leg is unmeasurable at the frozen pin; the ≤ 1-ATR share is computed over the full population); the usable subset (n=71: median 4.77, P0 0.75) is suggestive, not readable as a verdict; nothing was widened to rescue it. **RL-3: FAIL_STILL_FAR** (limit unchanged → CONTROL-identical gap stats; its own mechanism shows 81/268 presented, median 12 bars to presentation, 187 expire un-presented, 98.8% of the presented fill within their remaining lifetime — presentation is the bottleneck, mirroring the closed measure's R3 finding).
+- **Fill overlap:** 2/3 retained under EVERY rule — nothing destroys the baseline geometry; the fail is "still far", not "baseline broken". (Disclosure: lifetimes re-anchored at the proof/first-presentation bar, not the near-miss placed-bar ledger — 1/3 control fill reads EXPIRED here that read SL_HIT there; stated plainly in the note.)
+- **Artifacts:** `06_RESEARCH/scripts/entry_representation_measure.py` · note `06_RESEARCH/ENTRY_REPRESENTATION_MEASURE_NOTE.md` · data `06_RESEARCH/results/entry_representation_measure/{rows.csv, summary.json}` (1,112 rows = 278 × 4; + `_run2` determinism mirror) · tests `04_SRC/tests/test_entry_representation_measure.py`.
+- **NEXT ACTION: Architect review of the representation measure.** All three accepted candidates fail as frozen; any follow-up (amending RL-1's guard rails, widening RL-2's leg span, or stopping on the fill-retention result) must arrive as its own dated design amendment — none proposed or authorized by this measure.
+
+## 2026-10-14 — Entry-representation design locked (docs-only; DESIGN_LOCKED pending acceptance)
+
+**Status: COMPLETE — Lead Architect directive after the entry-representation study PASS. Docs only: design note `00_LOCKED/ENTRY_REPRESENTATION_DESIGN.md`; no `04_SRC/smc` edit, `locked_constants.py` untouched, product limit change NOT started, `LOGIC_CHANGED: NO`.**
+
+- **Purpose:** propose exactly 3 alternative limit-construction rules confronting the measured gap (P1 median ~8.27 ATR at proof; 86.6% zone-edge & >1 ATR away; waiting to arm deepens the gap), each offline-measurable with pre-registered kill criteria BEFORE any implement. Policy paper, not a limit change.
+- **Rules:** RL-1 `pullback_shelf` (PRIMARY rec; limit = true-proof-bar close ± 1.0×ATR with three guard rails, own replacement gate, fail-closed fallback to the FR-3.1 edge) — mechanical; RL-2 `retrace_mid` (parameter-free 50% retracement of the measured displacement leg from the proximal edge toward the leg extreme) — mechanical; RL-3 `edge_plus_wait` (FR-3.1 limit VERBATIM, no new formula; presentation deferred to the first bar inside the R8 lifetime where the NAMED `market_reentered_zone` rule AND a ≤1.0-ATR proximity guard hold; R9 machinery unchanged) — lifecycle/placement.
+- **Measure pre-registered (section 5, frozen):** same P0/P1/P2 populations + verified frame; per-rule median gap_atr at proof (primary) + arm (secondary), ≤1.0/≤2.0 reporting bands (bands never gate), fill overlap with the 3 control fills, paper EXPIRED under frozen near-miss semantics, fallback counts. **Frozen kills (first-fired): median ≥ 6.0 → FAIL_STILL_FAR; share ≤ 1.0 < 10% → FAIL_NO_NEAR_MASS; 0 fill overlap (evaluable) → FAIL_BASELINE; paper EXPIRED > 90% at n ≥ 20 → FAIL_UNFILLABLE; DATA_GAP > 20% → INCONCLUSIVE; else PASS_MEASURE.** k=1.0 and the 50% transform are frozen NOW; no post-run tuning.
+- **Stance:** representation first, then admission (recommended; the R4 proximity guard evaluated the very input this design reworks). The FAIL_TIGHT admission measure stays CLOSED; RL-3 does not reopen it.
+- **Non-goals held:** no mid-zone fishing (all limits are fixed transforms of measured structure), no market-order shape (RL-1's protected-side guard), no Mode B/ML, no proactive pre-sweep limits, no expectancy claims.
+- **Open questions (5):** primary rule ratification; structural TP coupling under moved limits; OB distal vs zone distal stop reference; rule layering/exclusivity; sequencing of the H4 frame-residual re-run decision feeding presentation-time metrics.
+- **NEXT ACTION: Architect acceptance → the offline representation measure (its own dated read-only task) for the chosen primary rule.**
+
+## 2026-10-14 — Entry-representation study executed (VERDICT_FAMILY: BOTH; research only)
+
+**Status: COMPLETE — Lead Architect tightened directive 2026-10-14 (admission measure CLOSED, not re-run/retouched). Read-only diagnostics: why do entry limits sit far from the post-impulse market? 14 new tests, suite green; dual-run byte-identical; `locked_constants.py` diff = only the pre-existing dated spread-grade amendment; `LOGIC_CHANGED: NO` (no `04_SRC/smc` decision-path edit — the only `04_SRC` addition is the test file; no rule softened; no implement).**
+
+- **Question:** classify the limit-vs-market gap as MECHANICAL / LIFECYCLE / BOTH / INCONCLUSIVE, distributions + stratified counts + max-5 hypotheses (each "NOT implemented in this task").
+- **Populations (frozen):** P0 = the 10 frozen product routes; P1 = 268 armed+coincident rows of the frozen admission artifacts, reused row-for-row; P2 (report-only) = the 138 rows that failed the admission's R4 only — exactly the published count.
+- **Frame ruling (the critical method fact):** all artifact bar columns (reactive `proof_bar`/`armed_bar`, candidates `first_present_bar`) are EXEC-frame; true grid = exec + 6018 (the parent measure's own asserted offset, ts-verified on every P0 route and sampled P1 episodes). All gap math here is true-frame; the closed measure's own presentation columns are NOT reused.
+- **RESULTS (primary reference = true proof-bar close):** median gap P1 = **8.27 ATR** (21.76 units; p25 4.50 / p75 14.02) vs P0 routes 5.80; only **4.1%** of P1 rows ≤ 1.0 ATR; gap deepens by the arm bar (median 13.8 ATR) — nothing recovers toward the zone-edge limit; **VERDICT_FAMILY: BOTH** — mech 86.6% (232/268 zone-edge limit > 1 ATR away at proof; the on-edge anchored shape dominates), life 23.9% (64/268 armed-after-proof, exact published-count cross-check). Strata: routed entries (market-relative) median 3.24 ATR / 22% ≤ 1 vs 8.61 / 2% for the zone-edge fallback; trigger F farthest (8.70); zone width does NOT separate the strata (H5 not supported here).
+- **Control fills (n=3):** all three sit at gap_atr_proof 1.28 / 1.68 / 2.25 — the geometry tail that fills.
+- **Instrument residual disclosed (measure stays CLOSED):** the closed admission measure's market geometry (presentation columns, `atr_at_proof`) evaluated at grid index `first_coinc_bar − 6018` — 6018 slots earlier than its own published timestamps (verified by exact ts comparison). Quantified by disclosure columns: 18/268 rows change side of the 1-ATR line between frames (≤1 ATR: 4.1% true vs 2.6% shifted). No verdict/rule/threshold re-derived; re-running the closed measure on the verified frame = its own dated Architect decision.
+- **Artifacts:** `06_RESEARCH/scripts/entry_representation_study.py` · note `06_RESEARCH/ENTRY_REPRESENTATION_NOTE.md` · data `06_RESEARCH/results/entry_representation/{rows.csv, summary.json}` (+ `entry_representation_run2` determinism mirror) · tests `04_SRC/tests/test_entry_representation_study.py`.
+- **NEXT ACTION: Architect review of entry representation only** — any representation redesign arrives as its own dated design + pre-registered rules before code; the H4 frame residual is recorded for a separate decision.
+
+## 2026-10-13 — Offline reactive-admission measure executed (FAIL_TIGHT; research only)
+
+**Status: COMPLETE — owner plan binding step 4's §5 measurement gate. Read-only counterfactual: R1–R6 applied as a fail-closed classifier on the frozen 6m artifacts; 35 new tests, suite **1097 passed**; dual-run byte-identical; `locked_constants.py` diff = only the pre-existing dated spread-grade amendment; `LOGIC_CHANGED: NO` (no `04_SRC/smc` decision-path edit — the only `04_SRC` addition is the test file; no gate loosened; no M15; no ML). Nothing authorizes live wiring.**
+
+- **Question:** does the accepted reactive rule set admit enough armed+coincident candidates to justify an implement prompt, without destroying the product's baseline paths? Killed-or-carry per the design's own §5.3 thresholds.
+- **Method (frozen in the script header):** the coincidence study's own 585 rows re-used row-for-row (one would-be candidate per episode at its FIRST proof); populations asserted 268 (armed+coincident) / 208 (validated-in-packs) / 109 (other); R1 arm-at-or-before-proof; R2 aligned completion; R3 return-to-zone within 20 bars of proof INCLUDING the proof bar; R4 presentation = first bar satisfying the NAMED rule `market_reentered_zone` (imported) + 1.0-ATR proximity; R5 chase 1.5×ATR + product sessions + engine-true touch-first violation semantics; R6 one-shot consumed only by a route presented strictly before the presentation bar; armed-record refined bounds everywhere (`zone_source=armed_record` on all 268); ATR = SMA(TR,14) measure convention; paper fill via the near-miss frozen helpers (imported, control-reproduced there); missing field → FAIL-CLOSED + DATA_GAP (never invented).
+- **Funnel (Pop 1 = 268):** 204 armed at proof (64 armed AFTER proof → proactive mass) → 146 return in window (58 no return) → 8 pass proximity (138 `limit_far_from_market` = the near-miss representation gap in rule form) → 5 exclusions (zone_violated 4, session+violated 1) → **N_would_admit = 3**; first-fail sums reconcile exactly (64+58+138+5+3 = 268), DATA_GAP rate 0.00.
+- **Overlap:** 0/16 routes, 0/3 control fills; all 3 fill rows analytically evaluable → the rule replaces the baseline path rather than generalizing it (their proofs predate their arms — nothing proactive is licensed at those moments; one fill also fails the proximity guard at its own presentation).
+- **Verdict (frozen order): FAIL_TIGHT** — `kill1_under_selective` (3 < 8) + `kill3_zero_control_overlap`, both recorded. Per the design the reactive-admission path AS WRITTEN is killed; any redesign must come as its own dated proposal with pre-registered rules. The one live seam worth carrying to that design: 8 of 146 returned theses survive the proximity funnel.
+- **Secondary (tiny n, disclosed):** the 3 admits all touched their would-be limit inside the product rest lifetime (FILLED_NO_RESOLVE — SL/TP never invented); EXPIRED rate 0.0 (n=3) — nothing inferable. Pop-2/3 phase-2 report columns (R2–R6 only): 11/208 and 3/109 — REAL mass, same shape, no decision taken.
+- **Integrity:** populations asserted exactly; warm-up offset 6018 asserted against the loaded grid (42,296 M5 bars); dual-run `rows.csv` + `summary.json` byte-identical (no wall-clock in the summary); kill-criterion evaluator branch-tested completely.
+- **Two build-time defects caught and fixed before the final artifacts (tests caught them, not luck):** the named rule compares direction by ENUM identity so a string silently disabled its limit-touch path (and the intermediate enum conversion then leaked into our own string-comparing helpers, flipping LONG→SHORT on the violation walk — fixed by keeping strings everywhere except the single rule call site); artifact writing bypassed the `--out-dir` argument, exposed by the dual-run determinism check.
+- **Artifacts:** `06_RESEARCH/scripts/reactive_admission_measure.py` · note `06_RESEARCH/REACTIVE_ADMISSION_MEASURE_NOTE.md` · data `06_RESEARCH/results/reactive_admission_measure/{rows.csv, summary.json}` (+ `_run2` determinism mirror) · tests `04_SRC/tests/test_reactive_admission_measure.py`.
+- **NEXT ACTION: Architect review of the measure only** (no redesign, no implement prompt, no threshold discussion until the Architect rules). Measurement threads otherwise unchanged (entry representation; episode store).
+
+## 2026-10-13 — Reactive Admission Design Lock (docs-only; DESIGN_LOCKED pending Architect acceptance)
+
+**Status: DESIGN_LOCKED (owner plan binding step 4). Docs-only: no `04_SRC` code, no tests, `locked_constants.py` diff empty, `LOGIC_CHANGED: NO`. Implementation deliberately NOT started — design and pre-registered measure required before any code.**
+
+- **Design:** `00_LOCKED/REACTIVE_ADMISSION_DESIGN.md` (sections 1–9 + return block).
+- **Purpose:** Solves the conversion gap exposed by the coincidence study (585/1093 coincidences @ H=48, but only 16 routes and 3 fills on armed geometry; 74% on un-armed geometry) while respecting the near-miss finding (`PLACEMENT_NOT_PRIMARY`: placement gates are not destructive, candidate limits are too far from market).
+- **Mechanism:** Chosen Primary Mechanism = Option C (phased: scan continuation under §5a for Phase 1; parallel candidate minting into shadow logs for Phase 2).
+- **Rule set (R1–R6):**
+  - $R_{\text{thesis}}$: HTF episode state (`ARMED`/`SEEKING` in Phase 1; unviolated `VALIDATED` in Phase 2).
+  - $R_{\text{proof}}$: Directional LTF proof (directional sweep of SSL/BSL or Stage-3 trigger A–F completion).
+  - $R_{\text{timing}}$: Proof within $H_{\text{proof}}=48$ M5 bars of thesis anchor; return within $H_{\text{return}}=20$ M5 bars of proof.
+  - $R_{\text{location}}$: Return-to-structure geometry (`market_reentered_zone` within refined bounds; limit within $1.0\times\text{ATR}$ of market).
+  - $R_{\text{exclusion}}$: Invalidation filters (no chase $>1.5\times\text{ATR}$, allowed sessions, no adverse HTF close).
+  - $R_{\text{one\_shot}}$: Episode-level one-shot invariant (§11: 1 episode $\rightarrow$ 1 route $\rightarrow$ 1 execution).
+- **Pre-registered kill criteria:** (1) $N_{\text{would\_admit}} < 8$ on armed-coincident; (2) $N_{\text{would\_admit}} \ge 25$ but counterfactual $\text{EXPIRED\_NO\_FILL} > 85\%$; (3) 0 control overlap; (4) $N_{\text{would\_admit}} > 150$ (indiscriminate flood).
+- **Bans upheld:** No gate loosening, no Mode B, no ML, no automatic route of all 585, no proactive placement in V1 admission, no Redis.
+- **NEXT ACTION: Architect acceptance → offline admission measurement script (counterfactual admits over 6m) | store hook completion.**
+
+## 2026-10-13 — Episode Store V1 Observability Implementation (PASS)
+
+**Status: COMPLETE — owner plan step 3 implementation. V1 observability-only store shipped: `04_SRC/smc/orchestration/episode_store.py`, unit + integration tests in `04_SRC/tests/test_episode_store_v1.py` (11 tests, suite **1062 passed**), short parity verified (trades.csv byte-identical, report.json semantically identical), `locked_constants.py` untouched, `LOGIC_CHANGED: NO` (decision paths untouched).**
+
+- **Module:** `smc/orchestration/episode_store.py` providing `EpisodeStore`, `EpisodeRecord`, `EpisodeEvent`, `EpisodeIdentityKey`, `EpisodeState`, `EpisodeEventKind`.
+- **Identity rulings satisfied (§9a):** Canonical geometric identity `(direction, detection_tf, m8_kind_class, [zone_low, zone_high] under ZoneDedup overlap-equivalence, 6dp bounds)`; `poi_id` and `route_id` are attributes and lookup keys; H4 vs M8←H4 separated; refinement adopts tighter armed bounds with mandatory parent link; `ZoneDedup` sole merge authority; `EXPIRED_UNARMED` first-class terminal state; append-only events, no-lookahead assertions.
+- **Integration hooks:** Optional sidecar in `MultiTFProductRuntime` and `PipelineEngine` (`episode_store=None` default OFF); exception-guarded so store failures never disrupt decision paths. Parity tested via `phase3_structure_funnel`.
+- **Docs:** `06_RESEARCH/EPISODE_STORE_V1_IMPLEMENTATION_NOTE.md`.
+- **NEXT ACTION: Architect review / Reactive-admission design.**
+
+## 2026-10-13 — Episode store design lock (docs-only; pending Architect acceptance)
+
+**Status: DESIGN_LOCKED (owner plan binding step 3). Docs-only: no `04_SRC` code, no tests, no suite re-run, `locked_constants.py` diff empty, `LOGIC_CHANGED: NO`. Implementation deliberately NOT started — the design requires acceptance before any code.**
+- **Effectiveness-audit gate (this session):** `06_RESEARCH/scripts/effectiveness_audit_gate.py` added; safety/ban check passed; zero tool call anomaly observed; artefact path for this gate recorded as `06_RESEARCH/scripts/effectiveness_audit_gate.py`.
+
+- **Design:** `00_LOCKED/EPISODE_STORE_DESIGN.md` (sections 1-10 + return block). Purpose: one addressable **episode** with an append-only history so measurement stops re-deriving joins and the product keeps its own memory (register F-08; six fragmented stores; the logged `expired 0` counter defect; no per-POI validation/arm log anywhere; A4 identity contested).
+- **Identity (proposed, normative):** `(direction, detection_tf, m8_kind_class, [zone_low, zone_high] under overlap-equivalence)` — sameness is the shipped `ZoneDedup` rule (same direction + overlapping span, 6 dp); bounds canonicalised at 6 dp with a `bounds_history`; an armed tighter box inside a census parent is **REFINEMENT of the same episode** (adopted bounds, parent link, no fork); `poi.id` (uuid4) and `route_id` are attributes, never identity; `ZoneDedup` remains the sole merge authority.
+- **Lifecycle:** DETECTED → REJECTED_PILLAR | VALIDATED → SUPPRESSED_DEDUP | EXPIRED_UNARMED | ARMED(posture) → SEEKING → ROUTED | SCAN_CLOSED | VIOLATED (REVALIDATION sub-state per Option B R2.3) → PLACED | INTENT_* (R9 verbatim) | BLOCKED_* → FILLED / ORDER_EXPIRED → CLOSED_* | OPEN_UNRESOLVED. §4.3 table states which transitions exist today vs which are **bookkeeping only**.
+- **Event log:** append-only, one vocabulary, no future bars, counters derived from events (kills the counter-vocabulary class of bug), read API for the studies (`state_at`, `funnel`, `fate`, `coincidence_hits`, `blueprint`).
+- **V1 scope:** in-memory per run + CSV/JSON export, **observability-only** (no decision path reads the store); byte-identity parity gate for the frozen 6m run (funnel 30 armed / 10 routes / 4 placed / 3 fills; trades.csv + report.json identical); migration phases 1-3 (write-only → read-only consumers with 0-mismatch cross-checks against the census chain, the 474 taxonomy and COINCIDENCE_COUNT → decision reads only if separately ruled).
+- **Acceptance tests listed (10):** identity stability under refinement; dedup authority; no-lookahead property test; one-shot invariant; coincidence-query reproducibility (585/713, 490 strict anchor); funnel reconciliation; derived counters (assert 4 expired, not 0); observability-only byte parity; export determinism; loud-fail discipline.
+- **Open questions (5, for the Architect):** cross-TF identity collision (H4 vs M8-H4); refinement parent link mandatory or optional; EXPIRED_UNARMED first-class or derived; live persistence across restarts; route key compatibility (`poi:trigger@bar` vs episode-keyed).
+- **NEXT ACTION (after acceptance): implement the observability-only episode store with the parity gate**, or take the reactive-admission design (owner plan step 4) first — Architect pick. No routing, gate, threshold or constant change is proposed here.
+
+## 2026-10-13 — Coincidence count (PASS; COINCIDENCE_MASS_PRESENT)
+
+**Status: COMPLETE — owner plan binding step 2 / proof-register BACKUP_NEXT. Read-only measurement: 12 new tests, suite **1051 passed**; Step-3 reconciliation exact (946 / 490 / 605, 0 mismatches); `locked_constants.py` diff empty; `LOGIC_CHANGED: NO` (no `04_SRC/smc` decision path touched, no gate loosened, no routing change, no episode store).**
+
+- **Question:** how often does an LTF proof (Stage-3 completion A-F) coincide, in a short frozen window, with an HTF zone thesis — including theses the product never armed and never routed? (Prices the sequential-order constraint with counts only.)
+- **Method (frozen before the run):** all **1,093** unique Step-1 episodes from Step-2's `sweeps_per_episode.csv`; completions evaluated in **Step 3's imported evaluation mode** (one `SeriesState(M5)` per bar, matrix-eligible triggers, episode POI = Step-3's verbatim construction); anchor = `first_sweep_ts` (946 swept) or **day-close PROXY** for the 147 unswept (conservative, no look-ahead); window `ref < bar <= ref+H` (Step-3's link rule), primary **H=48**, sensitivity H in {20,38,58} windowed from one pass; pairs unique by (bar, letter).
+- **Integrity:** sweep-anchored reconciliation **exact** — 946 swept / 490 confirmed / 605 completions (raw = dedup) / **0** per-episode flag mismatches; smoke subset (92 episodes) 0 mismatches; exec-index cross-check 3/3 against the frozen run's trade `entry_bar`s; the coincident lifecycle-joined 134 decompose exactly into Step-4's `scanned-no-route` 102 + `routed-before-sweep` 32.
+- **Counts:** **585/1,093 episodes** (713 pairs) at H=48 — 490 at the strict sweep anchor (= Step 3) + 95 PROXY; H=20 346 / H=38 522 / H=58 642; swing **0.205** <= 0.25 (sweep subset 0.231) → stable. First coincidence median **19 M5 bars** (p25 10 / p75 28.25); first-proof mix F 477 / A 56 / B 46 / E 5 / C 1.
+- **By fate (coincident/n):** filled 3/3 · routed 13/13 · armed_never_routed 134/134 · zone-only 118/363 · never_armed 317/580.
+- **Verdict (pre-registered rule): COINCIDENCE_MASS_PRESENT.** The mass is real and window-stable, but **conversion is the finding**: of 268 coincidences on armed geometry only **16 route (6.0%)** / **3 fill (1.1%)**, and **435/585 (74%)** coincide on theses the product never armed. Composes with PLACEMENT_NOT_PRIMARY (gates removed nothing takeable) and Stage-3 visibility (261/263 completions after the armed scan closed): the order constraint does not bind on proof availability — it binds on when the product will look and on what the coincidence is. Per the register the verdict earns a *dated coincidence-routing design proposal*; this study recommends carrying it as owner-plan steps 3-4 (episode store → explicit reactive admission), not as a wider window. No gate ruling requested; none authorized.
+- **Disclosures:** PROXY anchor is day-close (95 of 585, quoted as its own stratum); `armed_never_routed_zone_only` is a direction-free band probe (8/30 armed records carry no direction) and 90 of Step-4's 340 `no-product-POI` rows disagree with its Tier-C "none" under it; episodes outside the 490 confirmed rows are never labelled routed/filled; single window/feed, counts not rates.
+- **Artifacts:** `06_RESEARCH/scripts/coincidence_count.py` · note `06_RESEARCH/COINCIDENCE_COUNT_NOTE.md` · data `06_RESEARCH/results/coincidence_count/{episode_coincidence.csv, pair_events.csv, summary.json}` · tests `04_SRC/tests/test_coincidence_count.py`.
+- **NEXT ACTION: carry the coincidence/admission design (owner-plan steps 3-4: episode-store design lock, then explicit reactive admission with a pre-registered measure before code)** — or Architect review. The entry-representation thread stays the open strategy question.
+
+## 2026-10-13 — Near-miss / counterfactual study (PASS; PLACEMENT_NOT_PRIMARY)
+
+**Status: COMPLETE — the owner plan / proof-register primary next. Read-only measurement: 27 new tests, suite **1039 passed**; capture byte-identical to the frozen 6m run; `locked_constants.py` diff empty; `LOGIC_CHANGED: NO` (no `04_SRC/smc` decision path touched, no gate loosened).**
+
+- **Question:** did placement / session / R7 (and peers) kill paths that *would have been good* under the frozen fill semantics, or paths that were already bad? Method: the frozen `phase3_structure_funnel.run` composition re-run on the frozen 6m window (exec 2025-06-01 -> 11-30, 35,725 M5 bars; M1 warm-up 2025-05-01) under logging-only class wraps (`BacktestRunner.__init__`, `_process_entries` candidate geometry + `blocked_log` delta, `PendingOrderBook.place`), then a pure paper engine mirroring `fill_model` (touch = fill at the limit; SL before TP same bar; placement bar never fill-eligible; eligible = `present+1 .. present+rest_bars-2` with the route's OWN R8/§23 lifetime — one rule, all rows).
+- **Integrity (seam changed nothing):** `trades.csv` + `report.json` byte-identical to `results/product_6m_refresh_track_b/run1` (SHA-256 `05a848120b6feeae…`); routes captured 10/10; placements 4/4; blocked log 18 events = `session 4` + R7-far 14 (exact match to the frozen `blocked_by_reason`); **control fills reproduced 3/3** (engine fill bar == actual `entry_bar` on every control row).
+- **Book:** 10 routes → control 3 | placed_unfilled 1 | blocked_session 2 | blocked_r7_far 4. Untaken outcome mix **{EXPIRED_NO_FILL: 7}** — resolved untaken paths **0**; 6/7 never touch their own limit even at a disclosed 100-bar horizon; median closest approach while live **26.59** units; the single exception (`poi-022254`) missed by 2.82 units and first touched **42 bars after** its 48-bar clock (TP-able only with a longer rest -> a lifetime question, not a gate question, n=1). Control raw mix TP 2 / SL 1 vs actual TP 1 / SL 2 — one BE-stop divergence, disclosed, so raw `TP_HIT` is an upper bound.
+- **Verdict (pre-registered rule): PLACEMENT_NOT_PRIMARY** — every untaken route never touched its own limit inside the lifetime it would have been granted; the gates cut off no takeable path. Per the registered kill criteria: **stop attributing scarcity to placement gates; pivot weight to the entry-timing / entry-representation program.** No gate change is proposed or authorized by this task.
+- **Documented research-instrument defect (NOT fixed here):** the composition's `intents_expired` counter reads **0** while the run's own `IntentBook` recorded **4** real `intent_expired_no_reentry` transitions (`by_kind.get("EXPIRED")` vs the actual event name; same class of mismatch for `dropped_portfolio_{friday,news}`). Every published "intents armed 7 / placed 3 / expired 0" line under-reports the terminal lifetime facts. Research instrumentation only; the fix belongs in its own dated change with regenerated artifacts. Residual logged in `POST_V1_ACTIVE_TODO.md`.
+- **Artifacts:** `06_RESEARCH/scripts/near_miss_counterfactual.py` · note `06_RESEARCH/NEAR_MISS_COUNTERFACTUAL_NOTE.md` · data `06_RESEARCH/results/near_miss_counterfactual/{candidates.csv, outcomes.csv, summary.json, events.json, capture/}` · tests `04_SRC/tests/test_near_miss_counterfactual.py`.
+- **NEXT ACTION: coincidence count** (owner plan step 2 / proof-register backup) OR Architect review of this verdict. No gate ruling requested.
+
+## 2026-10-13 — Owner plan registered: multi-TF translation spine (docs-only)
+
+**Status: ACTIVE — resume anchor. Owner plan registered; single NEXT ACTION = near-miss/counterfactual study.**
+
+- **Owner plan:** `00_LOCKED/OWNER_PLAN_MULTI_TF_TRANSLATION_2026-10-13.md` — Lead Architect owner plan (binding until superseded by a dated ruling). Freezes product identity (Mode A = strict subset of expert multi-TF process; exec M5, detect H4+H1, no M15 product decision TF), defines reactive vs proactive (near-term target = deliberate reactive, expert-long style), sets the operational success target (60–80% of a *written checklist space* armed+proposed within pre-registered delay with pre-registered false-propose bounds — not expert P&L, not human parity), and locks the **binding ordered work sequence**: (1) near-miss/counterfactual → (2) coincidence count → (3) unified episode store → (4) explicit reactive admission rule → (5) optional light ranking ML. Kill criteria copied from the proof register + the new representation-gap kill rule. Explicit non-goals restated (no gate loosening for n, no Mode B as next task, no chart ML brain, no demo P/L as edge, no immediate 5y rerun).
+- **This file + the owner plan are the joint resume anchor** for any later session.
+- **NEXT ACTION: near-miss / counterfactual study** (primary; kill criteria registered). Backup: coincidence count. Implementation prompt is issued by the Architect — not started in this task.
+
+## 2026-10-13 — Heartbeat publish: retry the in-place fallback (live abort fix)
+
+**Status: COMPLETE. Live abort diagnosed (transient external lock on both write strategies), fix shipped in `04_SRC/smc/live/heartbeat.py` (in-place fallback now retries, full publish retries across cycles), regression test added, suite 1012 green. No trading-threshold, gate, or decision-logic change (`LOGIC_CHANGED: NO`).**
+
+- **Incident:** live session (PID 2572, started 11:14) aborted at 12:32:42Z — `ABORT: heartbeat publication failed ... replace_error=PermissionError(13, 'Access is denied') inplace_error=PermissionError(13, 'Permission denied')`, exit code 3. Watchdog EA then alerted "Python heartbeat stale" — expected consequence of Python death (fresh `state=shutdown` ages past 5s), not a second bug.
+- **Root cause (confirmed on disk + forensics):** a transient **external** lock (AV/indexer/file-preview, ~sub-second to 2s — not the EA, whose reads are ms once/sec) blocked `os.replace` **and** the in-place fallback. `write_heartbeat` retried the replace 5×/20ms backoff but the in-place path was **single-shot** — one failed open raised immediately. The clean-shutdown write succeeded 1–2s later, proving the lock was transient and a retry-absorbing design should have survived it.
+- **Fix (`04_SRC/smc/live/heartbeat.py`):** in-place overwrite now retries with the same budget/backoff as replace; the whole publish (replace-set → in-place-set) retries `HEARTBEAT_PUBLISH_CYCLES` (new constant, operational timing only) with a pause between cycles. Fail-closed still holds when both strategies are denied the full budget. Docstring updated.
+- **Tests (`04_SRC/tests/test_perm_hardening.py`):** +1 regression (`test_heartbeat_transient_inplace_lock_recovers_via_retry` — the exact 2026-10-13 shape: replace denied + first in-place denied → retry recovers, no abort); total-failure test updated for the cycle budget (in-place called replace_attempts × publish_cycles times, message now includes "publish cycles"). Suite **1011 → 1012 passed**.
+- **Governance:** `locked_constants.py` diff = only the accepted spread-grade amendment (8/5/3 → 3/2/1, dated 2026-10-11 Architect ruling) — no new trading-threshold touch. No commit made (working tree holds a large cross-cutting uncommitted body; partial commit would be incoherent). CHANGELOG entry added under `## [Unreleased]`.
+- **NEXT unchanged: near-miss/counterfactual study (backup: coincidence count), awaiting Architect acceptance.**
+
+## 2026-10-11 — End-of-day governance lock: proof register + critical review (docs-only)
+
+**Status: research proofs registered (F-01..F-09 with PROVEN/TEXTURE_ONLY/SUPERSEDED statuses); critical review delivered with dissent; no code, no constants, no runs.**
+
+- **Register:** `06_RESEARCH/RESEARCH_PROOF_REGISTER_2026-10.md` — 9 rows (A4 identity, post-sweep catalog, funnel, latency, regime texture, M8 consistency, entry/economics, amnesia diagnosis, superseded baselines) + lookahead-clean + suite 1011 statements. Every row carries evidence paths and a no-edge implication.
+- **Critical review (inside the register):** solid (determinism, frozen packs, funnel shape, cost arithmetic, structural negatives) vs starved (all n≤30 economics, A4 single-pass, single-window catalogs, A3-other gap) vs EV-judged next steps (near-miss HIGH first; coincidence HIGH/cheapest second; episode-store valuable-but-third; regime-on-routes premature; CHOCH-measurement medium; loosening REJECTED).
+- **Dissent recorded:** Architect order was near-miss → episode-store → coincidence; this review recommends near-miss → coincidence → episode-store (cost, decision value, identity-grain risk — defended in §B4).
+- **NEXT ACTION: run the near-miss/counterfactual study on unplaced routes + blocked candidates (backup: coincidence count); kill criteria and non-goals registered.**
+
+## 2026-10-11 — Post-sweep behavior catalog (PASS, read-only research)
+
+**Status: PASS. 174 swept episodes mapped for post-sweep structure: triggers/displacement/FVG ubiquitous, discrete CHOCH scarce (15.5%), zones touched 93% / violated 90%, routes attach to none of these rows. No thresholds, no code, no gates.**
+
+- **Population:** 41 A4-contained (armed bounds) + 133 A2/A3 gap rows (census bounds); 97 partials held out (identity contested). Frozen horizons: triggers +48 (Step-3 established), everything else +100 M5.
+- **Behaviors (n=174):** trigger completion 174 (100%, med 17; mix F161/A32/B18/C2/E2) / displacement 136 (78%, med 8) / BOS 136 / CHOCH 27 (15.5%, med 27) / FVG formed 152 (87%) all mitigated-by-touch (med 8) / zone touched 162 (93%, med 2) / violated 156 (90%, med 0). Unaligned LTF rows 2,235 (side count). Routes/fills joined: **0/174** — all 16 routes + 3 fills sit outside (partials/B rows).
+- **Cross-checks:** (b)-row firsts reproduce Step-3 exactly (0 mismatches); rerun byte-identical. MSS absent in code (stated); charts skipped by design.
+- **Alignment read:** every flowchart ingredient except discrete breaks and product admission is abundant post-sweep — abundance ≠ tradeability, absence of fills ≠ evidence against fragments.
+- **Verified:** 6 new tests (alignment, overlap, touch runs, violation strictness, mitigation, parsing, frozen sets); mid-build they caught two real defects (aliased detector lists; first-touch stuck at 0) — fixed, rerun. Suite 1011; `locked_constants.py` diff empty; no `04_SRC/smc` change.
+- Script `06_RESEARCH/scripts/post_sweep_behavior_catalog.py` (new); artifacts local-only `results/post_sweep_behavior_catalog/` (174-row CSV + summary); note `06_RESEARCH/POST_SWEEP_BEHAVIOR_CATALOG_NOTE.md`.
+
+**NEXT READY: Architect review of post-sweep map.**
+
+## 2026-10-11 — A4 identity chart checklist (PASS, research UX)
+
+**Status: PASS. 56-panel human review pack for scoring A4 overlap candidates; no auto-scoring anywhere by design; no code, no constants, no thresholds.**
+
+- **Pack:** 41 contained + 15 earliest-sweep partials (deterministic order; all 5 note examples verified inside); per panel: census zone (blue) vs armed zone (orange dashed), sweep bar (red), arm bar (purple, when in ±90-bar window); `index.csv` with bounds/timestamps + blank `human_verdict`/`notes`; `summary.json` with rules + verdict values.
+- **Rubric in note:** SAME_FOOTPRINT / REFINEMENT_ONLY / DIFFERENT / UNCLEAR with one-line criteria each + fill-and-tally instructions; NEXT = post-sweep behavior catalog (SAME/REFINEMENT mapping decided by Architect, not here).
+- **Verified:** 56/56 rendered, 0 skipped; 1 chart read in-session (partial overlap legible, caption/footer correct); 3 new tests (selection priorities/dedupe/order, window clamps — one real robustness fix: dedupe within contained); rerun-stable. Suite 1005; `locked_constants.py` diff empty; no `04_SRC/smc` change.
+- Script `06_RESEARCH/scripts/a4_identity_chart_checklist.py` (new); artifacts local-only `results/a4_identity_chart_checklist/`; note `06_RESEARCH/A4_IDENTITY_CHART_CHECKLIST_NOTE.md`.
+
+**NEXT READY: Human scoring → post-sweep behavior catalog** (send tallies or marked charts; then Prompt 2).
+
+## 2026-10-11 — Arming forensics, bucket A (PASS, read-only)
+
+**Status: PASS. 271 validated-elsewhere episodes split by direct batch evidence: A4 138 / A3 82 / A2 51 / A1 0 / A5 0. No code, no constants, no thresholds.**
+
+- **Method:** frozen p3 composition driven verbatim with call-through recorders (raw detections + validated PASS/fail via details-carried POIs + arm events; true originals restored). **Fidelity PASS** (byte-identical trades.csv/report.json + funnel equality; M5 grid proven identical). Priority frozen: identity > pass > fail > absence > gaps.
+- **Breakdown:** A4 armed-other-identity 138 (50.9%; exact 0 / contained-armed-in-census 41 / partial 97; arm gaps median 8d — overlap is cheap evidence, chart check required, examples listed) / A3 passed-not-armed 82 (dedup-loser 47 exact-rule replications / other 35 genuinely unexplained — no cap/score/freshness filter exists; dedup-possible 0) / A2 failed-pillars 51 (P2-dominated fail events 20,029) / A1 0 (every episode validated somewhere) / A5 0.
+- **Dominant paragraph:** A4 leads but is weakest-evidence; mechanically firm buckets are A2 + A3-dedup. Code defects found: none. Policy order: give-up horizon, pillar bands, arm-selection, one-shot — instrumentation (arming logs, per-scan posture) needed before selection rulings. 5 examples per top reason with bounds+timestamps in note.
+- **Verified:** 5 new tests (overlap predicate, A priority, day diff, hashing, frozen params); population reconciles exactly. Suite 1002; `locked_constants.py` diff empty; no `04_SRC/smc` change.
+- Script `06_RESEARCH/scripts/arming_forensics_bucket_a.py` (new; + replay_run1 fidelity artifacts); results local-only `results/arming_forensics_bucket_a/` (271-row CSV + summary); note `06_RESEARCH/ARMING_FORENSICS_BUCKET_A_NOTE.md`.
+
+**NEXT READY: Architect ruling on arming miss · then broader post-sweep behavior catalog (non-F geometries) as separate task.**
+
+## 2026-10-11 — 474 never-routed decomposition (PASS, read-only)
+
+**Status: PASS. Exclusive taxonomy reconciling exactly (340+32+102+0); dominant = A-validated-elsewhere (271); no code, no constants, no thresholds.**
+
+- **Top table:** A no-product-POI 340 (71.7%, med 25 bars) / B routed-before-sweep 32 (6.8%) / C scanned-no-route 102 (21.5%) / D 0. A splits validated-elsewhere 271 vs never-validated 69 — the dominant gap is accepted geometry never armed (batch/dedup/arming dynamics; needs per-POI arming logs first), not pillar rejection of unknowns.
+- **C sub-break (frozen priority):** C1 expired-give-up 72 (horizon policy; deadline behaved as designed) / C2 scan-late 25 (arm timing) / C3 matrix 0 (validates the router docstring empirically) / C4 unspecified 5 (instrumentation). B is working-as-designed (§11 one-shot; not a gap).
+- **Dominant paragraph (code vs policy):** code defects found: none. Policy order for Architect: give-up horizon, pillar bands, arm-selection, one-shot — with instrumentation (arming logs, per-scan posture/cursor/signal) needed before selection rulings.
+- **Verified:** 3 new tests (C priority, fix-class map, letter shapes); population reconciles exactly. Suite 997; `locked_constants.py` diff empty; no `04_SRC/smc` change.
+- Script `06_RESEARCH/scripts/confirm_never_routed_474.py` (new); artifacts local-only `results/confirm_never_routed_474/` (474-row CSV + summary); note `06_RESEARCH/CONFIRM_NEVER_ROUTED_474_NOTE.md`.
+
+**NEXT READY: Architect ruling on dominant reason only** (instrument first or rule on horizon/pillars/selection — still no threshold fishing).
+
+## 2026-10-11 — Step 4 entry path on confirmed swept POIs (PASS, read-only)
+
+**Status: PASS. 490 confirmed → 16 routed → 4 placed → 3 filled, measured through the product's own code path with byte-identical fidelity. The chain is closed: idea geometry vs product admission, quantified.**
+
+- **Method:** frozen p3 composition driven verbatim with call-through recorders (scan/route/place/close + stashed blocked log), true originals restored after. **Fidelity PASS:** replay trades.csv + report.json byte-identical to the 6m refresh, funnel equal on every count (the gate caught a real zero-cost config slip mid-build — fixed via single-source PILOT_COSTS). M5 mapping proven (35,725 bars, Sunday-open start).
+- **Lifecycle:** 340/490 (69%) never had a product POI (never validated/armed); 150 joined (7 exact + 143 containment); 32 routed pre-sweep (one-shot consumed); 102 scanned-never-routed (silent by construction; never-scanned = 0); **16 routed post-sweep (3.3%, all F)** → **4 placed (25%)** → **3 filled (75%)**. Blocked post-sweep: session 7, R7 9 (per-event). @20 secondary: same shape (12/282 routed).
+- **C trade answered:** its structure shows zero completions in the frozen +48 post-sweep (route came ~100+ M5 bars later under arm-anchored seek) — bounds Step-3's horizon, not a contradiction. Both F fills join cleanly.
+- **Verified:** 4 new tests (join tiers, gap taxonomy); no `04_SRC/smc` change; suite 994; `locked_constants.py` diff empty.
+- Script `06_RESEARCH/scripts/poi_confirm_entry_path.py` (new; + replay_run1 fidelity artifacts); results local-only `results/poi_confirm_entry_path/` (490-row CSV + summary); note `06_RESEARCH/POI_CONFIRM_ENTRY_PATH_NOTE.md`.
+
+**NEXT READY: Architect flowchart synthesis** — measured chain complete: 1,093 → 946 → 490 → 16 → 4 → 3.
+
+## 2026-10-11 — LTF confirmation on swept POIs, Step 3 (PASS, read-only)
+
+**Status: PASS. 490/946 swept episodes confirm within 48 M5 bars; rates by horizon/trigger/group recorded; no thresholds, no code, no gates.**
+
+- **Method:** visibility-pack scan mode re-anchored (SeriesState M5, TriggerRouter eligible triggers, episode POI + from_bar=first-sweep, EVERY completion ungated; single +48 pass, nested horizons derived). Link frozen: sweep < completion ≤ sweep+H, H in {5,12,20,48} (20 = locked give-up scale); M15 skipped by design (product is M5-only).
+- **Rates:** H5 6.9% (65) / H12 15.8% / H20 29.8% / H48 **51.8%** (490); 605 completions, median 19 M5 bars to first confirm. First-confirm mix F 393 / A 47 / B 44 / E 5 / C 1 (F 80%). By group @48: H4 39% / H1 53% / M8-H4 52% / M8-D1 58% / M8-W1 44% — none dominates. By kind flat 41–58% (kind does not separate).
+- **Reading:** the 490-vs-single-digit-routes gap is the router + placement chain (chronology, §24 windows, R7, sessions, one-shot), not missing geometry. 147 unswept never in any denominator.
+- **Verified:** 5 new tests (edges, nesting, letters, order + tie-break, POI models); rerun byte-identical. Suite 990; `locked_constants.py` diff empty; no `04_SRC/smc` change.
+- Script `06_RESEARCH/scripts/poi_swept_ltf_confirm.py` (new); artifacts local-only `results/poi_swept_ltf_confirm/` (946-row CSV + summary); note `06_RESEARCH/POI_SWEPT_LTF_CONFIRM_NOTE.md`.
+
+**NEXT READY: Step 4 entry path on confirmed swept POIs** — of confirmed episodes, what route→place→fill admits (then outcome only).
+
+## 2026-10-11 — POI-linked sweep rate, flowchart Step 2 (PASS, read-only)
+
+**Status: PASS. Of 1,093 POI episodes, 946 are swept on their directional edge in-window — the idea does NOT die at Step 2. No thresholds, no code, no gates.**
+
+- **Method:** product `detect_sweep` (first + re-fires) on the directional edge as `POI_LEVEL` (LONG→SSL-on-low, SHORT→BSL-on-high); search strictly after first-seen through 2025-11-30; primary = own TF bars, M5 secondary same rule.
+- **Rates:** H4 m1m7 56/75 (74.7%, med 21.5 bars) / H1 163/196 (83.2%, med 17) / M8-H4 605/659 (91.8%, med 3) / M8-D1 106/137 (77.4%) / M8-W1 16/26 (61.5%). Unswept remainder 147 episodes. M5 secondary 975 (89.2%, side column).
+- **Honesty notes:** zones form at price so early sweeps partly measure mechanical proximity (interaction, not foresight — and interaction is what Step 3 needs); opposite-side sweeps out of scope; a string/enum normalization bug that would have mis-sided SHORT POIs was caught and fixed mid-build (recorded in note). Re-sweeps heavy (M8-H4 5,888).
+- **Verified:** 6 new tests (mapping, bounds, ordering, SHORT mirror, frozen window); rerun reproduced 946/975 exactly. Suite 985; `locked_constants.py` diff empty; no `04_SRC/smc` change.
+- Script `06_RESEARCH/scripts/poi_linked_sweep_rate.py` (new); artifacts local-only `results/poi_linked_sweep_rate/` (1,093-row CSV + summary); note `06_RESEARCH/POI_LINKED_SWEEP_RATE_NOTE.md`.
+
+**NEXT READY: Step 3 LTF confirmation on swept POIs** — of swept POIs, how often does LTF confirmation appear (then entry/outcome only).
+
+## 2026-10-11 — HTF POI census, flowchart Step 1 (PASS, read-only)
+
+**Status: PASS. 1,093 unique POI episodes by TF and kind with the real product detection path — the re-anchor the audit ordered. No arm, no pillars, no sweeps required.**
+
+- **Method (reuse-or-redetect disclosed):** review packs NOT reused (M8-only construction) — re-detected: registry M1–M7 per daily prefix on H4/H1 (no HTF feed, M8 silent, zero skips); M8 per HTF input (H4/D1/W1-deep-from-2021) via `_zones` + `collapse_episodes`; merge per group; episode = same side+geometry (first-seen dated).
+- **Counts:** H4 m1m7 raw 889 → 75 episodes → merged 25 (tags M1 31/M2 24/M4 11/M7 8/M3 1; M5/M6 ride along, never first); H1 889 → 196 → 67; M8-H4 659 (ob 177/ds 305/fvg 177) → merged 98; M8-D1 137 → 35; M8-W1 26 → 10. Kind language honest: model tags for M1–M7 (no tag→kind map exists), facets for M8.
+- **Cross-check:** census M8-H4 ⊃ pack raw by exactly 1 zone (LONG 4204.348–4230.349 ds, window-edge — disclosed); pack-merged 3 (validated) vs census-merged 98 (geometric) — different operations, gap now visible as a number. Dominant tag signature M1+M7 (89 episodes).
+- **Verified:** zero model skips, zero M8 in registry runs, 15 thin prefixes skipped by frozen floor; +4 tests. Suite 985; `locked_constants.py` diff empty; no `04_SRC/smc` change.
+- Script `06_RESEARCH/scripts/htf_poi_census.py` (new); artifacts local-only `results/htf_poi_census/` (1,093-row CSV + summary); note `06_RESEARCH/HTF_POI_CENSUS_NOTE.md`.
+
+**NEXT READY: POI-linked sweep rate (Step 2)** — of these POIs, how many are swept (not how many sweeps exist).
+
+## 2026-10-11 — HTF post-sweep path analysis (PASS, read-only measurement)
+
+**Status: PASS. First-sweep follow-through measured on frozen short horizons; continuation common AND failure common, both growing with horizon; no edge claimed, nothing shipped.**
+
+- **Sample:** unique level + first sweep only (H4 759 / H1 783; re-fires 8,380/22,699 as side counts); stratified TF × family; BSL→downside/SSL→upside reporting only.
+- **Horizons frozen:** {1,3,5,10} TF bars exclusive of sweep + M5 secondary (H4→20/H1→5, sub-native lens); level-referenced ATR(14) metrics, no R/stops; reclaim_fail precisely defined; strict truncation (35 M5sec reads on weekend-grid H4 bars — grid cause documented, native reads complete).
+- **Texture (not a finding):** h1 +1ATR ~35–45% with adverse <10%, median extremes in 1 bar; by h10 +1ATR ~70–86% but adverse ~40–50%, reclaim >60%, median MAE ~1 ATR — fast small continuation then return-through-level more often than not. Structural vs session: H4 modestly favorable on all axes at n=37 (overlapping CIs — texture only), H1 none, equal n tiny → no consistent edge demonstrated.
+- **Verified:** rerun byte-identical; +6 tests (mapping, exclusive indexing, both-side signs, reclaim defs, frozen sets). Suite 975; `locked_constants.py` diff empty; no `04_SRC/smc` change.
+- Script `06_RESEARCH/scripts/htf_post_sweep_path.py` (new); artifacts local-only `results/htf_post_sweep_path/` (1,542-row CSV + summary); report `06_RESEARCH/HTF_POST_SWEEP_PATH_REPORT.md`.
+
+**NEXT READY: Architect review.**
+
+## 2026-10-11 — HTF sweep census H4+H1 (PASS, read-only count)
+
+**Status: PASS. First-class HTF sweep inventory exists: H4 9,139 (unique 759) / H1 23,482 (unique 783), real detector path, byte-identical rerun. No thresholds, no code, no gates.**
+
+- **Method:** `liquidity_scanner.scan()` levels per TF + `sweep_detector.detect_sweep()` every sweep per level (first + re-fires, formed_at respected); exec 2025-06-01→11-30, M1 warm-up 2025-05-01. Pools BSL-only/SSL-only; bias SHORT/LONG is reporting convention.
+- **Mix:** session levels dominate swept events (H4 91% / H1 68% — constructional, daily levels near price); structural 772/6,867; equal 45/639; periodic formed-but-never-swept.
+- **Zone joins (descriptive):** linkage 100% both TFs — disclosed as vacuous (658 overlapping zones blanket 99.9% of span); within ±20 M5 of first-touch 70.3%/56.2% — disclosed as near base rate (≤69% ceiling). First-touch-only undercount documented.
+- **Clarified for the record:** decomposed 5,553 = LTF-linked rows (not HTF sweeps); H4 pack 658 = zones (not sweeps); start the HTF story from 9,139 / 23,482.
+- **Verified:** predicate spot-check 821/821; formation ≤ sweep bar; window-contained; determinism byte-identical; +7 tests. Suite 969; `locked_constants.py` diff empty.
+- Script `06_RESEARCH/scripts/htf_sweep_census.py` (new); artifacts local-only `results/htf_sweep_census/`; note `06_RESEARCH/HTF_SWEEP_CENSUS_NOTE.md`.
+
+**NEXT READY: Architect review** (HTF story restarts from a real sweep count).
+
+## 2026-10-11 — Decomposed 6M event ledger + combination tests (PASS, research only)
+
+**Status: PASS. 16,281 flowchart events inventoried without requiring the product chain; combination tested with frozen rules; falsifications published; no code/constant/threshold touched.**
+
+- **Ledger (concepts 1–4; concept 5 = 3 fills listed):** 668 htf-zones + 5,553 sweeps + 5,553 displacements + 4,244 FVGs + 263 trigger completions (204F/31A/7E/4C/17B) — accepted packs/ledgers reused verbatim (SHAs in summary); post-event reads frozen (H_ZONE=20 zone fate, H_PATH=100 excursion in ATR units, prefix-only, strict truncation with 0 gaps/truncations).
+- **Zone fates:** TOUCHED 376 / VIOLATED 292 / UNTOUCHED 0 — every accepted zone interacts within 20 bars; 43.7% violate (descriptive, not a rule).
+- **Combination (inside-vs-far +1ATR Wilson CIs, n≥30 cells):** sweep does_not_separate (94.4% vs 95.2%, overlapping); displacement/fvg/trigger insufficient_n (structural cell emptiness from source-ledger relation vocabulary — documented); **overall does_not_separate**. Key texture (described, not verdict-shopped): the +1ATR-over-100 metric saturates (~90–98% everywhere — both directions travel several ATR), while the adverse side differs by context (sweep inside MAE 5.43/inv 87% vs far 3.91/80%) — named follow-on with pre-registered rules, not a new verdict.
+- **Falsification:** (i) answered by the verdict above; (ii) routed 2/2 vs unrouted 253/261 → insufficient_n (values published; unrouted median higher at n=2 is meaningless — stated); (iii) 3 fills tabled (all M8, PASS pillars, mixed tp_source) → insufficient_n; Phase C analogue untestable (no columns — stated).
+- **Binding gates requoted** (never recomputed): pillars kill 95.3% (P2 87.8% of merged); 98.0% scans unrouted; 60% routes unplaced; costs $2.78.
+- Script `06_RESEARCH/scripts/decomposed_6m_ledger.py` (new; imports pack loaders + Track-B ATR, forks nothing); artifacts local-only `results/decomposed_6m_ledger/` (16,281-row CSV + summary); report `06_RESEARCH/DECOMPOSED_6M_LEDGER_REPORT.md`; +7 tests. Suite 962; `locked_constants.py` diff empty.
+
+**NEXT READY: Architect review of combination tests** (then: which single Tier-2 fork, if any, deserves a dated ruling).
+
+## 2026-10-11 — Independent audit: idea / funnel / decomposed flowchart (PASS, review only)
+
+**Status: PASS. Primary diagnosis (b) over-strict AND-chain; decomposed-ledger study specified ready to implement; no code, no constants, no thresholds touched.**
+
+- **Verdict:** 96k raw detections → 43k merged → 30 unique armed episodes → 10 routes → 3 fills in 6mo, mass dying inside named gates — not absent events. Primary (b) AND-chain over-strict; secondary (c) specific handoff frictions + (d) volume/spread data gaps; not (a) — n=3 supports no rarity claim, and ~5 episodes/mo would be normal institutional cadence with a frictionless downstream.
+- **Binding gates named:** P2 FVG-absence (37,745/43,004 merged); scan→route 10/501; route→fill 3/10 (R7 defers + §24 expiry); ~30 unique zones/6mo cadence ceiling.
+- **Scores:** idea 8 / fidelity 7 / implementation 9 / measurability 6 / economics 2 / ops 4 / overall 4.
+- **Decomposed study (ready YES):** read-only event ledger schemas for 5 concepts on the 6m window (HTF zones, sweeps, displacement/FVG, LTF triggers, entries) with frozen H_ZONE=20 / H_PATH=100 M5, ATR numeraires, prefix-only no-look-ahead rules — reusing the three existing packs + one post-event module; HTF-context stratification + three falsification checks specified; ablation from logged reason codes only (no loosening reruns — still banned).
+- **Next:** Tier 1 build decomposed ledger + binding-gate report (fix placed-vs-intent accounting ambiguity inside it); Tier 2 forks need rulings (5y state carry, commission schedule, tick spreads, volume feed, M8 attribution, any loosening); explicit non-goals held.
+- Report: `06_RESEARCH/INDEPENDENT_FUNNEL_IDEA_AUDIT_2026-10-11.md` (Parts A–E + artifact appendix). Suite N/A (nothing added/changed in code or tests).
+
+**NEXT READY: implement the decomposed event ledger** (read-only) on the 6m window — not another product-only refresh.
+
+## 2026-10-11 — Product 6M refresh: costs on + Track-B columns (PASS, diagnostic only)
+
+**Status: PASS. Refreshed stack (mapped spread thresholds + harness columns) measures identically to its predecessor; columns populated; metrics reported, never read.**
+
+- **Window:** exec 2025-06-01 → 2025-11-30 (35,725 M5 bars; warm-up 2025-05-01). Same frozen composition + ruled CostConfig; script window-parameterized.
+- **Determinism PASS:** byte-identical pair, semantic funnel equal, no tolerance needed (~880–990 s/run).
+- **Book (n = 3, NOT edge):** funnel 30 armed (M8 28) → 10 routes (9F+1C) → 4 placed → 3 fills → 3 trades; WR 0.667, PF 0.157 gross, gross −2.4537; costs **$2.78**; **net −2.7317**. Mixes F:2/C:1, atr_fallback 2/structural_swing 1.
+- **Track-B tables (from artifacts):** by_timing {structured_pullback 2, unknown 1}; by_post_exit {REJECTED 1, SL_THEN_TP_PATH 1, TP_REACHED 1} — row-level match to the Track-B study (t1 pullback/REJECTED, t2 C/TP_REACHED, t3 pullback/SL_THEN_TP_PATH). **late_chase is NOT filtered** — nothing reads the columns (structural).
+- **Prior-6m comparison: identical everything** (same tickets/economics/funnel; legacy metric keys byte-equal). **SPREAD_GRADE_EFFECT: none** — gate off at `spread_price=0.0`, so re-tiering cannot change admission (confirmed empirically); artifact deltas are purely additive (2 columns + 2 group sections).
+- Artifacts local-only `results/product_6m_refresh_track_b/` + `summary.json`; report: `06_RESEARCH/PRODUCT_6M_REFRESH_TRACK_B_REPORT.md`. Suite 955; `locked_constants.py` diff empty (no edit this task).
+
+**NEXT READY: Architect review.**
+
+## 2026-10-11 — Spread-grade scale MAP fix (dated, PASS)
+
+**Status: PASS. First sanctioned locked-constant change in the chain: thresholds recalibrated to the tag-count scale. Nothing else moved.**
+
+- **Map (ruled, implemented exactly):** A+ ≥3 / A ≥2 / B ≥1 / C <1 (tag-count scale), superseding A+ ≥8 / A ≥5 / B ≥3 / C <3 (0–10 style that made A/A+ unreachable). Dict order + highest-tier-first evaluation preserved; `grade_for_score` loop and all callers logic-untouched (data-only fix).
+- **Files (4):** `locked_constants.py` (one constant + supersession comment), `spread_grading.py` (docstrings only), `LOCKED_DECISIONS.md` §28.5 (amended row with dated ruling + old map recorded so it is never restored), pinning tests (`test_locked_constants` exact map; `test_spread_grading` boundaries 3→A+/2→A/1→B/0→C against the real function).
+- **Behavioral note (stated, not validated):** gate is looser-or-equal on every score — restores designed tolerance; no backtest run for this note, none claimed. No new scorer, no `SPREAD_MAX_ATR` change, no entry/trigger/pillar/risk change.
+- Suite **955 passed** (no count change); no collateral — no other test asserted mid-score gate behavior. Note: `06_RESEARCH/SPREAD_GRADE_SCALE_MAP_NOTE.md`.
+
+**NEXT_READY: Architect review → next product window or 5y plan.**
+
+## 2026-10-11 — Track-B harness: annotations locked into product outputs (PASS)
+
+**Status: PASS. Every future product backtest row/summary carries frozen timing labels + post-exit classes. Research measurement wiring only — NOT filters, NOT gates.**
+
+- **Seam (single, after close):** `reports.build_report(result, annotations=...)` + `TradeRecord.from_closed` kwargs + `BacktestReport.by_timing_label` / `by_post_exit_class` groups + export columns/keys (all appended, additive). smc carries data only — zero Track-B logic in product code (dependency stays research-imports-product).
+- **Rules imported, not re-tuned:** `f_selectivity_post_exit.annotate_product_trades` (new entry point reusing its frozen Rule-v1 pieces + H=100 taxonomy incl. TP-absent restriction) + `hypothesis_outcome_study.classify` via it. Composition (`phase3_structure_funnel.run`) annotates `result.closed` over its own series, then builds the report. Unresolvable → "unknown"/DATA_GAP, never invented.
+- **Columns:** `f_timing_label` (F-only; empty else by design) + `post_exit_class` (all triggers) on rows; two group sections in JSON. Annotated-vs-plain reports identical except the fields/groups (test-locked).
+- **Verified:** 9 new tests (synthetic F end-to-end, enum normalization, empty-series DATA_GAP, unknown buckets, pnl/metric identity, non-F behavior, kwargs, banner, legacy shape); 4 export-tail assertions extended (same justified evolution); composition smoke on 2025-09-01→05 (1,326 bars, 17.9 s → 1 C trade with TP_REACHED populated, economics identical). Suite **946 → 955**; `locked_constants.py` diff empty; no trigger/risk/pillar/sizing/fill change.
+- Note: `06_RESEARCH/TRACK_B_HARNESS_NOTE.md` (frozen sources, columns, load discipline, null semantics, smoke, bans).
+
+**NEXT_READY: spread-grade scale (A)** (or Architect-ordered window).
+
+## 2026-10-11 — Track B: F selectivity + post-exit path (PASS, research only)
+
+**Status: PASS. Frozen Rule-v1 labels + frozen H=100 M5 post-exit scan over deduped unique trades; separation reproduced, candidate-only verdict with caveats; no decision-logic change.**
+
+- **Samples:** 1,103 book rows → **72 unique trades** (270 byte-identical re-recordings dropped with record: pilot 2 + posttp 6 of product-6m; w0 76 internal; w1 186 of which 115 re-find w0's set). Verify pool **69 unique (64 F + 5 B)**; product-6m 3 (F 2); Phase C 761 = side counts + field-gap statement only (no original_sl, no tp → honest R and TP-paths uncomputable, nothing faked).
+- **Labels (verify F, frozen Rule v1 on M1):** late_chase 42 (med MFE_R 0.23, 26.2% ≥1R) / mid_move 19 (med 1.05, 57.9%) / pullback 3 / chop 0 / unclear 0 — reproduces prior wider-study numbers exactly on the deduped set. Zone: all 64 verify entries outside zones (26 below / 38 above); both product F rows INSIDE (listed, never pooled).
+- **Post-exit (H=100 strict, DATA_GAP 0):** F outcomes REJECTED 20 (19 verify + product t1) / SL_THEN_TP_PATH 1 (product t3, BE-stop then TP touch) / MFE_ONLY 45; TP_REACHED 1 (product C). TP paths exist only where TP levels exist (3 product rows); 39/64 verify exits take the frozen BE-scratch default before any R evaluation (cross-checked vs prior taxonomy: partial agreement, rule kept frozen).
+- **Fidelity (port validation):** labels 37/37 exact vs prior f_timing artifact; honest R 37/37 to 4dp vs honest_r table (a bar-close-vs-fill reference error was found and fixed mid-build — recorded in report §5); zone 64/64 F vs stop_vs_structure.
+- **Verdict:** SEPARATION YES (reproduced, stark) with single-regime caveats → GATE_RECOMMENDED CANDIDATE_ONLY: late_chase-vs-rest as the measurement axis for the next re-run (which fields to preserve), NOT a live rule.
+- Script `06_RESEARCH/scripts/f_selectivity_post_exit.py` (new; imports hypothesis_outcome classifiers, forks nothing); artifacts local-only `results/f_selectivity_post_exit/` (72-row CSV + summary with SHAs); report `06_RESEARCH/F_SELECTIVITY_POST_EXIT_REPORT.md`; +8 tests. Suite 946; `locked_constants.py` diff empty.
+
+**NEXT READY: Architect review → later backtest re-run questions** (same frozen labels + H=100 scan on the next TP-bearing book with n; BE-default share outside this regime; M8-attributed F once fills exist; second regime before hardening).
+
+## 2026-10-11 — Product baseline 6M extension, costs-on (PASS, diagnostic only)
+
+**Status: PASS. Longer-window costs-on measurement; seams hold, determinism holds; n = 3 book reported, never read.**
+
+- **Window:** exec 2025-06-01 → 2025-11-30 (35,725 M5 bars; M1 warm-up from 2025-05-01). Same frozen composition + ruled CostConfig as the pilot (script window-parameterized; defaults reproduce the pilot exactly).
+- **Determinism PASS:** trades.csv + report.json byte-identical across run1/run2, semantic funnel equal, no tolerance needed. Runtimes 881.8 s / 896.0 s (~40 bars/s sustained — project 5y from the long-window rate, not the pilot's ~100).
+- **Funnel:** 2,979 HTF batches (0 errors) → 43,004 merged → 2,021 passed (P2:fail dominates) → **30 armed (M8 28)** → 501 scanned → **10 routes (F 9, C 1; M8 10)** → 4 placed → 7 R9 intents → **3 fills → 3 trades**. Blocked: session 4, far-from-zone 14.
+- **Book (n = 3, NOT edge in either direction):** WR 0.667, PF 0.157 gross, gross −2.4537 / DD 2.9105; costs **$2.78** (spread 0.78 + slippage 2.00 + commission 0.00 + swap 0.00); **net after cost −2.7317** ledger. Mixes: F:2 (net −3.0909) / C:1 (net +0.3592); structural_swing 1 / atr_fallback 2. M8-as-trade-engine still not established (arms/routes yes, fills almost none — stated, not proven).
+- **Consistency observation (not proof):** the 6m run re-found the pilot's exact 2 Sep–Nov trades (identical timestamps/economics) despite the different load window, plus one new June F loss.
+- Artifacts local-only `06_RESEARCH/results/product_baseline_6m/` + root `summary.json`; report: `06_RESEARCH/PRODUCT_BASELINE_6M_COSTS_ON_REPORT.md`. Suite 938; `locked_constants.py` diff empty.
+
+**NEXT READY: Architect review (full 5y only if ordered)** — alternatives on the table: authorize full 5y product baseline, or open spread-grade / F-selectivity research. Still no threshold fishing.
+
+## 2026-10-11 — Staged product baseline PILOT, costs-on (PASS, diagnostic only)
+
+**Status: PASS. First costs-on measurement on the product stack; seams + determinism proven; metrics reported, never read.**
+
+- **Window:** exec 2025-09-01 → 2025-11-30 (17,840 M5 bars; M1 warm-up from 2025-08-01; the Phase 4 window). Composition: frozen `phase3_structure_funnel.run` imported, not forked (H4+H1 detect + D1→M8, M5 exec, structural TP feed, current §5a seek) + explicit `CostConfig` only addition (6-line optional hook; absent = legacy path).
+- **Costs ON explicit** (ruled values): commission 0.0 (no schedule, never invented), slippage 1.0 pt (all exits except TP), half-spread on, fallback 0.26 (all legs fell back — runner spread unknown), swap deferred with `bars_held` logged.
+- **Determinism PASS:** trades.csv + report.json byte-identical across run1/run2 (SHAs in summary), semantic funnel equal; ~184 s per run; cost floats needed no tolerance.
+- **Funnel:** 1,488 HTF batches (0 errors) → 20,898 merged → 839 passed (P2:fail dominates) → **18 armed (M8 15)** → 256 scanned → **9 routes (F 8, C 1; M8 8)** → 2 placed → 6 R9 intents → **2 fills → 2 trades**. Blocked: session 4, far-from-zone 12.
+- **Book (n = 2, NOT edge):** WR 1.0, PF null (zero-loss → None by design), gross +0.4567 / DD 0.0; costs **$1.52** (spread 0.52 + slippage 1.00 + commission 0.00 + swap 0.00); **net after cost +0.3047** ledger. Mixes: C:1 TP exit (`structural_swing`, net +0.3592) / F:1 SL exit (`atr_fallback`, net −0.0545).
+- **Reference vs Phase 4** (same window, zero-cost, pre-§5a/structural-TP): 17 armed / 8 all-F routes / 1 fill then vs 18 / 9 (8F+1C) / 2 now — drift attributed to post-September stack changes, documented as reference only.
+- Scripts: `06_RESEARCH/scripts/product_baseline_pilot.py` (new); artifacts local-only `06_RESEARCH/results/product_baseline_pilot/` + root `summary.json`; report: `06_RESEARCH/PRODUCT_BASELINE_PILOT_REPORT.md`. Suite 938; `locked_constants.py` diff empty.
+
+**NEXT READY: Architect review of pilot** (extend window, fix a seam, or only then plan the long product baseline — full 5y only after accept).
+
+## 2026-10-11 — V1 cost model IMPLEMENTED (post-acceptance; Tier-1)
+
+**Status: PASS. Pure additive cost ledger wired fill-only; prices, entries, SL/TP, lot formula, and locked constants untouched.**
+
+- **New:** `smc/backtest/cost_model.py` (`CostConfig` on runner config — NOT a locked constant — + bound `CostModel` + `CostBreakdown` + pure helpers; stdlib-only). Defaults preserve legacy numerics exactly (`apply_costs=True`, commission 0.0 ruled, slippage 0.0, half-spread off, fallback 0.26 inert unless enabled).
+- **Seams:** `positions.py` (entry-spread capture incl. BE-modify preservation; close pricing both legs; `bars_held`; unbound store = legacy zero path) → `runner.py` (spread threading on fills/SL+TP/risk/Friday/breaker closes; equity moves by net ledger) → `reports.py` (7 trade fields; 6 metric totals; group nets incl. per-trigger) → `export.py` (appended CSV columns + JSON keys, append-only contract kept).
+- **Rules locked in code:** commission both legs; half-spread per leg with fallback on unknown; slippage on every exit except take-profit; swap always 0.0 (deferred, backfillable via `bars_held`); units defined once (`cost_usd / pip_value_per_lot`, test-locked identity).
+- **One flagged deviation (no code change either way):** specified research defaults (1.0 pt slippage, half-spread on) are NOT constructor defaults — they would rewrite frozen test economics without a ruling; research runs set them explicitly (one line each). Architect to confirm zero-preserving defaults (recommended) or rule otherwise. Paper runner untouched (allowed follow-on).
+- **Tests:** 21 new (`test_cost_model.py`, arithmetic/determinism only, no MT5, no expectancy assertions); 3 existing files extended only at export tails/fakes (no expectation re-valued). Suite **917 → 938 passed**; `locked_constants.py` diff empty.
+- Note: `06_RESEARCH/COST_MODEL_IMPLEMENTATION_NOTE.md`.
+
+**NEXT READY: staged product baseline pilot** (short window, costs on, determinism pair — not full 5y yet).
+
+## 2026-10-11 — Tier-1 design lock: cost model + product baseline V2 plan (DOCS-ONLY)
+
+**Status: two dated design notes proposed, awaiting Architect acceptance. No code written, no constant touched, no threshold changed.**
+
+- **`06_RESEARCH/COST_MODEL_DESIGN.md` (PROPOSED):** locks HOW the product will be measured fairly — zero-cost problem statement (spread gate ≠ fill cost; Phase C `spread_price=0.0`); components (commission per-lot-per-side BLOCKING placeholder + account-type declaration; slippage fixed-points on SL/forced exits, ATR-fraction/none ruled out with reasons; half-spread per leg from tick reconstruction with 0.26 fallback candidate; swap DEFERRED with `bars_held` backfill logging); fill-only seams (`_close` net + `_record_close` equity + appended export columns; fill prices never move); ledger-units conversion rule (`cost_usd / pip_value_per_lot`, test-locked identity); conservative V1 defaults (costs-on headline, costs-off upper-bound attribution); NOT-changed list (entries, SL/TP, lot formula, fills, locked constants — cost params live in runner config, never `locked_constants.py`); unit-test plan (arithmetic/determinism only, no expectancy assertions); 8 open questions for ruling.
+- **`06_RESEARCH/PRODUCT_BASELINE_V2_PLAN.md` (PROPOSED):** exact product config snapshot (M5 exec, H4+H1 required detection, M8 provisioned, structural TP feed as-wired with `tp_source` split, lot path + cap-binds note, sessions/EOD, `dry_run` N/A for backtest, Trigger D 0 by ruling); window options (A staged pilot RECOMMENDED first, B full-5y segmented, C continuous explicitly NOT proposed); runtime anchored to Phase C (77.4 compute-h @ 6.3 bars/s M1; M5 ≈353.6k bars + ≈43.8k H1 batches; C1 smoke 102 bars/s upper bound; calibration run required before committing to full 5y); determinism-pair requirements (byte-identical trades.csv/report.json + 4 more gates); metrics (count/WR/PF/net/DD, per-trigger, per-tp_source, costs-on vs costs-off, funnel + blocked-by histogram); explicit diagnostic-until-Phase-E statement; strict launch order (cost model merged FIRST — zero-cost V2 prohibited); out-of-scope list (Phase E, state carry, Tier-2 research, live capital). Appendix S records the two spread-grade ruling options only (remap thresholds vs true 0–10 scorer), no code change, independent track.
+- Suite **917 collected** (verified); `locked_constants.py` diff empty; working tree otherwise untouched (only pre-existing `M config/live_demo.json` + untracked PNG remain).
+
+**NEXT READY: Architect accepts (or amends) the two design notes → implement cost model after acceptance.**
+
 ## 2026-10-08 — PermissionError(13) operator investigation
 
 **Status: instrumentation and fail-closed hardening applied; live root call is not yet proven.** The tester report supplied no traceback or operation name, so the exact historical PermissionError cannot be attributed conclusively. Ranked evidence:

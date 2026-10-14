@@ -242,6 +242,7 @@ class MultiTFProductRuntime:
         atr_period: int = 14,
         allow_single_tf_degraded: bool = False,
         supply_d1_to_m8: bool = True,
+        episode_store=None,
     ) -> None:
         if not detection_timeframes:
             raise ValueError("detection_timeframes must name at least one timeframe")
@@ -267,6 +268,7 @@ class MultiTFProductRuntime:
         self.atr_period = atr_period
         self.allow_single_tf_degraded = bool(allow_single_tf_degraded)
         self.supply_d1_to_m8 = bool(supply_d1_to_m8)
+        self.episode_store = episode_store
         self.dedup = ZoneDedup()
         self.batches = 0
         self._fallback_driver: DetectionDriver | None = None
@@ -404,8 +406,45 @@ class MultiTFProductRuntime:
         for tf, info in (getattr(result, "details", {}) or {}).items():
             if not info:
                 continue
+            tf_name = getattr(tf, "name", str(tf))
             results_by_id = {r.poi.id: r for r in info.get("results", [])}
             disp_map = info.get("disp_map", {}) or {}
+
+            # Record validation facts into episode_store if present (observability only)
+            if self.episode_store is not None:
+                as_of_ts = getattr(report, "as_of", None)
+                for res in info.get("results", []):
+                    try:
+                        p = res.poi
+                        if res.passed:
+                            self.episode_store.record_event(
+                                "validated",
+                                poi=p,
+                                ts=as_of_ts,
+                                bar_index=arm_bar,
+                                tf=tf_name,
+                                data={
+                                    "poi_id": p.id,
+                                    "score": p.score,
+                                    "models": [getattr(m, "name", str(m)) for m in p.models],
+                                },
+                            )
+                        else:
+                            ff = getattr(res, "first_failure", None)
+                            self.episode_store.record_event(
+                                "rejected_pillar",
+                                poi=p,
+                                ts=as_of_ts,
+                                bar_index=arm_bar,
+                                tf=tf_name,
+                                data={
+                                    "poi_id": p.id,
+                                    "reason": getattr(ff, "name", str(ff)) if ff else "unknown",
+                                },
+                            )
+                    except Exception:  # noqa: BLE001 — store failure never breaks product path
+                        pass
+
             # L1 sweep links (display only): every passed POI with a paired
             # displacement gets its sweep side retained on the report.
             for poi in info.get("passed", []):
@@ -424,6 +463,18 @@ class MultiTFProductRuntime:
                     continue
                 if dedup.seen(poi.zone):
                     report.duplicates.append(poi.id)
+                    if self.episode_store is not None:
+                        try:
+                            self.episode_store.record_event(
+                                "suppressed_dedup",
+                                poi=poi,
+                                ts=as_of_ts if (as_of_ts := getattr(report, "as_of", None)) is not None else None,
+                                bar_index=arm_bar,
+                                tf=getattr(tf, "name", str(tf)),
+                                data={"poi_id": poi.id, "reason": "ZoneDedup_seen"},
+                            )
+                        except Exception:  # noqa: BLE001 — observability must never break product decision
+                            pass
                     continue
                 if note is not None:
                     try:
@@ -441,6 +492,23 @@ class MultiTFProductRuntime:
                     continue
                 dedup.register(poi.zone)
                 report.armed.append(poi)
+                if self.episode_store is not None:
+                    try:
+                        self.episode_store.record_event(
+                            "armed",
+                            poi=poi,
+                            ts=getattr(report, "as_of", None),
+                            bar_index=arm_bar,
+                            tf=getattr(tf, "name", str(tf)),
+                            data={
+                                "poi_id": poi.id,
+                                "zone_low": poi.zone.bottom,
+                                "zone_high": poi.zone.top,
+                                "models": [getattr(m, "name", str(m)) for m in poi.models],
+                            },
+                        )
+                    except Exception:  # noqa: BLE001 — store failure never breaks product path
+                        pass
 
     def _fallback_single_tf(self) -> DetectionDriver:
         """Lazily built legacy driver for the EXPLICIT degraded mode only."""
