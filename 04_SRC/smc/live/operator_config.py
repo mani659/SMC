@@ -54,6 +54,15 @@ ALLOWED_KEYS = frozenset({
     "console_mode",               # "event" (default) | "board" (legacy timed)
     "alive_interval_s",           # event mode: short alive line every N s (0 = off)
     "log_dir",
+    # Mode T + console judgements + chart markers (design lock
+    # 00_LOCKED/MODE_T_CONSOLE_MARKER_DESIGN.md §2.1/§3.1/§4.1). The flag is a
+    # POSTURE flag (default OFF); the Mode T GEOMETRY constants are NOT here
+    # and must never be (they live in smc.live.mode_t — LOCKED_FORBIDDEN_KEYS
+    # rejects them like every other locked quantity).
+    "diagnostic_entries",        # Mode T posture flag (default False)
+    "judge_interval_s",           # ≥1 judgement board per interval even flat (0 = off; default 60)
+    "marker_enabled",             # Python marker file writer on/off (default True)
+    "marker_path",                # "" = same EA-readable dir as the heartbeat
 })
 
 # LOCKED quantities that must never appear in an operator config. Values are
@@ -143,6 +152,14 @@ class OperatorConfig:
     console_mode: str = "event"
     alive_interval_s: float = 300.0
     log_dir: str = "logs/phase_d"
+    # Mode T + console judgements + marker surface (design note §2.1/§3.1/§4.1):
+    # default OFF / 60 s / on / "" so a product config untouched by the owner
+    # NEVER opts into diagnostic entries (Mode T geometry constants live in
+    # smc.live.mode_t — not here, not operable).
+    diagnostic_entries: bool = False
+    judge_interval_s: float = 60.0
+    marker_enabled: bool = True
+    marker_path: str = ""     # "" = resolved to the heartbeat's directory
     source_path: str | None = None
     raw: dict = field(default_factory=dict, repr=False, compare=False)
 
@@ -304,5 +321,27 @@ def load_operator_config(path: str | Path) -> OperatorConfig:
         if not ld:
             raise ConfigError("config.log_dir must be a non-empty string")
         kwargs["log_dir"] = ld
+    if "diagnostic_entries" in data:
+        kwargs["diagnostic_entries"] = _coerce_bool(
+            data["diagnostic_entries"], "diagnostic_entries"
+        )
+    if "judge_interval_s" in data:
+        value = data["judge_interval_s"]
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ConfigError(
+                f"config.judge_interval_s must be a number, got {value!r}"
+            )
+        if value < 0:
+            raise ConfigError(
+                f"config.judge_interval_s must be >= 0 (0 disables the flat-cadence "
+                f"judgement board), got {value!r}"
+            )
+        kwargs["judge_interval_s"] = float(value)
+    if "marker_enabled" in data:
+        kwargs["marker_enabled"] = _coerce_bool(
+            data["marker_enabled"], "marker_enabled"
+        )
+    if "marker_path" in data:
+        kwargs["marker_path"] = str(data["marker_path"]).strip()
 
     return OperatorConfig(**kwargs)

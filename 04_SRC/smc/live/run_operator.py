@@ -61,6 +61,22 @@ from smc.live.operator_console import (                      # noqa: E402
     render_startup_banner,
     render_status_board,
 )
+from smc.live.judgement_console import (                     # noqa: E402
+    judge_interval_used,
+    render_judgement_board,
+)
+from smc.live.marker_writer import (                         # noqa: E402
+    MARKER_FILENAME,
+    MarkerWriter,
+    snapshot_to_records,
+)
+from smc.live.mode_t import (                                # noqa: E402
+    MODE_T_BANNER,
+    MODE_T_MARK,
+    ModeTDirector,
+    ModeTLedger,
+    is_skip_reason,
+)
 from smc.live.structure_console import (                     # noqa: E402
     build_structure_snapshot,
     render_structure_console,
@@ -139,6 +155,13 @@ class OperatorSession:
         }
         # L1: rate-limit anchor for structure snapshot rebuilds.
         self._last_structure_mono = 0.0
+        # Mode T + judgement + markers (design lock §2/§3/§4; built in
+        # _build_stack only when the config opts in — default posture A).
+        self._mode_t_director: ModeTDirector | None = None
+        self._marker_writer: MarkerWriter | None = None
+        self._last_judge_mono = 0.0
+        self._last_marker_mono = 0.0
+        self._last_marker_sig = None
 
     # ------------------------------------------------------------------ #
     # Backend logging (append-only, gitignored)
@@ -422,6 +445,60 @@ class OperatorSession:
         self._runner = runner
         self._adapter = adapter
         self._heartbeat = heartbeat
+        # --- Marker surface (design note §4.1): same Files-dir recipe as the
+        # heartbeat — explicit config path wins, else the heartbeat's dir.
+        if getattr(cfg, "marker_enabled", True):
+            marker_dir = (
+                Path(str(cfg.marker_path)).resolve(strict=False)
+                if cfg.marker_path
+                else heartbeat_path.parent
+            )
+            self._marker_writer = MarkerWriter(
+                marker_dir / MARKER_FILENAME
+            )
+            self._log(
+                "MARKER PATH RESOLVED: " + str(self._marker_writer.path)
+            )
+        # --- Mode T director (design note §2): diagnostics only; the product
+        # path above is untouched. In dry_run NOTHING is sent (decisions are
+        # still logged — prompt §1.4 / note dry-run parity).
+        if cfg.diagnostic_entries:
+            ledger = ModeTLedger(Path(cfg.log_dir) / "mode_t_events.jsonl")
+            place_fn = None
+            cancel_fn = None
+            if not cfg.dry_run:
+                from smc.execution.order_manager import (
+                    OrderKind,
+                    OrderRequest,
+                )
+                from smc.core.enums import Direction as _Direction
+
+                broker = getattr(runner, "broker", None)
+                if broker is not None:
+                    def place_fn(decision, comment):
+                        return broker.place_limit(OrderRequest(
+                            symbol=cfg.symbol,
+                            kind=OrderKind.LIMIT,
+                            direction=decision.direction if isinstance(
+                                decision.direction, _Direction) else _Direction.LONG,
+                            volume=float(decision.volume),
+                            price=float(decision.entry),
+                            sl=float(decision.sl),
+                            tp=float(decision.tp),
+                            comment=comment,
+                        ))
+
+                    cancel_fn = (lambda ticket: bool(getattr(
+                        broker.cancel_pending(int(ticket)), "success", False)
+                    ))
+            self._mode_t_director = ModeTDirector(
+                ledger=ledger, place_fn=place_fn, cancel_fn=cancel_fn,
+                clock=lambda: datetime.now(timezone.utc),
+            )
+            self._log(
+                "MODE T enabled (diagnostic_entries=true, dry_run="
+                + str(cfg.dry_run) + ")"
+            )
         return connector
 
     # ------------------------------------------------------------------ #
@@ -580,6 +657,9 @@ class OperatorSession:
                 f"ceil A+<={ceilings['A+']:.3f} A<={ceilings['A']:.3f} "
                 f"B<={ceilings['B']:.3f} C<={ceilings['C']:.3f}"
             )
+        else:
+            self.state["gate_pass"] = False
+            self.state["gate_detail"] = "n/a (atr/spread unavailable)"
 
         if connector is not None:
             positions = self._mt5_call(
@@ -592,6 +672,176 @@ class OperatorSession:
         self.state["open_positions"] = (
             None if positions is None else len(positions)
         )
+        # Mode T poll hook (design note §2.2/§2.4): evaluate proof events
+        # + manage the diagnostic book AFTER the §28.5 mirror artifacts
+        # (spread/atr/positions are either valid or untouched); never
+        # breaks the product poll itself.
+        try:
+            self._mode_t_on_poll()
+        except Exception as exc:          # noqa: BLE001 — never breaks the poll
+            self.state["errors"].append(f"mode T poll: {exc!r}")
+            self._logger.error(
+                "MODE T POLL FAILED error=%r", exc, exc_info=True,
+            )
+
+    def _mode_t_on_poll(self) -> None:
+        """Mode T seam (candidate/limit seam, design note §2 — diagnostics only).
+
+        Per poll, for each routed-but-not-accepted workflow in the adapter's
+        own book (the ONLY Stage-3 proof events visible without forking
+        detection/§5), evaluate rule T2 once per (poi, proof) event and
+        manage the director's ticket book (12-bar rest / §5 invalidation /
+        Friday EOD §28.4). Product ties win via ``product_ticket_active``
+        (a live product pending/position for the same POI). dry_run: the
+        director records every decision and sends nothing (§1.4 parity).
+        Observability-only: any failure is recorded, never fatal to the
+        product loop.
+        """
+        director = self._mode_t_director
+        if director is None:
+            return
+        from smc.config.locked_constants import (
+            FRIDAY_EOD_CLOSE_HOUR_UTC,
+            SPREAD_GRADE_MULTIPLIERS,
+            SPREAD_MAX_ATR,
+        )
+        from smc.core.enums import POIState
+        from smc.risk.spread_grading import grade_for_score
+        from smc.utils.timestamps import in_session
+        from smc.utils.timestamps import Session as _Session
+        from smc.live.mode_t import ACTION_PLACE
+
+        cfg = self.config
+        adapter = self._adapter
+        engine = getattr(adapter, "engine", None)
+        candles = getattr(adapter, "_candles", None)
+        if engine is None or not candles:
+            return
+        bar_index = len(candles) - 1
+        now_bar = candles[-1].timestamp
+        atr = adapter.current_atr(bar_index)
+        spread = self.state.get("spread")
+
+        from smc.live.mode_t import ACTION_PLACE, MIN_LOT_FLOOR
+
+        def to_utc_hour(ts):
+            from smc.utils.timestamps import to_utc
+            return to_utc(ts).hour
+
+        def session_gate(ts) -> bool:
+            if not cfg.allowed_sessions:
+                return True
+            return any(
+                in_session(ts, _Session[name]) for name in cfg.allowed_sessions
+            )
+
+        def spread_gate(score, bar_ts) -> bool:
+            if spread is None or not atr > 0:
+                return True          # unknowable → not a Mode T verdict input
+            grade = grade_for_score(float(score or 0.0))
+            ceiling = SPREAD_MAX_ATR * atr * SPREAD_GRADE_MULTIPLIERS[str(grade)]
+            return bool(spread <= ceiling)
+
+        # Deferred (separate dict) because consider() must run AFTER the
+        # product-ticket scan of the SAME poll — built below, then applied.
+        for poi_id, candidate in list(adapter.active_workflows().items()):
+            route_id = str(getattr(candidate, "route_id", "") or "")
+            if "@" not in route_id:
+                continue
+            try:
+                proof_bar = int(route_id.rsplit("@", 1)[1])
+            except ValueError:
+                continue
+            if proof_bar < 0 or proof_bar >= len(candles):
+                continue
+            proof = candles[proof_bar]
+            trigger_enum = getattr(candidate, "trigger", None)
+            letter = str(
+                getattr(trigger_enum, "value", None) or "T2"
+            )
+            tf_enum = getattr(candidate, "detection_tf", None)
+            detection_tf = (
+                getattr(tf_enum, "name", None)
+                if tf_enum is not None else None
+            )
+            decision = director.consider(
+                poi_id=str(poi_id),
+                detection_tf=detection_tf,
+                trigger_letter=letter,
+                direction=candidate.direction,
+                proof_bar=proof_bar,
+                proof_high=float(proof.high),
+                proof_low=float(proof.low),
+                proof_close=float(proof.close),
+                atr=atr if atr > 0 else None,
+                session_ok=session_gate(now_bar),
+                spread_gate_ok=spread_gate(
+                    getattr(candidate, "score", None), now_bar
+                ),
+                product_ticket_active=self._product_ticket_active(
+                    str(poi_id)
+                ),
+                concurrent_open=(
+                    len(director.open_pois)
+                ),
+                volume_min=MIN_LOT_FLOOR,
+                bar_index=bar_index,
+            )
+            if (decision.action == ACTION_PLACE
+                    or decision.skip_reason is not None):
+                self._event_reason = self._event_reason or (
+                    "Mode T " + decision.action
+                    + (""
+                       if decision.skip_reason is None
+                       else ": " + decision.skip_reason)
+                )
+
+        # §28.4 Friday EOD + §5 invalidation cancel the book (§2.4).
+        invalidated = []
+        for poi in engine.tracked_pois():
+            try:
+                if engine.state_machine.current(poi) == POIState.VIOLATED:
+                    invalidated.append(poi.id)
+            except Exception:          # noqa: BLE001 — display-only safety
+                continue
+        friday_eod = (
+            now_bar.weekday() == 4
+            and to_utc_hour(now_bar) >= int(FRIDAY_EOD_CLOSE_HOUR_UTC)
+        )
+        for cancel in director.manage(
+            bar_index=bar_index,
+            friday_eod=friday_eod,
+            invalidated_pois=invalidated,
+        ):
+            self._log("MODE T MANAGE " + str(cancel))
+
+    def _product_ticket_active(self, poi_id: str) -> bool:
+        """True when a PRODUCT pending/position exists for ``poi_id`` (broker
+        truth; product comments start with ``poi.id[:8]`` and never with the
+        Mode T mark). Conservative: a MT5-call failure reads False (ties are
+        then product-lost only if the book is empty — demo caps still bound)."""
+        if self._mt5 is None:
+            return False
+        prefix = str(poi_id)[:8]
+        orders = self._mt5_call(
+            "orders_get", self._mt5.orders_get, symbol=self.config.symbol
+        ) or []
+        for order in orders:
+            comment = str(getattr(order, "comment", "") or "")
+            if comment.startswith(MODE_T_MARK):
+                continue
+            if prefix and comment.startswith(prefix):
+                return True
+        positions = self._mt5_call(
+            "positions_get", self._mt5.positions_get, symbol=self.config.symbol
+        ) or []
+        for position in positions:
+            comment = str(getattr(position, "comment", "") or "")
+            if comment.startswith(MODE_T_MARK):
+                continue
+            if prefix and comment.startswith(prefix):
+                return True
+        return False
 
     def _maybe_refresh_structure(self, new_bars: int, batch_changed: bool) -> None:
         """L1: rebuild the read-only structure snapshot.
@@ -693,6 +943,11 @@ class OperatorSession:
         )
         print(banner)
         self._append_console_mirror(banner)
+        # Mode T posture banner (design note §2.1 — printed EXACTLY once,
+        # exact string). Never printed when the flag is off.
+        if self._mode_t_director is not None:
+            print(MODE_T_BANNER)
+            self._append_console_mirror(MODE_T_BANNER)
         # Event 1 (session start): the first full board prints immediately in
         # BOTH modes — event mode via a queued reason, board mode via the
         # legacy last_console=0.0 anchor.
@@ -752,12 +1007,14 @@ class OperatorSession:
                 if self._console_mode == "event":
                     self._maybe_print_console(now_mono)
                     self._maybe_alive(now_mono)
+                    self._maybe_judge(now_mono)
                 else:
                     if self._console_force or \
                             now_mono - last_console >= cfg.console_refresh_s:
                         self._console_force = False
                         last_console = now_mono
                         self._publish_console()
+                    self._maybe_judge(now_mono)
                 time.sleep(cfg.poll_interval_s)
         except KeyboardInterrupt:
             print("\n[session] Ctrl+C — clean shutdown…")
@@ -782,6 +1039,106 @@ class OperatorSession:
         self._event_reason = None
         self._publish_console(reason=reason)
         return True
+
+    def _maybe_judge(self, now_mono: float) -> bool:
+        """Judgement board (design note §3.1): guaranteed at least ONE full
+        board per ``judge_interval_s`` EVEN WHEN FLAT (0 s disables). Pure
+        observability; failures are recorded, never fatal."""
+        interval = 0.0
+        try:
+            interval = float(getattr(self.config, "judge_interval_s", 60.0) or 0.0)
+        except (TypeError, ValueError):
+            interval = 0.0
+        if interval <= 0:
+            return False
+        if now_mono - self._last_judge_mono < interval:
+            return False
+        self._last_judge_mono = now_mono
+        try:
+            self._publish_judgement()
+        except Exception as exc:          # noqa: BLE001 — board must not die
+            self.state["errors"].append(f"judgement board: {exc!r}")
+            self._logger.error(
+                "JUDGEMENT BOARD FAILED error=%r", exc, exc_info=True,
+            )
+        return True
+
+    def _publish_judgement(self) -> None:
+        """Render + mirror ONE judgement board (blocks per design §3.2)."""
+        now_utc = _utcnow().isoformat(timespec="seconds")
+        director = self._mode_t_director
+        events: list[dict] = []
+        if director is not None:
+            tail = director.ledger.tail(5)
+            for rec in tail:
+                events.append(
+                    f"POI {rec.get('poi_id', 'n/a')[:8]} proof={rec.get('proof_bar', 'n/a')}"
+                    f" · action={rec.get('action', 'n/a')}"
+                    + (f" · SKIP: {rec.get('skip_reason')}"
+                       if rec.get("skip_reason") else "")
+                    + (f" · Mode T LIMIT {rec.get('entry'):.2f} reason proof_close-mid"
+                       if rec.get("action") == "PLACE" else "")
+                )
+        if not events and self.state.get("structure") is None and not self.state.get("errors"):
+            events = []                     # flat session keeps the note's idle line
+        hb = self._heartbeat
+        board = render_judgement_board(
+            now_utc=now_utc,
+            mode="T" if director is not None else "A",
+            mode_t_banner=MODE_T_BANNER if director is not None else None,
+            structure=self.state.get("structure"),
+            mode_t_events=events,
+            book_product_positions=self.state.get("open_positions") or 0,
+            book_product_pendings=None,
+            book_mode_t_positions=None,
+            book_mode_t_pendings=(len(director.resting) if director is not None else 0),
+            hb_seq=getattr(hb, "sequence", None),
+            hb_age_s=(max(0.0, _utcnow().timestamp() - hb._last_unix)
+                      if hb is not None and getattr(hb, "_last_unix", None) is not None
+                      else None),
+            hb_state=(getattr(hb, "state", None)
+                      if self._heartbeat_ea_readable is not False
+                      else f"{getattr(hb, 'state', None)} (EA path unconfirmed)"),
+        )
+        print(board)
+        self._append_console_mirror(board)
+
+    def _maybe_markers(self, now_mono: float) -> None:
+        """Marker snapshot rewrite (design note §4.1): refresh when the
+        structure snapshot changes and on Mode T place/cancel (rate-limited
+        by ``console_refresh_s`` otherwise). Marker failure logged + skipped
+        — never fatal (§4.4)."""
+        writer = self._marker_writer
+        if writer is None:
+            return
+        director = self._mode_t_director
+        marker_sig = (
+            self.state.get("htf_batches"),
+            tuple(sorted((director.resting or {}).items()))
+            if director is not None else (),
+        )
+        sig = marker_sig
+        if sig == self._last_marker_sig:
+            return
+        if now_mono - self._last_marker_mono < max(1.0, float(self.config.console_refresh_s)):
+            return
+        self._last_marker_mono = now_mono
+        self._last_marker_sig = sig
+        try:
+            records = snapshot_to_records(
+                symbol=self.config.symbol,
+                structure=self.state.get("structure"),
+                mode="T" if self._mode_t_director is not None else "A",
+                heartbeat_ok=(self._heartbeat_ea_readable is not False),
+                mode_t_poi=None,          # V1: entry line carried in symbol text below
+                updated_at_utc=_utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+            )
+            writer.write(records)
+        except Exception as exc:          # noqa: BLE001 — markers never fatal
+            self.state["errors"].append(f"marker writer: {exc!r}")
+            self._logger.error(
+                "MARKER SNAPSHOT FAILED error=%r", exc, exc_info=True,
+            )
 
     def _maybe_alive(self, now_mono: float) -> bool:
         """Event mode: at most ONE short alive line per ``alive_interval_s``.
@@ -834,6 +1191,12 @@ class OperatorSession:
             structure_board = render_structure_console(structure)
             print(structure_board)
             self._append_console_mirror(structure_board)
+        # Marker surface rides every console publish (design §4.1: refresh
+        # on structure change + Mode T place/cancel; rate-limited).
+        try:
+            self._maybe_markers(time.monotonic())
+        except Exception as exc:          # noqa: BLE001 — markers never fatal
+            self.state["errors"].append(f"marker publish: {exc!r}")
         # Periodic KPI JSONL rewrite (append-friendly snapshot of the session).
         kpi_path = self.log_dir / "kpi_records.jsonl"
         try:
@@ -904,6 +1267,11 @@ class OperatorSession:
             )
         self._log("SESSION STOP " + json.dumps(
             {"polls": summary["polls"], "bars": summary["bars_processed"]}))
+        # Mode T clean stop (design note §2.4): resting diagnostic tickets
+        # cancelled; open diagnostic positions left to the static watchdog.
+        if self._mode_t_director is not None:
+            for cancel in self._mode_t_director.shutdown():
+                self._log("MODE T SHUTDOWN CANCEL " + str(cancel))
         shutdown = getattr(connector, "shutdown", None)
         if callable(shutdown):
             shutdown()
