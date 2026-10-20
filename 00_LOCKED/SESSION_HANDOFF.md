@@ -1,5 +1,14 @@
 # SESSION HANDOFF — SMC BOT
 
+## 2026-10-20 (6) — COMMIT+PUSH — scarcity stack frozen on origin/main (`COMMIT_STATUS: PASS`)
+
+**Authority: Architect 2026-10-20 COMMIT_READY: YES_WITH_CAVEATS (split commits; no live-promotion claim). Commit-only engagement — no strategy logic change. Suite: working tree 1,236 passed EXIT=0; committed HEAD verified in a clean worktree — 986 passed, 4 skipped, EXIT=0 (local suite total is higher because untracked research/live test files stay deliberately uncommitted).**
+
+- **SHAs (this branch, pushed): `e1d1893` feat(orchestration): ZoneDedup retire with episode lifecycle (LEG 5b) · `14967bd` docs(research): scarcity LEG 1–6 reports, audit, ops density smoke note · `0130081` docs(locked): owner plan + episode-store design + handoff/changelog · `51dee42` ops(demo): density-smoke operator config · `7e3288b` fix(product): include smc.backtest.cost_model referenced by tracked runner/tests (HEAD-green necessity, no behavior change). The pre-existing local commit `9b649d5` (Mode T) rides at the base of these; not amended.**
+- `locked_constants.py` diff **EMPTY**. `06_RESEARCH/results/` ignored (gitignored line 38) and uncommitted. No secrets in commits (scanned).
+- **Deliberately left unstaged (live-path residual, awaiting its own accepted ruling):** 04_SRC `smc/data/mt5_connector.py`, `smc/live/{heartbeat,mode_t,operator_console,run_operator}.py`, tests `{test_live_phase7,test_mode_t,test_mode_t_console_markers,test_operator_pack,test_perm_hardening}`, `05_MQL5_SAFETY/SMC_Safety_Watchdog.mq5`, `config/live_demo.json`; untracked research packages (other legs: entry-representation, reactive admission, coincidence/HTF censuses, track B, etc.), `06_RESEARCH/flowchart/`, `AUTO_PDF_PLACEHOLDER.png`, and untracked 00_LOCKED docs (Mode A/M entry representation, reactive admission, Mode T markers, multi-TF owner plan).
+- **NEXT_READY (Architect):** live-promotion residual ruling (multi-H1 soak vs accept · EA attach drill · Mode B stub) and the live-path commit decision for the unstaged residual above.
+
 ## 2026-10-20 (5) — OPS DENSITY SMOKE, live/paper operator path (M-2 gate) — MEASURED (`OPS_DENSITY_STATUS: PASS`)
 
 **Status: COMPLETE — OPS ONLY, NO EDGE/PnL CLAIM. `LOGIC_CHANGED: NO` (no `04_SRC` edit; suite NOT_RUN). Authority: Architect disposition 2026-10-20 (LIVE_PROMOTION blocked until density soak under ~20× arm class). Note: `06_RESEARCH/OPS_DENSITY_SMOKE_NOTE.md`; artifacts `06_RESEARCH/results/ops_density_smoke_session/` (gitignored).**
