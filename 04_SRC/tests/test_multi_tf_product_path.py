@@ -180,7 +180,7 @@ def test_zone_dedup_matches_research_rule():
     dedup = ZoneDedup()
     long_zone = Zone(top=110.0, bottom=105.0, direction=Direction.LONG)
     assert dedup.seen(long_zone) is False
-    dedup.register(long_zone)
+    dedup.register(long_zone, owner_id="poi-000001")
     assert dedup.seen(long_zone) is True                       # identical
     assert dedup.seen(Zone(top=105.5, bottom=100.0,
                            direction=Direction.LONG)) is True  # overlap

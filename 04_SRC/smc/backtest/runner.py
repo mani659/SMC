@@ -653,6 +653,10 @@ class BacktestRunner(BarHandler):
             return
         retain = {o.poi_id for o in self.orders.active() if o.poi_id}
         retain |= {p.poi_id for p in self.positions.open_positions() if p.poi_id}
+        # LEG 5 (design R3.1/F-2): an alive R9 intent is a live obligation
+        # (it may still place) — its POI's dedup key must not retire under it.
+        retain |= {i.candidate.poi_id for i in self.intents.alive_intents()
+                   if getattr(i.candidate, "poi_id", None)}
         prune(retain, bar_index)
 
     def current_equity(self) -> float:

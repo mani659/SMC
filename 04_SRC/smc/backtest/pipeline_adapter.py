@@ -133,6 +133,16 @@ class PipelineAdapter:
         # prefix recomputations it replaces (per-piece arguments in the
         # Phase C report; October golden replay pins it byte-for-byte).
         self._state: SeriesState | None = None
+        # LEG 5 (design R3.4): the session's effective ZoneDedup handle,
+        # bound ONCE by MultiTFProductRuntime from the arm seam so the
+        # object this adapter retires from IS the object ``seen()`` reads.
+        # None (unbound) → retirement is a no-op (design R6).
+        self._dedup_registry = None
+        # LEG 5 R3.2 bookkeeping: ids already sent to retire (the two
+        # retirement sources may overlap; re-sending an id would only
+        # inflate ``retire_misses``). Pure dedup bookkeeping — retirement
+        # itself is idempotent either way.
+        self._retire_sent: set[str] = set()
 
     # ------------------------------------------------------------------ #
     # Runner adapter protocol
@@ -370,7 +380,81 @@ class PipelineAdapter:
             self._tested_bar.pop(poi_id, None)
             self._routed.discard(poi_id)
             self._scan_cursor.pop(poi_id, None)
+        # LEG 5 (design R3.2): engine first, registry second — the ids this
+        # prune just released lose their ZoneDedup keys in the SAME step,
+        # then the still-tracked episodes that satisfy the R3.1 death
+        # predicate (no live obligation AND terminal-or-past-give-up) are
+        # swept. The engine's own retention is deliberately untouched
+        # (design §1.1: adapter ``bar=None`` retention keeps FRESH/TESTED;
+        # the registry is the lifecycle subject, not the engine's list).
+        # NOTE: the sweep receives the RUNNER-SUPPLIED obligation ids
+        # (orders / positions / alive intents) — NOT the ``_may_route``
+        # retention additions above, which keep an episode routable but are
+        # NOT a live trade obligation (F-1 distinction).
+        self._retire_dead_keys(pruned, set(retain_ids or ()), bar_index)
         return pruned
+
+    def bind_dedup_registry(self, dedup) -> None:
+        """LEG 5 R3.4: bind the session's effective ZoneDedup handle.
+
+        Called by ``MultiTFProductRuntime`` in the arm seam so the object
+        this adapter retires from IS the object ``seen()`` reads for that
+        session (``run_batch``'s ``dedup`` override, else the runtime's own
+        registry). Idempotent for the same handle; silently rebinding a
+        DIFFERENT handle would split identity — refused loudly.
+        """
+        if self._dedup_registry is not None and self._dedup_registry is not dedup:
+            raise ValueError(
+                "adapter already bound to a different dedup registry "
+                "(LEG 5 R3.4 handle identity)")
+        self._dedup_registry = dedup
+
+    def _retire_dead_keys(self, pruned_ids, retain, bar_index) -> None:
+        """LEG 5 R3.1/R3.2: release ZoneDedup keys of product-dead episodes.
+
+        Death (design R3.1) = the owning episode has NO live obligation
+        (no resting order, no open position, no alive R9 intent — carried
+        in ``retain`` by the runners' ``_prune_engine_state`` — and no
+        in-flight workflow) AND (§5 state VIOLATED OR
+        ``bar_index > arm_bar + poi_give_up_bars()`` — the SAME clock the
+        give-up scan closure already uses). FRESH/TESTED inside the
+        window stay live even with no obligation (the episode may still
+        route — P1 conservatism); any obligated POI stays live
+        regardless of state or clock.
+
+        Fail-safe (design R6): no handle → no-op; a per-POI evaluation
+        failure never breaks the bar loop. Nothing is cleared wholesale,
+        no arm may raise because of retirement, and no new threshold
+        exists (the clock is the shipped ``poi_give_up_bars()``).
+        """
+        dedup = self._dedup_registry
+        if dedup is None or not callable(getattr(dedup, "retire", None)):
+            return
+        try:
+            for poi_id in pruned_ids:
+                if poi_id in self._retire_sent:
+                    continue
+                self._retire_sent.add(poi_id)
+                dedup.retire(poi_id)
+            if bar_index is None:
+                return  # legacy no-bar prune: terminal release only
+            obligations = set(retain or ())
+            obligations |= set(self._workflows)
+            give_up = poi_give_up_bars()
+            machine = self.engine.state_machine
+            for poi in self.engine.tracked_pois():
+                if poi.id in obligations or poi.id in self._retire_sent:
+                    continue
+                if machine.current(poi) is not POIState.VIOLATED:
+                    episode = self.engine.episode(poi)
+                    if episode is None:
+                        continue
+                    if not bar_index > episode.arm_bar + give_up:
+                        continue  # still inside its seek window — live
+                self._retire_sent.add(poi.id)
+                dedup.retire(poi.id)
+        except Exception:  # noqa: BLE001 — retirement must never break the bar
+            return
 
     # ------------------------------------------------------------------ #
     # Internals

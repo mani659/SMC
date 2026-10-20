@@ -945,6 +945,10 @@ class PaperRunner:
         prune = getattr(self.adapter, "prune_terminal_pois", None)
         retain = {t.poi_id for t in self._pendings.values() if t.poi_id}
         retain |= {p.poi_id for p in self._positions.values() if p.poi_id}
+        # LEG 5 (design R3.1/F-2): an alive R9 intent is a live obligation
+        # (it may still place) — its POI's dedup key must not retire under it.
+        retain |= {i.candidate.poi_id for i in self.intents.alive_intents()
+                   if getattr(i.candidate, "poi_id", None)}
         if callable(prune):
             prune(retain, bar_index)
         else:

@@ -141,29 +141,91 @@ class ZoneDedup:
     re-detected by a later HTF batch is never armed twice. Shared here so
     live/paper/research all dedup identically (POI ids are uuid4, so
     identity comparison alone is not enough).
+
+    LEG 5 lifecycle coupling (design
+    ``06_RESEARCH/ZONE_DEDUP_LIFECYCLE_DESIGN.md``, Architect ACCEPT
+    2026-10-20): every key is OWNED by the ``poi.id`` that armed it —
+    ``register(zone, owner_id=...)`` (owner required; the geometry tuple
+    and the 6 dp rounding are unchanged) — and ``retire(owner_id)``
+    removes the key when the owning episode is product-dead. The death
+    predicate itself (no live obligation AND VIOLATED-or-past the §24
+    give-up window) lives in ``PipelineAdapter.prune_terminal_pois``;
+    this class only removes BY OWNER ID and never re-derives geometry
+    from floats (design R4: ``seen`` compares unrounded queries against
+    6 dp stored bounds, so a float re-derivation would be lossy).
+    ``seen`` stays owner-blind and keeps its inclusive overlap semantics
+    byte-for-byte; a retired key is REMOVED, never flagged dead, so
+    ``seen`` remains a pure "is a live episode here" test (design R2).
+
+    Counters (design R6): ``retired_total`` — keys removed;
+    ``retire_misses`` — retire calls for an id with no live key
+    (expected: both retirement sources may touch one id); ``live_keys`` —
+    current registry size.
     """
 
     def __init__(self) -> None:
-        self._zones: list[tuple[str, float, float]] = []
+        # (direction, top6, bottom6, owner_id); the owner is an attribute
+        # of the key, never part of the sameness test (design R1/R2).
+        self._zones: list[tuple[str, float, float, str]] = []
+        self.retired_total: int = 0
+        self.retire_misses: int = 0
 
     def seen(self, zone) -> bool:
         """True when an equivalent (same-direction, overlapping) zone exists."""
         top = float(zone.top)
         bottom = float(zone.bottom)
         direction = str(getattr(zone, "direction", ""))
-        for known_direction, known_top, known_bottom in self._zones:
+        for known_direction, known_top, known_bottom, _owner in self._zones:
             if known_direction != direction:
                 continue
             if known_top >= bottom and top >= known_bottom:
                 return True
         return False
 
-    def register(self, zone) -> None:
-        """Record a zone as an armed episode (rounded to 6dp, as research)."""
+    def register(self, zone, *, owner_id: str) -> None:
+        """Record a zone as an armed episode (rounded to 6dp, as research).
+
+        ``owner_id`` (the armed POI's id) is REQUIRED — an ownerless key
+        could never be retired (design R1). One successful arm registers
+        exactly one key; a failed ``arm_at`` registers none (behaviour
+        unchanged — ``register`` still runs only after ``arm_at`` wins).
+        """
+        if owner_id is None:
+            raise TypeError(
+                "ZoneDedup.register requires owner_id (the armed poi.id); "
+                "an ownerless key could never be retired (LEG 5 design R1)")
         self._zones.append(
             (str(getattr(zone, "direction", "")),
-             round(float(zone.top), 6), round(float(zone.bottom), 6))
+             round(float(zone.top), 6), round(float(zone.bottom), 6),
+             str(owner_id))
         )
+
+    def retire(self, owner_id) -> int:
+        """Remove every key owned by ``owner_id``; idempotent (design R3/R6).
+
+        Returns the number of keys removed. An id with no live key is an
+        EXPECTED case (both retirement sources may touch one id): no
+        exception, ``retire_misses`` incremented, 0 returned. The lookup is
+        by the stored owner string — floats are never re-derived. Removal
+        preserves the order of the remaining keys, so registry iteration
+        stays deterministic.
+        """
+        if owner_id is None:
+            return 0
+        wanted = str(owner_id)
+        kept = [z for z in self._zones if z[3] != wanted]
+        removed = len(self._zones) - len(kept)
+        if removed:
+            self._zones = kept
+            self.retired_total += removed
+        else:
+            self.retire_misses += 1
+        return removed
+
+    @property
+    def live_keys(self) -> int:
+        """Number of live keys currently in the registry (design R6)."""
+        return len(self._zones)
 
     def __len__(self) -> int:
         return len(self._zones)
@@ -316,6 +378,16 @@ class MultiTFProductRuntime:
         the runtime-owned registry (tests); default = the runtime's own.
         """
         zone_dedup = dedup if dedup is not None else self.dedup
+        # LEG 5 R3.4: the per-bar prune step must retire from the SAME
+        # registry this runtime reads — bind the effective registry (the
+        # ``dedup`` argument, else this runtime's own) onto the adapter
+        # every batch, idempotently, from the run seam. No constructor
+        # churn across live/paper/backtest; handle identity is testable
+        # (``adapter._dedup_registry is runtime.dedup``).
+        if adapter is not None:
+            bind = getattr(adapter, "bind_dedup_registry", None)
+            if callable(bind):
+                bind(zone_dedup)
         missing = self.missing_series(series_by_tf)
         if missing:
             names = ", ".join(tf.name for tf in missing)
@@ -490,7 +562,7 @@ class MultiTFProductRuntime:
                 except Exception as exc:  # noqa: BLE001 — one POI never kills the batch
                     report.errors[poi.id] = f"{type(exc).__name__}: {exc}"
                     continue
-                dedup.register(poi.zone)
+                dedup.register(poi.zone, owner_id=poi.id)  # LEG 5 R1: owned key
                 report.armed.append(poi)
                 if self.episode_store is not None:
                     try:
@@ -562,6 +634,7 @@ class MultiTFProductRuntime:
         note = getattr(adapter, "note_route_context", None) if adapter is not None else None
         results_by_id = {r.poi.id: r for r in results}
         from smc.backtest.pipeline_bridge import pillar_path_summary
+
         for poi in passed:
             if engine.episode(poi) is not None:
                 report.skipped_tracked.append(poi.id)
@@ -582,6 +655,6 @@ class MultiTFProductRuntime:
             except Exception as exc:  # noqa: BLE001
                 report.errors[poi.id] = f"{type(exc).__name__}: {exc}"
                 continue
-            dedup.register(poi.zone)
+            dedup.register(poi.zone, owner_id=poi.id)
             report.armed.append(poi)
         return report
