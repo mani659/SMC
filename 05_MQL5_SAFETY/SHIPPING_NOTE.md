@@ -18,6 +18,16 @@ the Python side writes the heartbeat to the terminal data-folder
 `MQL5/Files/smc_heartbeat.txt` automatically (derived from the live
 `terminal_info().data_path`, else `terminal_path` in `config/live_tester.json`).
 
+**ONE EA since 2026-10-22 (companion-EA merge):** the structure-draw duty is
+now INSIDE `SMC_Safety_Watchdog.mq5` (v1.20) — compile once, attach once. All
+draw inputs default on (`InpEnableStructureDraw=true`, file
+`smc_structure_draw.txt`, prefix `SMC_SD_`); it reads the same `MQL5/Files`
+sandbox and paints only — a bad/missing draw file can never trigger the
+emergency. `SMC_Structure_Draw.mq5` is **DEPRECATED — do not ship, do not
+attach** (kept only as reference source; if the build script would copy it,
+remove it from the pack's `mql5/` folder). Owner checklist before any tester
+shipping: `06_RESEARCH/MT5_STRUCTURE_DRAW_NOTE.md` §4b.
+
 Operational note: use ONE active Python owner per terminal. A leftover operator
 process (or a bat-test venv) keeps the watchdog quiet and competing IPC clients
 produce spurious `PermissionError(13)`.
