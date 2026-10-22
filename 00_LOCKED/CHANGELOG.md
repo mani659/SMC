@@ -7,6 +7,19 @@
 
 ## [Unreleased]
 
+### 2026-10-22 (4) — PRE-SETTLE SNAPSHOT COMMITTED + PUSHED (7 commits; `SNAPSHOT_STATUS: PASS` — NOT A TESTER RELEASE, NO SHIP)
+- Authority: Architect / Owner 2026-10-22 — commit-only engagement. **NO tester zip rebuild, NO external ship, nothing shipped to testers.** `locked_constants.py` diff **EMPTY**; suite **1296 passed (EXIT=0)** at the committed state; `06_RESEARCH/results/` + `07_DATA/` gitignored and NOT committed (nothing force-added); secrets scan clean on every staged path; no force-push.
+- **7 commits on `main`, pushed `b5e8c53..a4e98e4` to `origin` (`https://github.com/mani659/SMC.git`):**
+  - `ee7c65f` **ops(live):** MT5 auto-reconnect (`MT5Connector.is_alive`/`reconnect`), heartbeat in-place write WITHOUT truncate (kills the false "heartbeat unreadable" emergency that flattened demo positions ~2-4x/day), startup banner surfaces heartbeat path / HB independence / auto-reconnect, Mode T ONE entry marker, NEW `smc/live/structure_publish.py` + `structure_draw_enabled`/`structure_draw_path` config keys. `config/live_demo.json`: dry_run true->false for the owner's demo settle (`require_demo=true` retained).
+  - `6f541bd` **feat(mql5):** structure-draw duty MERGED into `05_MQL5_SAFETY/SMC_Safety_Watchdog.mq5` v1.20 (ONE EA: heartbeat emergency + markers + draw; timer order safety -> markers -> draw); `SMC_Structure_Draw.mq5` DEPRECATED (reference source only); explicit datetime casts on the display-window math -> 0 errors / 0 warnings.
+  - `defe1c0` **feat(essence):** SIGNED `00_LOCKED/ESSENCE_CONTRACT_V1.md` + NEW `04_SRC/smc/essence/**` (parallel path, COMPLEX untouched) + capture harnesses + expert-pack path records.
+  - `e10fe66` **feat(dumb):** DUMB flowchart v1 parallel package `04_SRC/smc/dumb/**` + `00_LOCKED/BASELINE_COMPLEX_V1_1_COMPARISON_POINT.md` (COMPLEX frozen at `b5e8c53`).
+  - `ba4ca4a` **research:** 23 diagnostic harnesses + 23 frozen-helper test modules (DIAGNOSTIC, not edge).
+  - `0fc33de` **docs(research):** 45 note/report files backing those harnesses.
+  - `a4e98e4` **docs(locked):** SESSION_HANDOFF/CHANGELOG ledger, `PRODUCT_RUNTIME_CONTRACT.md` §10 (F1 essence M1 amendment), `POST_V1_ACTIVE_TODO.md`, + 6 previously untracked 00_LOCKED product contracts.
+- **Left OUT of the snapshot on purpose (local-only excludes, no repo policy edit):** `AUTO_PDF_PLACEHOLDER.png` (transient build artifact of `AUTO_BUILD_RELEASE.py`), `06_RESEARCH/flowchart/2SrLo.jpg` (parked binary reference image), `06_RESEARCH/scripts/go_test.sh` (stray Go helper; this repo is Python, no `go.mod`). `02_KNOWLEDGE_BASE/` and `03_REFERENCE_CODE/` stay untracked under the existing policy — the expert pack PATHS are recorded, the chart binaries are not.
+- **NEXT_READY: owner multi-day settle on the terminal (merged EA + operator + structure draw) — run the §4b checklist; ship to testers ONLY after the settle AND the checklist PASS.**
+
 ### 2026-10-22 (3) — WATCHDOG + STRUCTURE DRAW MERGED INTO ONE COMPANION EA (heartbeat safety UNCHANGED; `MERGE_EA_STATUS: PASS` — VISUALIZATION, NOT STRATEGY)
 - Authority: Architect merge lock 2026-10-22. **One clean `.mq5`: `05_MQL5_SAFETY/SMC_Safety_Watchdog.mq5` v1.20 now carries heartbeat emergency + markers + structure draw (timer order safety → markers → draw). No Python change (`PYTHON_CHANGED: NO` — both files already published), `locked_constants.py` diff EMPTY, no trading-logic change, no edge claim; suite **1296 passed (EXIT=0)**.
 - **Heartbeat behavior UNCHANGED (verified):** `CheckHeartbeat`/`Emergency`/`CloseAllPositions`/`DeleteAllPendings` byte-identical — `OrderSend`/`TRADE_ACTION_*` still appear ONLY in those two pre-existing emergency duties. The draw duty contains ZERO `Emergency`/`Alert`/trade calls (grep-verified): missing/stale/foreign/symbol-mismatched `smc_structure_draw.txt` → `ObjectsDeleteAll(0, InpDrawPrefix)` ONLY, never a false emergency.
