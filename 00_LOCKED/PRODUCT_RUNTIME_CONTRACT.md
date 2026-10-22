@@ -117,6 +117,39 @@ fallback until a trigger honestly emits a structural target under the §C3 valid
 `00_LOCKED/V1_1_RUNTIME_BASELINE_FREEZE.md`. Changes to locked constants, pillars, triggers,
 zone bands, or R7/R9 require a dated ruling in that file or `POST_V1_PLAN_OF_ACTION.md`.
 
+## 10. Amendment 2026-10-21 — ESSENCE M1 path (F1 ruling, Architect)
+
+**Architect F1 ruling (2026-10-21), under the SIGNED `00_LOCKED/ESSENCE_CONTRACT_V1.md` 
+(Owner Salman + Architect sign-off):** the older **"no M1-exec product"** line in §1 is
+**SUPERSEDED FOR THE ESSENCE PATH ONLY**. A parallel essence product path MAY
+**detect/confirm/enter on M1** (`ESSENCE_SLICE` — `04_SRC/smc/essence/**`), executing the
+signed picks: entry TF **A (M1 sniper)**, LIMIT-style entry inside the HTF zone, confirm
+set **C** (ending diagonal primary) read on M1, SL band **B** (2–5 pips beyond the M1
+structure), TP **D** (macro HTF target with the hard 1:5 gate), PureRunner BE **ON**
+(1.0 × ATR, 100 % runner).
+
+Scope and limits of this amendment (verbatim intent):
+
+* **The COMPLEX / V1.1 baseline is untouched and remains M5-oriented** — §1's canonical
+  runtime, the per-bar M5 execution loop, the one-driver rule, the loud-fail policy and the
+  §4 non-goals all stand unchanged for the COMPLEX path. COMPLEX stays the frozen
+  comparison baseline (`00_LOCKED/BASELINE_COMPLEX_V1_1_COMPARISON_POINT.md`, `b5e8c53`).
+* **The essence path is a parallel package** (`smc/essence/**`) — not a branch inside the
+  COMPLEX spine, no `if essence:` anywhere outside the package, and its only shared code is
+  read-only reuse (M8 zone scan, structural swings, wave-structure ending diagonal, the
+  locked conservative fill model, PureRunner, the frozen §21/§23/§26/§28.1 constants).
+* **The essence path is diagnostic** — expert stage-scoring recall (§8 rubric), no PF
+  optimisation, no edge claim, and the fallback boundary-sweep family is OUT of the v1
+  build (signed "include later").
+* Locked constants are **not edited**: the signed values this wiring relies on
+  (`M8_SL_MIN_PIPS`/`MAX_PIPS` 2.0/5.0, `M8_MIN_RR` 5.0, `M1_EXPIRY_BARS` 30,
+  `PURE_RUNNER_BE_ATR`/`BUFFER` 1.0/0.10) already exist and are consumed read-only by the
+  essence path. Any change is a dated amendment, one rule at a time.
+
+Mapping evidence for each rule: `06_RESEARCH/ESSENCE_V1_CODE_MAPPING.md` (REQUIRED
+FOLLOW-UP list, F1–F12 — F1 is resolved by this amendment; the remaining items rule per
+leg). Implementation record: `06_RESEARCH/ESSENCE_V1_SLICE_NOTE.md`.
+
 ## 9. Residual engineering (Track A) scope
 
 In scope and closed by Track A: E1 entry_anchor export (done). Explicitly out of scope:
