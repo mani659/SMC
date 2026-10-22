@@ -379,6 +379,31 @@ def test_demo_config_diagnostic_entries_absent_or_false():
     assert cfg.diagnostic_entries is False
 
 
+def test_session_start_payload_carries_mode_disriminator(tmp_path):
+    """R2 (design §2.1): the session-start JSON must discriminate
+    posture — "T" when diagnostic_entries is true, "A" otherwise;
+    banner and log lines stay unchanged."""
+    from smc.live.operator_config import load_operator_config
+    from smc.live.run_operator import OperatorSession
+
+    base = {
+        "symbol": "XAUUSDm", "magic": 42, "dry_run": True,
+        "log_dir": str(tmp_path / "logs"),
+    }
+    opt_file = tmp_path / "t.json"
+    opt_file.write_text(json.dumps({**base, "diagnostic_entries": True}),
+                        encoding="utf-8")
+    session_t = OperatorSession(load_operator_config(opt_file))
+    payload_t = session_t._session_start_payload()
+    assert payload_t["mode"] == "T"
+
+    off_file = tmp_path / "a.json"
+    off_file.write_text(json.dumps(base), encoding="utf-8")
+    session_a = OperatorSession(load_operator_config(off_file))
+    payload_a = session_a._session_start_payload()
+    assert payload_a["mode"] == "A"
+
+
 def test_config_rejects_mode_t_geometry_keys(tmp_path):
     from smc.live.operator_config import ConfigError, load_operator_config
     cfg_file = tmp_path / "c.json"

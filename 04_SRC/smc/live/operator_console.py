@@ -164,17 +164,27 @@ def render_startup_banner(
     log_dir: str | None = None,
     console_mode: str = "board",
     alive_interval_s=None,
+    heartbeat_path=None,
+    hb_independent=None,
+    auto_reconnect=None,
 ) -> str:
     """Render the one-shot session startup banner (ASCII-only).
 
     ``facts`` is the identity-gate dict (all keys optional — missing keys
     render ``n/a``). Printed once after identity PASS; the full facts remain
-    in ``identity.json`` + ``events.log``.
+    in ``identity.json`` + ``events.log``. ``heartbeat_path``/``hb_independent``/
+    ``auto_reconnect`` (2026-10-17) surface where the heartbeat is written and
+    whether it runs on its own thread + auto-reconnects MT5.
     """
     if not isinstance(facts, dict):
         facts = {}
     lines: list[str] = []
     push = lines.append
+
+    def _tri(value) -> str:
+        if value is None:
+            return "n/a"
+        return "YES" if value else "NO"
 
     push("=" * 68)
     push("")
@@ -219,6 +229,11 @@ def render_startup_banner(
     push(
         f" backend  : events.log + console_mirror.log + kpi_records.jsonl"
         f"  ({_fmt(log_dir)})"
+    )
+    push(f" heartbeat: {_fmt(heartbeat_path)}")
+    push(
+        f" watchdog : HB independent: {_tri(hb_independent)}"
+        f" | auto-reconnect: {_tri(auto_reconnect)}"
     )
     push("-" * 68)
     push(" Ctrl+C stops the session cleanly (heartbeat shutdown marker).")

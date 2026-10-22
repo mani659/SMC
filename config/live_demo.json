@@ -2,7 +2,7 @@
   "terminal_path": "C:\\Program Files\\MetaTrader 5 EXNESS - Copy\\terminal64.exe",
   "symbol": "XAUUSDm",
   "magic": 20260919,
-  "dry_run": true,
+  "dry_run": false,
   "require_demo": true,
   "risk_fraction": 0.01,
   "timeframe": "M5",

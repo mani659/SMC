@@ -414,3 +414,115 @@ def test_heartbeat_total_publish_failure_raises_after_all_strategies(
     assert "replace_error" in message
     assert "inplace_error" in message
     assert "publish cycles" in message
+
+
+# --------------------------------------------------------------------------- #
+# Fix A (2026-10-17 ruling): the in-place fallback must NOT truncate the
+# heartbeat to 0 bytes before writing, or a concurrent 1 Hz EA read can land
+# in the truncate→write window and fail-closed ("heartbeat unreadable").
+# --------------------------------------------------------------------------- #
+def test_write_in_place_never_exposes_empty_file_to_reader(
+    tmp_path, monkeypatch
+):
+    target = tmp_path / "smc_heartbeat.txt"
+    write_heartbeat(target, 1_000_000, 1)
+
+    observed = {}
+    real_fsync = os.fsync
+
+    def spy_fsync(fd):
+        # At fsync time the full NEW payload is on disk and truncation has not
+        # run yet: the file must never be empty here (the old "w" bug made it so).
+        observed["text"] = target.read_text(encoding="ascii")
+        return real_fsync(fd)
+
+    monkeypatch.setattr(heartbeat_write.os, "fsync", spy_fsync)
+    heartbeat_write._write_in_place(target, "1000200 2\nstate=running\n")
+
+    assert observed["text"] != ""
+    assert observed["text"].startswith("1000200 2\n")
+    assert target.read_text(encoding="ascii") == "1000200 2\nstate=running\n"
+
+
+def test_write_in_place_removes_stale_tail(tmp_path):
+    target = tmp_path / "smc_heartbeat.txt"
+    long_payload = "1000000 1\nstate=running\n" + "x" * 64
+    heartbeat_write._write_in_place(target, long_payload)
+    heartbeat_write._write_in_place(target, "1000001 2\nstate=shutdown\n")
+    assert target.read_text(encoding="ascii") == "1000001 2\nstate=shutdown\n"
+
+
+# --------------------------------------------------------------------------- #
+# B2 (2026-10-17 ruling): capped-backoff MT5 reconnect + loud give-up
+# --------------------------------------------------------------------------- #
+def _session_with_poll(session, run_once, connector):
+    session._identity = {}
+    session._heartbeat = types.SimpleNamespace(
+        sequence=1, state="running", _last_unix=1_000_000
+    )
+    session.identity_check = lambda: {}
+    session._build_stack = lambda: connector
+    session._loop = types.SimpleNamespace(
+        start=lambda: True, run_once=run_once, stop=lambda: None,
+    )
+
+
+def test_operator_poll_failure_reconnects_and_resumes(tmp_path, monkeypatch):
+    session = _session(tmp_path)
+
+    class _Connector:
+        def __init__(self):
+            self.reconnect_calls = 0
+            self.shutdown = Mock()
+
+        def reconnect(self):
+            self.reconnect_calls += 1
+            return True
+
+    connector = _Connector()
+    run_once = Mock(side_effect=[
+        MT5CallError(
+            "copy_rates_from_pos",
+            session.config.terminal_path,
+            PermissionError(13, "Access is denied"),
+        ),
+        0,
+        KeyboardInterrupt,
+    ])
+    _session_with_poll(session, run_once, connector)
+    monkeypatch.setattr("smc.live.run_operator.time.sleep", lambda _s: None)
+
+    session.run(max_seconds=10)
+
+    assert connector.reconnect_calls == 1
+    assert session._reconnect_attempts == 0
+    assert session.state["polls"] == 1
+    events = (tmp_path / "logs" / "events.log").read_text(encoding="utf-8")
+    assert "MT5 RECONNECTED" in events
+
+
+def test_operator_reconnect_gives_up_after_max_attempts(tmp_path, monkeypatch):
+    session = _session(tmp_path)
+
+    class _DownConnector:
+        def __init__(self):
+            self.shutdown = Mock()
+
+        def reconnect(self):
+            return False
+
+    connector = _DownConnector()
+    run_once = Mock(side_effect=MT5CallError(
+        "copy_rates_from_pos",
+        session.config.terminal_path,
+        PermissionError(13, "Access is denied"),
+    ))
+    _session_with_poll(session, run_once, connector)
+    monkeypatch.setattr("smc.live.run_operator.time.sleep", lambda _s: None)
+
+    with pytest.raises(SystemExit, match="MAJOR: giving up reconnect"):
+        session.run(max_seconds=10)
+
+    events = (tmp_path / "logs" / "events.log").read_text(encoding="utf-8")
+    assert "MAJOR: giving up reconnect" in events
+

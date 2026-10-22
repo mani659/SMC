@@ -63,6 +63,11 @@ ALLOWED_KEYS = frozenset({
     "judge_interval_s",           # ≥1 judgement board per interval even flat (0 = off; default 60)
     "marker_enabled",             # Python marker file writer on/off (default True)
     "marker_path",                # "" = same EA-readable dir as the heartbeat
+    # Structure-draw publisher (design lock 2026-10-22, §2): writes
+    # smc_structure_draw.txt for the draw-only EA. VISUALIZATION ONLY —
+    # no trading logic, no thresholds, no entry decisions.
+    "structure_draw_enabled",     # draw file publisher on/off (default True)
+    "structure_draw_path",        # "" = same EA-readable dir as the heartbeat
 })
 
 # LOCKED quantities that must never appear in an operator config. Values are
@@ -160,6 +165,8 @@ class OperatorConfig:
     judge_interval_s: float = 60.0
     marker_enabled: bool = True
     marker_path: str = ""     # "" = resolved to the heartbeat's directory
+    structure_draw_enabled: bool = True
+    structure_draw_path: str = ""  # "" = resolved to the heartbeat's directory
     source_path: str | None = None
     raw: dict = field(default_factory=dict, repr=False, compare=False)
 
@@ -343,5 +350,11 @@ def load_operator_config(path: str | Path) -> OperatorConfig:
         )
     if "marker_path" in data:
         kwargs["marker_path"] = str(data["marker_path"]).strip()
+    if "structure_draw_enabled" in data:
+        kwargs["structure_draw_enabled"] = _coerce_bool(
+            data["structure_draw_enabled"], "structure_draw_enabled"
+        )
+    if "structure_draw_path" in data:
+        kwargs["structure_draw_path"] = str(data["structure_draw_path"]).strip()
 
     return OperatorConfig(**kwargs)

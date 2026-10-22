@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -46,6 +47,7 @@ __all__ = [
     "HeartbeatRecord",
     "HeartbeatWriteError",
     "HeartbeatPublisher",
+    "HeartbeatRunner",
     "WatchdogDecision",
     "write_heartbeat",
     "read_heartbeat",
@@ -79,6 +81,7 @@ STATE_RUNNING = "running"
 STATE_SHUTDOWN = "shutdown"
 logger = logging.getLogger(__name__)
 _read_failures: dict[str, tuple[str, str]] = {}
+_replace_blocked_signatures: dict[str, tuple[str, str]] = {}
 
 
 class HeartbeatWriteError(PermissionError):
@@ -128,11 +131,12 @@ def write_heartbeat(
        a transient sharing violation (the EA is mid-read), retry a few times
        with a short backoff.
     3. If the rename still fails, fall back to an IN-PLACE overwrite of the
-       target (open + truncate + write + flush). In-place writes need only
-       write sharing, not delete sharing, so they survive a read lock that
-       blocks the rename. The in-place path retries the same way (2026-10-13),
-       and the whole publish is retried a few cycles, so a brief external
-       lock (AV/indexer) still cannot fail-closed a healthy session.
+       target that does NOT truncate first (2026-10-17 — see
+       :func:`_write_in_place`). In-place writes need only write sharing, not
+       delete sharing, so they survive a read lock that blocks the rename. The
+       in-place path retries the same way (2026-10-13), and the whole publish
+       is retried a few cycles, so a brief external lock (AV/indexer) still
+       cannot fail-closed a healthy session.
     4. Only when both strategies are denied for the full retry budget does
        this raise :class:`HeartbeatWriteError` — a single transient
        'Access is denied' collision must NOT fail the session closed.
@@ -183,17 +187,20 @@ def write_heartbeat(
                 tmp.unlink(missing_ok=True)
             except OSError:
                 pass
-            logger.warning(
-                "heartbeat atomic replace blocked after %d attempts; wrote "
-                "in place (attempt %d/%d) target=%s temp=%s "
-                "last_replace_error=%r",
-                attempts,
-                attempt,
-                inplace_attempts,
-                target,
-                tmp,
-                last_replace_exc,
-            )
+            sig = (type(last_replace_exc).__name__, str(last_replace_exc))
+            if _replace_blocked_signatures.get(str(target)) != sig:
+                logger.warning(
+                    "heartbeat atomic replace blocked after %d attempts; wrote "
+                    "in place (attempt %d/%d) target=%s temp=%s "
+                    "last_replace_error=%r",
+                    attempts,
+                    attempt,
+                    inplace_attempts,
+                    target,
+                    tmp,
+                    last_replace_exc,
+                )
+                _replace_blocked_signatures[str(target)] = sig
             return
         # Both strategies were denied for a full retry budget this cycle:
         # pause briefly and re-try the whole publish before failing closed.
@@ -209,15 +216,45 @@ def write_heartbeat(
 
 
 def _write_in_place(target: Path, payload: str) -> None:
-    """Overwrite ``target`` in place (open + truncate + write + fsync).
+    """Overwrite ``target`` in place WITHOUT truncating it first (2026-10-17).
+
+    The previous implementation used ``Path.open("w")``, which truncates the
+    file to 0 bytes *before* the new payload is written. The watchdog EA reads
+    the file once per second; an EA read landing in the truncate→write window
+    saw an EMPTY file and fail-closed to "heartbeat unreadable" for one tick
+    (then recovered). Live evidence 2026-10-15..17: a healthy multi-day
+    session produced ~2–4 such one-second false alarms per day — each one an
+    ``Emergency()`` that closes ALL scoped positions / pendings, which is
+    harmless while flat but can wrongly flatten a live demo trade.
+
+    This variant opens the existing file read/write (NO truncation), seeks to
+    offset 0, overwrites the full payload, flushes/fsyncs, then truncates to
+    the exact payload length so no stale tail remains. The file is never
+    momentarily empty, so a concurrent 1 Hz reader always sees a parseable
+    first line — either the previous record or the new one.
 
     Needs only write sharing, so it coexists with an EA that holds the file
     open for reading — unlike an atomic rename, which needs delete sharing.
     """
-    with target.open("w", encoding="ascii") as fh:
-        fh.write(payload)
-        fh.flush()
-        os.fsync(fh.fileno())
+    data = payload.encode("ascii")
+    # O_BINARY is Windows-only and MANDATORY here: the CRT defaults os.open()
+    # to TEXT mode, which would rewrite "\n" -> "\r\n" (and drop the tail byte
+    # under ftruncate). We want byte-exact ASCII.
+    flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_BINARY", 0)
+    fd = os.open(target, flags, 0o644)
+    try:
+        os.lseek(fd, 0, os.SEEK_SET)
+        view = memoryview(data)
+        while view:
+            written = os.write(fd, view)
+            view = view[written:]
+        try:
+            os.fsync(fd)
+        except OSError:
+            pass
+        os.ftruncate(fd, len(data))
+    finally:
+        os.close(fd)
 
 
 def read_heartbeat(path) -> HeartbeatRecord | None:
@@ -290,21 +327,30 @@ def is_stale(
 # Watchdog decision — the tested spec the EA implements
 # ---------------------------------------------------------------------- #
 def evaluate_watchdog(
-    heartbeat_path, now_unix: float, timeout: float
+    heartbeat_path,
+    now_unix: float,
+    timeout: float,
+    *,
+    consecutive_unreadable: int = 1,
+    unreadable_debounce_ticks: int = 1,
 ) -> WatchdogDecision:
     """The watchdog decision for one check (mirrors the EA's OnTimer).
 
     * heartbeat readable and fresh  → ``no_action``
     * heartbeat stale               → ``emergency`` ("stale")
-    * heartbeat missing/unreadable  → ``emergency`` ("unreadable") — fail-closed
+    * heartbeat missing/unreadable  → ``emergency`` ("unreadable") after debounce ticks
 
     The EA performs exactly this decision, then executes the emergency
     action (close ALL scoped positions + delete ALL scoped pendings).
     """
     record = read_heartbeat(heartbeat_path)
     if record is None:
+        if consecutive_unreadable >= unreadable_debounce_ticks:
+            return WatchdogDecision(
+                action="emergency", reason="unreadable", record=None
+            )
         return WatchdogDecision(
-            action="emergency", reason="unreadable", record=None
+            action="no_action", reason="unreadable_debounced", record=None
         )
     if is_stale(record, now_unix, timeout):
         return WatchdogDecision(
@@ -338,30 +384,102 @@ class HeartbeatPublisher:
         self._sequence = 0
         self._last_unix: float | None = None
         self.state = STATE_RUNNING
+        # 2026-10-17 (B1): the publisher may be driven by BOTH the poll loop
+        # and the independent heartbeat thread, so guard sequence/interval
+        # state against concurrent writers.
+        self._lock = threading.Lock()
 
     # ------------------------------------------------------------------ #
     def _unix(self) -> float:
         return self._now().timestamp()
 
+    def _write_locked(self) -> None:
+        self._sequence += 1
+        ts = self._unix()
+        write_heartbeat(self.path, ts, self._sequence, self.state)
+        self._last_unix = ts
+
     def publish(self) -> None:
         """Force a heartbeat write (ignores the interval)."""
-        self._sequence += 1
-        write_heartbeat(self.path, self._unix(), self._sequence, self.state)
-        self._last_unix = self._unix()
+        with self._lock:
+            self._write_locked()
 
     def maybe_publish(self) -> bool:
         """Write only when the interval has elapsed; True when written."""
-        if self._last_unix is not None:
-            if self._unix() - self._last_unix < self.interval_seconds:
-                return False
-        self.publish()
-        return True
+        with self._lock:
+            if self._last_unix is not None:
+                if self._unix() - self._last_unix < self.interval_seconds:
+                    return False
+            self._write_locked()
+            return True
 
     def publish_shutdown(self) -> None:
         """Mark a CLEAN stop (operator observability; watchdog unchanged)."""
-        self.state = STATE_SHUTDOWN
-        self.publish()
+        with self._lock:
+            self.state = STATE_SHUTDOWN
+            self._write_locked()
 
     @property
     def sequence(self) -> int:
         return self._sequence
+
+
+class HeartbeatRunner:
+    """Publishes the heartbeat from a dedicated daemon thread (2026-10-17).
+
+    Lead Architect ruling: the heartbeat must keep advancing even when the
+    MAIN poll thread is blocked inside a slow MT5 call or a multi-second HTF
+    batch. Before this, a live-but-busy process looked dead to the watchdog
+    within seconds (HB_MAIN_THREAD_ONLY: YES in the 2026-10-15 probe).
+
+    The thread only touches the heartbeat FILE — never MT5 — so it cannot
+    itself block on the terminal. Transient write failures are logged
+    (rate-limited by signature) and retried next tick; the main poll loop
+    remains the fail-closed authority via its own ``maybe_publish`` (a
+    persistent failure there still aborts the session).
+    """
+
+    def __init__(self, publisher, *, tick_seconds: float | None = None) -> None:
+        self.publisher = publisher
+        if tick_seconds is None:
+            interval = float(getattr(publisher, "interval_seconds", 1.0) or 1.0)
+            tick_seconds = max(0.05, min(0.5, interval / 2.0))
+        self.tick_seconds = float(tick_seconds)
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+        self.last_error: BaseException | None = None
+        self._last_error_signature: tuple | None = None
+
+    def _run(self) -> None:
+        while not self._stop.wait(self.tick_seconds):
+            try:
+                self.publisher.maybe_publish()
+            except Exception as exc:  # noqa: BLE001 — keep the thread alive
+                self.last_error = exc
+                signature = (type(exc).__name__, str(exc))
+                if signature != self._last_error_signature:
+                    logger.critical(
+                        "independent heartbeat publish failed (retrying): %r",
+                        exc,
+                        exc_info=True,
+                    )
+                    self._last_error_signature = signature
+
+    def start(self) -> None:
+        """Publish once immediately, then run the daemon ticker."""
+        if self._thread is not None:
+            return
+        self.publisher.publish()
+        self._stop.clear()
+        self._thread = threading.Thread(
+            target=self._run, name="smc-heartbeat", daemon=True
+        )
+        self._thread.start()
+
+    def stop(self, timeout: float = 5.0) -> None:
+        """Stop the ticker (the caller writes the shutdown marker once)."""
+        self._stop.set()
+        thread = self._thread
+        if thread is not None:
+            thread.join(timeout=timeout)
+            self._thread = None

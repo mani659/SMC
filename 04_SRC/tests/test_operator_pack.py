@@ -190,6 +190,19 @@ def test_render_startup_banner_empty_degrades():
     assert banner.isascii()
 
 
+def test_render_startup_banner_reports_heartbeat_and_reconnect():
+    banner = render_startup_banner(
+        {},
+        heartbeat_path=r"C:\...\MQL5\Files\smc_heartbeat.txt",
+        hb_independent=True,
+        auto_reconnect=True,
+    )
+    assert "smc_heartbeat.txt" in banner
+    assert "HB independent: YES" in banner
+    assert "auto-reconnect: YES" in banner
+    assert banner.isascii()
+
+
 # ---------------------------------------------------------------------- #
 # Backend logging artifacts (no terminal)
 # ---------------------------------------------------------------------- #

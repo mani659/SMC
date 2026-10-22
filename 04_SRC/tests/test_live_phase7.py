@@ -8,6 +8,7 @@ over a scriptable fake connector.
 """
 
 import logging
+import time
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
@@ -26,6 +27,7 @@ from smc.execution.session_filter import Session
 from smc.live.config import LiveConfig, live_config_from_dict
 from smc.live.heartbeat import (
     HeartbeatPublisher,
+    HeartbeatRunner,
     evaluate_watchdog,
     is_stale,
     read_heartbeat,
@@ -125,6 +127,29 @@ def test_heartbeat_publisher_respects_interval(tmp_path):
     assert pub.sequence == 2
 
 
+def test_heartbeat_runner_publishes_independently_of_main_thread(tmp_path):
+    """B1 (2026-10-17 ruling): the heartbeat must keep advancing on its own
+    thread even if the main poll thread is blocked (MT5/HTF batch)."""
+    clock = FakeClock(START)
+    pub = HeartbeatPublisher(
+        tmp_path / "hb.txt", interval_seconds=0.05, now=clock
+    )
+    runner = HeartbeatRunner(pub, tick_seconds=0.01)
+    runner.start()
+    try:
+        first = read_heartbeat(tmp_path / "hb.txt")
+        assert first is not None and first.sequence == 1  # immediate publish
+
+        clock.advance(1.0)  # interval elapsed for the background ticker
+        deadline = time.monotonic() + 2.0
+        while pub.sequence < 2 and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert pub.sequence >= 2
+    finally:
+        runner.stop()
+    assert runner._thread is None
+
+
 # ---------------------------------------------------------------------- #
 # Watchdog decision — the spec the MQL5 EA implements
 # ---------------------------------------------------------------------- #
@@ -140,6 +165,29 @@ def test_watchdog_decision_healthy_no_action_stale_emergency(tmp_path):
     # Fail-closed: a missing file requests the SAME emergency action.
     missing = evaluate_watchdog(tmp_path / "missing.txt", now, 5.0)
     assert missing.action == "emergency" and missing.reason == "unreadable"
+
+
+def test_watchdog_decision_unreadable_debounce(tmp_path):
+    now = 1_000_000.0
+    missing = tmp_path / "nonexistent.txt"
+
+    # tick 1 of 3: debounced (no action)
+    d1 = evaluate_watchdog(
+        missing, now, 5.0, consecutive_unreadable=1, unreadable_debounce_ticks=3
+    )
+    assert d1.action == "no_action" and d1.reason == "unreadable_debounced"
+
+    # tick 2 of 3: debounced (no action)
+    d2 = evaluate_watchdog(
+        missing, now, 5.0, consecutive_unreadable=2, unreadable_debounce_ticks=3
+    )
+    assert d2.action == "no_action" and d2.reason == "unreadable_debounced"
+
+    # tick 3 of 3: triggers emergency
+    d3 = evaluate_watchdog(
+        missing, now, 5.0, consecutive_unreadable=3, unreadable_debounce_ticks=3
+    )
+    assert d3.action == "emergency" and d3.reason == "unreadable"
 
 
 # ---------------------------------------------------------------------- #

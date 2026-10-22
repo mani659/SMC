@@ -139,6 +139,41 @@ class MT5Connector:
         self._call("shutdown", self._mt5().shutdown)
         self._connected = False
 
+    def is_alive(self) -> bool:
+        """Cheap liveness probe: the terminal answers ``terminal_info()``.
+
+        Added 2026-10-17: a terminal that is closed/disconnected makes most
+        MT5 calls return ``None`` SILENTLY (no exception), so a lost terminal
+        can otherwise go unnoticed. This positive check lets the operator
+        treat a silent drop as a reconnect trigger.
+        """
+        if not self._connected:
+            return False
+        try:
+            return self._mt5().terminal_info() is not None
+        except OSError:
+            return False
+
+    def reconnect(self) -> bool:
+        """Reset and re-establish the session with the SAME ``terminal_path``.
+
+        Added 2026-10-17 (operator resilience): best-effort ``shutdown()`` to
+        clear stale terminal state, then ``connect()`` again. Reuses THIS
+        connector — no second process is spawned for the same magic/terminal.
+        Callers re-assert the demo/terminal gate after a successful return.
+        """
+        try:
+            self._call("shutdown", self._mt5().shutdown)
+        except Exception:  # noqa: BLE001 — best-effort reset, keep going
+            logger.debug(
+                "MT5 reconnect shutdown failed terminal_path=%r",
+                self.terminal_path,
+                exc_info=True,
+            )
+        self._connected = False
+        self._active_call_errors.clear()
+        return self.connect()
+
     def last_error(self) -> tuple[int, str] | None:
         """Return ``(code, message)`` from the last MT5 call, if any."""
         return self._mt5().last_error()

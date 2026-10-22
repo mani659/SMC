@@ -81,8 +81,21 @@ from smc.live.structure_console import (                     # noqa: E402
     build_structure_snapshot,
     render_structure_console,
 )
+from smc.live.structure_publish import (                     # noqa: E402
+    STRUCTURE_DRAW_FILENAME,
+    StructureDrawPublisher,
+)
 
 __all__ = ["OperatorSession", "main"]
+
+# MT5 auto-reconnect (2026-10-17 Lead Architect ruling): a transient terminal
+# drop (terminal restarted, IPC lost, broker weekend reconnect) must self-heal
+# with capped backoff instead of killing the session; a terminal that never
+# comes back must stop the operator loudly (non-zero exit) rather than spin
+# silently. Operational timing only — NOT a trading constant.
+RECONNECT_BACKOFF_SECONDS = (1.0, 2.0, 5.0)
+RECONNECT_MAX_ATTEMPTS = 10
+RECONNECT_LOG_INTERVAL_SECONDS = 30.0
 
 
 def _utcnow() -> datetime:
@@ -110,6 +123,13 @@ class OperatorSession:
         self._adapter = None
         self._heartbeat = None
         self._heartbeat_ea_readable: bool | None = None
+        # 2026-10-17 (B1): heartbeat runs on its own daemon thread so a main
+        # poll-thread hang cannot freeze the watchdog sequence.
+        self._hb_runner = None
+        # 2026-10-17 (B2/B3): MT5 reconnect bookkeeping + console rate-limit.
+        self._reconnect_attempts = 0
+        self._last_reconnect_log_mono = 0.0
+        self._last_reconnect_signature: tuple | None = None
         self._armed_total = 0            # C1: cumulative newly-armed POIs
         self._console_force = False      # batch change → repaint board NOW
         # Event-driven console (2026-10-07): "event" mode stays mostly silent
@@ -329,7 +349,7 @@ class OperatorSession:
         from smc.data.mt5_connector import MT5Connector
         from smc.execution.order_manager import OrderManager
         from smc.execution.position_manager import PositionManager
-        from smc.live.heartbeat import HeartbeatPublisher
+        from smc.live.heartbeat import HeartbeatPublisher, HeartbeatRunner
         from smc.live.heartbeat_path import (
             heartbeat_path_candidates,
             probe_writable,
@@ -445,6 +465,8 @@ class OperatorSession:
         self._runner = runner
         self._adapter = adapter
         self._heartbeat = heartbeat
+        # B1 (2026-10-17): independent heartbeat ticker (started by run()).
+        self._hb_runner = HeartbeatRunner(heartbeat)
         # --- Marker surface (design note §4.1): same Files-dir recipe as the
         # heartbeat — explicit config path wins, else the heartbeat's dir.
         if getattr(cfg, "marker_enabled", True):
@@ -458,6 +480,24 @@ class OperatorSession:
             )
             self._log(
                 "MARKER PATH RESOLVED: " + str(self._marker_writer.path)
+            )
+        # --- Structure-draw publisher (design lock 2026-10-22, §2): writes
+        # smc_structure_draw.txt for the draw-only EA. Same EA-readable dir
+        # recipe as the markers: the heartbeat's already-probed directory.
+        # VISUALIZATION ONLY — never feeds a trading decision.
+        self._structure_draw = None
+        if getattr(cfg, "structure_draw_enabled", True):
+            draw_dir = (
+                Path(str(cfg.structure_draw_path)).resolve(strict=False)
+                if cfg.structure_draw_path
+                else heartbeat_path.parent
+            )
+            self._structure_draw = StructureDrawPublisher(
+                draw_dir / STRUCTURE_DRAW_FILENAME
+            )
+            self._log(
+                "STRUCTURE DRAW PATH RESOLVED: "
+                + str(self._structure_draw.path)
             )
         # --- Mode T director (design note §2): diagnostics only; the product
         # path above is untouched. In dry_run NOTHING is sent (decisions are
@@ -885,6 +925,34 @@ class OperatorSession:
                 exc,
                 exc_info=True,
             )
+        # Structure-draw file (design lock §2): publish on EVERY refresh —
+        # a batch change (arming) forces both the board AND the draw file.
+        # Fail-safe: a broken draw publish is logged, never fatal.
+        self._publish_structure_draw()
+
+    def _publish_structure_draw(self) -> None:
+        """Rewrite smc_structure_draw.txt from the current snapshot.
+
+        No snapshot yet (early loop) → publishes a header-only payload so
+        the EA clears rather than showing stale geometry. Never raises.
+        """
+        writer = getattr(self, "_structure_draw", None)
+        if writer is None:
+            return
+        try:
+            if not writer.publish(
+                self.state.get("structure"),
+                symbol=self.config.symbol,
+            ):
+                self.state["errors"].append("structure draw publish failed")
+        except Exception as exc:               # noqa: BLE001 — never fatal
+            self.state["errors"].append(f"structure draw: {exc!r}")
+            self._logger.error(
+                "STRUCTURE DRAW PUBLISH FAILED path=%s error=%r",
+                getattr(writer, "path", "?"),
+                exc,
+                exc_info=True,
+            )
 
     def _fold_flow_counters(self) -> None:
         """Fold the KPI decision/management records into board flow fields."""
@@ -907,6 +975,28 @@ class OperatorSession:
     # ------------------------------------------------------------------ #
     # Main run loop
     # ------------------------------------------------------------------ #
+    def _session_start_payload(self) -> dict:
+        """Structured session-start record (§2.1: mode discriminable —
+        "T" when diagnostic_entries is true, else "A").
+
+        The ``mode`` key reads the CONFIG FLAG, not ``_mode_t_director``:
+        the director is only built later inside ``_build_stack()`` (which
+        constructs it IFF the flag is true), so the flag is the posture's
+        source of truth at logging time and the two can never disagree.
+        """
+        return {"symbol": self.config.symbol,
+                "magic": self.config.magic,
+                "dry_run": self.config.dry_run,
+                "tf": self.config.timeframe,
+                "terminal_path": self.config.terminal_path,
+                "python_pid": os.getpid(),
+                "detection_tfs": list(self.config.detection_timeframes),
+                "allow_single_tf_degraded":
+                    self.config.allow_single_tf_degraded,
+                "mode":
+                    "T" if getattr(self.config, "diagnostic_entries", False)
+                    else "A"}
+
     def run(self, max_seconds: float | None = None) -> None:
         """Identity → stack → poll loop with console cadence → clean stop.
 
@@ -920,17 +1010,17 @@ class OperatorSession:
 
         if not self._loop.start():
             raise SystemExit("ABORT: connector failed to initialize")
+        # B1 (2026-10-17): start the independent heartbeat ticker. A failure
+        # here means the watchdog would fail-close immediately → abort loudly.
+        if self._hb_runner is not None:
+            try:
+                self._hb_runner.start()
+            except HeartbeatWriteError as exc:
+                raise SystemExit(
+                    f"ABORT: heartbeat publication failed: {exc}"
+                ) from exc
         self.state["session_started_utc"] = _utcnow().isoformat()
-        self._log(
-            "SESSION START "
-            + json.dumps({"symbol": cfg.symbol, "magic": cfg.magic,
-                          "dry_run": cfg.dry_run, "tf": cfg.timeframe,
-                          "terminal_path": cfg.terminal_path,
-                          "python_pid": os.getpid(),
-                          "detection_tfs": list(cfg.detection_timeframes),
-                          "allow_single_tf_degraded":
-                              cfg.allow_single_tf_degraded})
-        )
+        self._log("SESSION START " + json.dumps(self._session_start_payload()))
         print(f"[session] running — Ctrl+C to stop (dry_run={cfg.dry_run})")
         # One-shot startup banner (identity/terminal/symbol/dry_run/paths).
         banner = render_startup_banner(
@@ -940,6 +1030,11 @@ class OperatorSession:
             log_dir=cfg.log_dir,
             console_mode=self._console_mode,
             alive_interval_s=cfg.alive_interval_s,
+            heartbeat_path=getattr(self._heartbeat, "path", None),
+            hb_independent=self._hb_runner is not None,
+            auto_reconnect=bool(
+                callable(getattr(connector, "reconnect", None))
+            ),
         )
         print(banner)
         self._append_console_mirror(banner)
@@ -959,6 +1054,11 @@ class OperatorSession:
         try:
             while deadline is None or time.monotonic() < deadline:
                 try:
+                    probe = getattr(connector, "is_alive", None)
+                    if callable(probe) and not probe():
+                        raise ConnectionError(
+                            "MT5 terminal not responding (liveness probe)"
+                        )
                     new_bars = self._loop.run_once()
                 except HeartbeatWriteError as exc:
                     detail = f"HEARTBEAT WRITE FAILED: {exc}"
@@ -987,12 +1087,16 @@ class OperatorSession:
                             exc,
                             exc_info=True,
                         )
+                        self._print_console(
+                            f"[poll-error] utc={_utcnow().isoformat()} "
+                            f"{type(exc).__name__}: {exc}"
+                        )
                         self._last_poll_error_signature = signature
                     else:
                         self._logger.debug(
                             "Repeated poll failure suppressed: %s", exc
                         )
-                    time.sleep(1.0)
+                    self._attempt_reconnect(connector, exc)
                     continue
                 if self._last_poll_error_signature is not None:
                     self._logger.info(
@@ -1000,7 +1104,13 @@ class OperatorSession:
                         cfg.terminal_path,
                         os.getpid(),
                     )
+                    self._print_console(
+                        f"[poll-recovered] utc={_utcnow().isoformat()} "
+                        f"polls={self.state.get('polls')}"
+                    )
                     self._last_poll_error_signature = None
+                if self._reconnect_attempts:
+                    self._reconnect_attempts = 0
                 self._on_poll(new_bars, connector)
 
                 now_mono = time.monotonic()
@@ -1022,6 +1132,131 @@ class OperatorSession:
             if deadline is not None:
                 print("\n[session] max-seconds reached — clean shutdown…")
             self._shutdown(connector)
+
+    # ------------------------------------------------------------------ #
+    # MT5 reconnect (2026-10-17 ruling B2/B3)
+    # ------------------------------------------------------------------ #
+    def _print_console(self, line: str) -> None:
+        """Print a structured one-liner to stdout and mirror it (best effort)."""
+        print(line)
+        try:
+            self._append_console_mirror(line)
+        except OSError:
+            pass
+
+    def _log_reconnect(self, line: str, signature: tuple) -> None:
+        """Console one-liner for a reconnect event, rate-limited (B3).
+
+        An identical (unchanged) signature prints at most once per
+        ``RECONNECT_LOG_INTERVAL_SECONDS``; a changed state always prints.
+        Every line is still recorded in events.log.
+        """
+        now_mono = time.monotonic()
+        changed = signature != self._last_reconnect_signature
+        if changed or (
+            now_mono - self._last_reconnect_log_mono
+            >= RECONNECT_LOG_INTERVAL_SECONDS
+        ):
+            self._print_console(line)
+            self._last_reconnect_log_mono = now_mono
+            self._last_reconnect_signature = signature
+        self._log(line)
+
+    def _verify_reconnect_gate(self, connector) -> None:
+        """Re-assert the terminal-path + demo gate on the SAME connector.
+
+        After a reconnect the SAME terminal and (when ``require_demo``) a DEMO
+        account are required; a real mismatch aborts the session. A still-
+        unresponsive terminal is left to the next liveness probe.
+        """
+        from smc.data.mt5_connector import MT5CallError
+
+        try:
+            term = connector.terminal_info()
+            acct = connector.account_info()
+        except MT5CallError as exc:
+            self._logger.error(
+                "RECONNECT GATE info unavailable error=%r", exc, exc_info=True
+            )
+            return
+        except Exception as exc:  # noqa: BLE001 — never crash on the gate probe
+            self._logger.error(
+                "RECONNECT GATE call failed error=%r", exc, exc_info=True
+            )
+            return
+        if term is None or acct is None:
+            self._logger.error(
+                "RECONNECT GATE: terminal/account info unavailable after "
+                "reconnect terminal_path=%r",
+                self.config.terminal_path,
+            )
+            return
+        live_dir = normalize_terminal_dir(str(term.path or ""))
+        required_dir = normalize_terminal_dir(self.config.terminal_path)
+        if live_dir != required_dir:
+            raise SystemExit(
+                f"ABORT: reconnect terminal dir {live_dir!r} != required "
+                f"{required_dir!r}"
+            )
+        mode = {0: "DEMO", 1: "CONTEST", 2: "REAL"}.get(
+            int(acct.trade_mode), "UNKNOWN"
+        )
+        if self.config.require_demo and mode != "DEMO":
+            raise SystemExit(
+                f"ABORT: require_demo=true after reconnect but mode={mode}"
+            )
+
+    def _attempt_reconnect(self, connector, exc) -> None:
+        """Capped-backoff MT5 reconnect after a poll failure (2026-10-17 B2).
+
+        Reuses THIS connector (no second process for the same magic/terminal).
+        Gives up with a non-zero exit only after ``RECONNECT_MAX_ATTEMPTS``
+        consecutive hard failures. Sleeps a short backoff between attempts;
+        the caller continues the poll loop on return.
+        """
+        self._reconnect_attempts += 1
+        attempt = self._reconnect_attempts
+        delay = RECONNECT_BACKOFF_SECONDS[
+            min(attempt - 1, len(RECONNECT_BACKOFF_SECONDS) - 1)
+        ]
+        if attempt >= RECONNECT_MAX_ATTEMPTS:
+            message = (
+                f"MAJOR: giving up reconnect after {attempt} consecutive "
+                f"failures: {exc!r}"
+            )
+            self._log(message)
+            print(f"[critical] {message}")
+            raise SystemExit(message)
+        self._log_reconnect(
+            f"[reconnect] utc={_utcnow().isoformat()} "
+            f"attempt={attempt}/{RECONNECT_MAX_ATTEMPTS} "
+            f"terminal={self.config.terminal_path!r} error={exc!r} "
+            f"retry_in={delay:g}s",
+            (type(exc).__name__, str(exc)),
+        )
+        reconnect = getattr(connector, "reconnect", None)
+        if callable(reconnect):
+            try:
+                if reconnect():
+                    self._reconnect_attempts = 0
+                    self._verify_reconnect_gate(connector)
+                    self._log(
+                        "MT5 RECONNECTED terminal_path=%r python_pid=%s"
+                        % (self.config.terminal_path, os.getpid())
+                    )
+                    self._log_reconnect(
+                        f"[reconnect] utc={_utcnow().isoformat()} RECONNECTED "
+                        f"terminal={self.config.terminal_path!r}",
+                        ("reconnected", ""),
+                    )
+                    return
+            except SystemExit:
+                raise
+            except Exception as re_exc:  # noqa: BLE001 — keep retrying
+                self._logger.error(
+                    "MT5 RECONNECT CALL FAILED error=%r", re_exc, exc_info=True
+                )
+        time.sleep(delay)
 
     # ------------------------------------------------------------------ #
     # Console + artifacts
@@ -1112,10 +1347,20 @@ class OperatorSession:
         if writer is None:
             return
         director = self._mode_t_director
+        entry_marker = (
+            director.latest_entry_marker()
+            if director is not None else None
+        )
         marker_sig = (
             self.state.get("htf_batches"),
             tuple(sorted((director.resting or {}).items()))
             if director is not None else (),
+            # R1: the entry_t line is part of the marker identity so a new
+            # dry-run decision refreshes the snapshot (no book change to piggy
+            # on) and a fill/cancel/expiry drops or updates it.
+            (entry_marker or {}).get("poi_id"),
+            (entry_marker or {}).get("entry"),
+            (entry_marker or {}).get("text"),
         )
         sig = marker_sig
         if sig == self._last_marker_sig:
@@ -1130,7 +1375,7 @@ class OperatorSession:
                 structure=self.state.get("structure"),
                 mode="T" if self._mode_t_director is not None else "A",
                 heartbeat_ok=(self._heartbeat_ea_readable is not False),
-                mode_t_poi=None,          # V1: entry line carried in symbol text below
+                mode_t_poi=entry_marker,   # R1: live entry_t line (§4.3)
                 updated_at_utc=_utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
             )
             writer.write(records)
@@ -1215,6 +1460,17 @@ class OperatorSession:
     def _shutdown(self, connector) -> None:
         from smc.live.heartbeat import HeartbeatWriteError
 
+        # B1 (2026-10-17): stop the independent ticker FIRST so it cannot
+        # overwrite the shutdown marker with a "running" record afterwards.
+        if self._hb_runner is not None:
+            try:
+                self._hb_runner.stop()
+            except Exception as exc:       # noqa: BLE001 — shutdown must finish
+                self._logger.error(
+                    "HEARTBEAT RUNNER STOP FAILED error=%r",
+                    exc,
+                    exc_info=True,
+                )
         try:
             self._loop.stop()   # writes the heartbeat shutdown marker
         except HeartbeatWriteError as exc:

@@ -411,6 +411,55 @@ class ModeTDirector:
         """POIs with ANY live Mode T ticket (resting or filled)."""
         return sorted(self._open.keys())
 
+    # -- entry_t marker input (note §4.3: ONE entry line for the latest
+    #    Mode T decision; residual fix R1 post-confirmation audit) ------- #
+    def latest_entry_marker(self) -> dict | None:
+        """Observability-only input for the marker writer (§4.3 entry_t line).
+
+        Display policy, mirroring the ledger honestly:
+        - a booked ticket (resting OR filled) shows its entry — text flags
+          ``(filled)`` once the fill is known;
+        - a dry-run PLACE decision (nothing sent, ``place_fn is None``)
+          shows its entry flagged ``(dry-run, not sent)`` so the chart
+          demonstrates what WOULD have been visible on the tester;
+        - a rejected / cancelled / expired / invalidated place shows
+          NOTHING — the chart mirrors the book, never the skip history.
+        """
+        for (poi_id, _proof_bar), decision in reversed(
+            list(self._decided.items())
+        ):
+            if decision.action is not ACTION_PLACE or decision.entry is None:
+                continue
+            direction = (
+                "BUY" if decision.direction is Direction.LONG else "SELL"
+            )
+            diag = self._open.get(poi_id)
+            if diag is not None:
+                text = f"Mode T LIMIT {decision.entry:.2f}"
+                if not diag.resting:
+                    text += " (filled)"
+                return {
+                    "poi_id": decision.poi_id,
+                    "direction": direction,
+                    "entry": decision.entry,
+                    "text": text,
+                }
+            if self._place_fn is None:      # dry-run parity (§1.4)
+                return {
+                    "poi_id": decision.poi_id,
+                    "direction": direction,
+                    "entry": decision.entry,
+                    "text": (
+                        f"Mode T LIMIT {decision.entry:.2f}"
+                        " (dry-run, not sent)"
+                    ),
+                }
+            # Real place_fn but no book entry → the place was rejected and
+            # the ledger already recorded the failure; display nothing
+            # rather than a phantom line the book cannot corroborate.
+            continue
+        return None
+
     def decision_for(self, poi_id: str, proof_bar: int) -> ModeTDecision | None:
         return self._decided.get((poi_id, int(proof_bar)))
 

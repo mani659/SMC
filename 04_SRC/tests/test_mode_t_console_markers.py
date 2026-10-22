@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import Mock
 
+from smc.core.enums import Direction
 from smc.live.judgement_console import (
     judge_interval_used,
     render_judgement_board,
@@ -111,16 +113,19 @@ def test_sweep_marker_needs_linked_zone(tmp_path):
 
 
 def test_writer_never_raises_on_unwritable_dir(tmp_path):
-    # Path in a deleted dir: write() returns False, never raises (§4.4).
-    dead = tmp_path / "gone" / MARKER_FILENAME
-    writer = MarkerWriter(dead)
-    tmp_path.chmod(0o500)   # read-only parent chain best effort; POSIX ok
+    # R3 (post-audit hardening): the old assertion was a tautology
+    # ("is False or is True") — it checked the OSError escape guarantee but
+    # never an actual failure outcome. A REAL grammar of the failure path:
+    # make the parent a FILE so mkdir/replace genuinely fail (OSError
+    # subclass), then require write() to swallow it and return exactly False.
+    blocker = tmp_path / "not_a_directory"
+    blocker.write_text("x", encoding="utf-8")
+    dead_path = blocker / "sub" / MARKER_FILENAME   # parent chain is a file
+    writer = MarkerWriter(dead_path)
     try:
-        assert writer.write([]) is False or writer.write([]) is True
-    except OSError:
-        pytest.fail("MarkerWriter.write must swallow OSError")
-    finally:
-        tmp_path.chmod(0o700)
+        assert writer.write([]) is False
+    except OSError as exc:                    # pragma: no cover
+        pytest.fail(f"MarkerWriter.write must swallow OSError, got {exc!r}")
 
 
 # --------------------------------------------------------------------- #
@@ -175,3 +180,127 @@ def test_judge_knob_zero_disables():
     assert judge_interval_used(60) is True
     assert judge_interval_used(0) is False
     assert judge_interval_used(None) is False
+
+
+# --------------------------------------------------------------------- #
+# R1 — entry_t marker goes LIVE (was: wiring passed mode_t_poi=None)
+# --------------------------------------------------------------------- #
+def _clock(s="2026-10-15T09:30:00"):
+    from datetime import datetime, timezone
+    return lambda: datetime.fromisoformat(s).replace(tzinfo=timezone.utc)
+
+
+def test_entry_t_row_lives_while_ticket_is_booked(tmp_path):
+    from smc.live.mode_t import ModeTDirector, ModeTLedger
+
+    class FakeOutcome:
+        def __init__(self):
+            self.success = True
+            self.retcode = 10008
+            self.ticket = 77
+
+    director = ModeTDirector(
+        ledger=ModeTLedger(tmp_path / "ev.jsonl"),
+        place_fn=lambda d, c: FakeOutcome(), cancel_fn=lambda t: True,
+        clock=_clock(),
+    )
+    director.consider(
+        poi_id="poi-abcdef12", detection_tf="H4", trigger_letter="F",
+        direction=Direction.LONG,
+        proof_bar=5, proof_high=100.4, proof_low=99.6, proof_close=100.0,
+        atr=2.0, session_ok=True, spread_gate_ok=True,
+        product_ticket_active=False, concurrent_open=0, volume_min=0.01,
+        bar_index=10,
+    )
+    marker = director.latest_entry_marker()
+    assert marker is not None
+    assert marker["direction"] == "BUY"
+    assert marker["entry"] == 100.0
+    assert "Mode T LIMIT 100.00" in marker["text"]
+
+    records = snapshot_to_records(
+        symbol="XAUUSDm", structure={}, mode="T", heartbeat_ok=True,
+        mode_t_poi=marker,
+        updated_at_utc="2026-10-15T09:30:00Z",
+    )
+    entry_rows = [r for r in records if r.kind == "entry_t"]
+    assert len(entry_rows) == 1
+    assert entry_rows[0].price_high == 100.0
+    assert entry_rows[0].id.startswith("entry_t_")
+
+
+def test_entry_t_row_clears_after_cancel(tmp_path):
+    from smc.live.mode_t import ModeTDirector, ModeTLedger
+    cancel = Mock(side_effect=lambda t: True)
+
+    class FakeOutcome:
+        def __init__(self):
+            self.success = True
+            self.retcode = 10008
+            self.ticket = 42
+
+    director = ModeTDirector(
+        ledger=ModeTLedger(tmp_path / "ev.jsonl"),
+        place_fn=lambda d, c: FakeOutcome(), cancel_fn=cancel,
+        clock=_clock(),
+    )
+    director.consider(
+        poi_id="poi-abcdef12", detection_tf="H4", trigger_letter="F",
+        direction=Direction.LONG,
+        proof_bar=0, proof_high=100.4, proof_low=99.6, proof_close=100.0,
+        atr=2.0, session_ok=True, spread_gate_ok=True,
+        product_ticket_active=False, concurrent_open=0, volume_min=0.01,
+        bar_index=10,
+    )
+    assert director.latest_entry_marker() is not None
+    # Rest-expiry cancels the ticket → the line must come off the chart.
+    director.manage(bar_index=10 + 12, friday_eod=False, invalidated_pois=[])
+    assert director.latest_entry_marker() is None
+
+
+def test_entry_t_dry_run_row_is_flagged_not_sent(tmp_path):
+    from smc.live.mode_t import ModeTDirector, ModeTLedger
+
+    director = ModeTDirector(
+        ledger=ModeTLedger(tmp_path / "ev.jsonl"),
+        place_fn=None,                                  # dry_run wiring
+        cancel_fn=None, clock=_clock(),
+    )
+    director.consider(
+        poi_id="poi-abcdef12", detection_tf="H4", trigger_letter="F",
+        direction=Direction.SHORT,
+        proof_bar=5, proof_high=100.4, proof_low=99.6, proof_close=100.0,
+        atr=2.0, session_ok=True, spread_gate_ok=True,
+        product_ticket_active=False, concurrent_open=0, volume_min=0.01,
+        bar_index=10,
+    )
+    marker = director.latest_entry_marker()
+    assert marker is not None
+    assert marker["direction"] == "SELL"
+    assert marker["entry"] == 100.0
+    assert "(dry-run, not sent)" in marker["text"]
+
+
+def test_rejected_place_never_draws_entry_t(tmp_path):
+    from smc.live.mode_t import ModeTDirector, ModeTLedger
+
+    class RejectedOutcome:
+        success = False
+        retcode = 10004
+        ticket = None
+
+    director = ModeTDirector(
+        ledger=ModeTLedger(tmp_path / "ev.jsonl"),
+        place_fn=lambda d, c: RejectedOutcome(), cancel_fn=lambda t: True,
+        clock=_clock(),
+    )
+    director.consider(
+        poi_id="poi-abcdef12", detection_tf="H4", trigger_letter="F",
+        direction=Direction.LONG,
+        proof_bar=5, proof_high=100.4, proof_low=99.6, proof_close=100.0,
+        atr=2.0, session_ok=True, spread_gate_ok=True,
+        product_ticket_active=False, concurrent_open=0, volume_min=0.01,
+        bar_index=10,
+    )
+    # Ledger keeps the decision trail — but the chart shows no phantom line.
+    assert director.latest_entry_marker() is None
