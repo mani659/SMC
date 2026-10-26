@@ -1,0 +1,15 @@
+risk_id,risk_category,risk_description,likelihood,impact,mitigation,residual_risk,status
+R1,sample_integrity,Multiple OBs per BOS inflate sample,High,Critical,One event per BOS (§5.3),Low,MITIGATED
+R2,stale_events,OBs from distant past enter sample,Medium,High,Freshness state machine (§6),Low,MITIGATED
+R3,serial_dependence,Clustered events during strong trends distort inference,Medium,Medium,HAC standard errors bandwidth=10 (§15.5),Low,MITIGATED
+R4,entry_nonfill,Limit order not reached by next bar open,High,Medium,Event excluded from measurement (§7.3),Low,MITIGATED
+R5,cost_underestimation,Real costs exceed 4-point assumption,Low,High,Conservative frozen assumption; sensitivity check in secondary,Low,MITIGATED
+R6,survivorship_bias,Only showing successful entries,Low,Critical,All qualifying events tracked including stop-outs (§9.6),Low,MITIGATED
+R7,parameter_freedom,Hidden degrees of freedom in methodology,Low,Critical,Zero parameters identified and documented (§20),Low,MITIGATED
+R8,outcome_driven,Adjusting horizon/metric after seeing results,Low,Critical,All frozen before testing (§21 checklist),Low,MITIGATED
+R9,structural_ambiguity,BOS/OB definitions unclear or ambiguous,Low,High,Deterministic definitions validated by R2 (§4),Low,MITIGATED
+R10,lookahead,Future data used in event classification,Low,Critical,R2 lookahead audit PASS (0 issues),Low,MITIGATED
+R11,overlap_events,Overlapping BOS events create dependent samples,Medium,Medium,Independent freshness tracking per POI (§15.4),Low,MITIGATED
+R12,horizon_choice,120-bar horizon may not capture full move,Medium,Low,Secondary R-multiple descriptor captures risk-normalized view,Low,ACCEPTED
+R13,fill_realism,Limit order fills assumed at next bar open,Medium,Low,Conservative; actual fills may be better or worse,Low,ACCEPTED
+R14,spread_variation,Actual spread varies by session/volatility,Low,Medium,Frozen 3-point assumption is conservative average,Low,ACCEPTED

@@ -1,0 +1,11 @@
+risk_id,risk_description,severity,probability,impact,mitigation,status
+R1,Trend definition may be ambiguous (what counts as "established"),Medium,Low,High,Frozen as 2+ consecutive HH/HL or LH/LL using N=5 swings — deterministic,MITIGATED
+R2,Same level may be swept multiple times creating apparent duplicate events,Low,Medium,Medium,One event per sweep — new trend required for new event — deterministic,MITIGATED
+R3,CHOCH confirmation timing may be unclear,Low,Low,Medium,Defined as bar close beyond CHOCH swing — deterministic,MITIGATED
+R4,Entry retest may never occur (price moves away after CHOCH),Medium,Medium,Medium,Excluded events — no outcome bias — fill constraint enforced,MITIGATED
+R5,Low event count may prevent statistical inference,Medium,Medium,Medium,Rare-event policy — CI-based evidence — no arbitrary minimum,MITIGATED
+R6,Cost assumption (2-point spread) may not reflect reality,Medium,High,Medium,Labeled as researcher assumption — not claimed as observed — three-tier reporting,MITIGATED
+R7,Prior trend may be subjective in borderline cases,Medium,Low,High,Frozen as 2+ consecutive swings — any borderline cases excluded by construction,MITIGATED
+R8,CHOCH swing selection may be ambiguous (which HL to break),Low,Low,High,Defined as last HL/LH before sweep — deterministic,MITIGATED
+R9,Same-bar stop and entry may conflict,Low,Low,Low,M1 data handles via wick-based stop trigger — same as BOS+OB,MITIGATED
+R10,Event clustering may be more severe than estimated,Low,Medium,Medium,HAC with bandwidth=10 — if clustering proves severe Control Session may require day aggregation,MITIGATED

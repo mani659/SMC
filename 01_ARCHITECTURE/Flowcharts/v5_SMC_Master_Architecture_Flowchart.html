@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SMC Master Architecture Flowchart (Revision 5 — Locked System)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-primary: #070a12;
+    --bg-secondary: #0d121f;
+    --bg-card: #111827;
+    --border-color: #1e293b;
+    --border-focus: #4f46e5;
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --accent-gold: #f59e0b;
+    --accent-cyan: #38bdf8;
+    --accent-green: #10b981;
+    --accent-purple: #a855f7;
+    --accent-rose: #f43f5e;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  
+  @page {
+    size: A2 landscape;
+    margin: 6mm;
+  }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: var(--text-primary);
+    background: var(--bg-primary);
+    line-height: 1.5;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Navigation & HUD Header */
+  .hud-header {
+    background: linear-gradient(135deg, #111827 0%, #0d121f 50%, #070a12 100%);
+    border-bottom: 1px solid var(--border-color);
+    padding: 16px 28px;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    backdrop-filter: blur(12px);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+  }
+
+  .hud-top-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  .brand-group {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .badge-locked {
+    background: rgba(245, 158, 11, 0.15);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 800;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .badge-system {
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 800;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .hud-title {
+    font-size: 1.25rem;
+    font-weight: 900;
+    color: #ffffff;
+    letter-spacing: 0.5px;
+  }
+
+  .hud-subtitle {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+  }
+
+  .hud-controls {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .btn {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    padding: 7px 14px;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .btn:hover {
+    background: #1e293b;
+    border-color: var(--accent-cyan);
+    color: var(--accent-cyan);
+  }
+
+  .btn-primary {
+    background: linear-gradient(135deg, #4338ca 0%, #312e81 100%);
+    border-color: #6366f1;
+    color: #ffffff;
+  }
+
+  .btn-primary:hover {
+    background: linear-gradient(135deg, #4f46e5 0%, #3730a3 100%);
+    border-color: var(--accent-cyan);
+    box-shadow: 0 0 15px rgba(99, 102, 241, 0.4);
+  }
+
+  /* Interactive Filter Bar */
+  .filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    flex-wrap: wrap;
+  }
+
+  .filter-label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .filter-chip {
+    background: rgba(30, 41, 59, 0.6);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .filter-chip:hover {
+    border-color: var(--accent-cyan);
+    color: #ffffff;
+  }
+
+  .filter-chip.active {
+    background: rgba(56, 189, 248, 0.15);
+    border-color: var(--accent-cyan);
+    color: var(--accent-cyan);
+    font-weight: 800;
+  }
+
+  /* Main Container */
+  .main-wrapper {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 20px 28px;
+    gap: 20px;
+  }
+
+  /* Confluence Simulator Bar */
+  .simulator-panel {
+    background: linear-gradient(135deg, #0d121f 0%, #111827 100%);
+    border: 1px solid #334155;
+    border-radius: 12px;
+    padding: 16px 20px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+  }
+
+  .sim-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .sim-title {
+    font-size: 0.95rem;
+    font-weight: 800;
+    color: #fbbf24;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .sim-tags-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .model-tag-checkbox {
+    display: none;
+  }
+
+  .model-tag-label {
+    background: #0f172a;
+    border: 1px solid #334155;
+    color: #94a3b8;
+    padding: 6px 14px;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .model-tag-checkbox:checked + .model-tag-label {
+    background: rgba(16, 185, 129, 0.2);
+    border-color: #10b981;
+    color: #a7f3d0;
+    box-shadow: 0 0 12px rgba(16, 185, 129, 0.3);
+  }
+
+  .sim-result-box {
+    margin-top: 12px;
+    padding: 12px 16px;
+    background: #070a12;
+    border: 1px solid #1e293b;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .sim-score-text {
+    font-size: 0.85rem;
+    color: #cbd5e1;
+  }
+
+  .sim-score-badge {
+    padding: 4px 12px;
+    border-radius: 6px;
+    font-weight: 900;
+    font-size: 0.8rem;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .grade-base { background: rgba(56, 189, 248, 0.2); color: #38bdf8; border: 1px solid #38bdf8; }
+  .grade-elevated { background: rgba(16, 185, 129, 0.2); color: #10b981; border: 1px solid #10b981; }
+  .grade-institutional { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid #f59e0b; box-shadow: 0 0 12px rgba(245,158,11,0.4); }
+
+  /* Diagram Frame */
+  .diagram-container {
+    width: 100%;
+    background: #070a12;
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.8);
+    position: relative;
+    display: flex;
+    justify-content: center;
+  }
+
+  .diagram-container svg, .diagram-container object {
+    width: 100%;
+    max-width: 2400px;
+    height: auto;
+    display: block;
+    border-radius: 14px;
+  }
+
+  /* Quick Summary Section */
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 16px;
+    margin-top: 10px;
+  }
+
+  .summary-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 16px 20px;
+  }
+
+  .summary-card h3 {
+    font-size: 0.95rem;
+    font-weight: 800;
+    color: var(--accent-cyan);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .summary-card ul {
+    list-style: none;
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+  }
+
+  .summary-card li {
+    margin-bottom: 6px;
+    padding-left: 14px;
+    position: relative;
+  }
+
+  .summary-card li::before {
+    content: "•";
+    color: var(--accent-gold);
+    position: absolute;
+    left: 0;
+    font-weight: bold;
+  }
+
+  /* Footer */
+  footer {
+    border-top: 1px solid var(--border-color);
+    padding: 16px 28px;
+    text-align: center;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* Print Optimizations */
+  @media print {
+    .hud-header, .simulator-panel, footer, .btn {
+      display: none !important;
+    }
+    body {
+      background: #000000 !important;
+      padding: 0 !important;
+    }
+    .diagram-container {
+      border: none !important;
+      box-shadow: none !important;
+    }
+  }
+</style>
+</head>
+<body>
+
+<!-- HUD HEADER & NAVIGATION -->
+<header class="hud-header">
+  <div class="hud-top-row">
+    <div class="brand-group">
+      <span class="badge-locked">FROZEN SPECIFICATION</span>
+      <span class="badge-system">REVISION 5 ARCHITECTURE</span>
+      <div>
+        <h1 class="hud-title">SMC QUANTITATIVE MASTER ARCHITECTURE</h1>
+        <p class="hud-subtitle">Modular 8-POI Confluence System • Base Candle Validity • 5 Quantitative Pillars • 6 Surgical LTF Triggers • PureRunner Engine</p>
+      </div>
+    </div>
+
+    <div class="hud-controls">
+      <button class="btn" onclick="window.print()">
+        <span>🖨️</span> Export PDF / Print (A2/A3)
+      </button>
+      <button class="btn" onclick="openSvgDirect()">
+        <span>🔍</span> Standalone SVG
+      </button>
+      <button class="btn btn-primary" onclick="toggleFullscreen()">
+        <span>⛶</span> Full Screen View
+      </button>
+    </div>
+  </div>
+
+  <!-- Quick Stage Jump & Filter Controls -->
+  <div class="filter-bar">
+    <span class="filter-label">Quick Jump:</span>
+    <button class="filter-chip active" onclick="scrollToElement('top')">Overview</button>
+    <button class="filter-chip" onclick="scrollToElement('sim')">Confluence Simulator</button>
+    <button class="filter-chip" onclick="scrollToElement('diagram')">Full Vector Flowchart</button>
+    <button class="filter-chip" onclick="scrollToElement('rules')">Key Locked Rules</button>
+  </div>
+</header>
+
+<main class="main-wrapper">
+
+  <!-- INTERACTIVE CONFLUENCE SIMULATOR -->
+  <section class="simulator-panel" id="sim">
+    <div class="sim-header">
+      <div class="sim-title">
+        <span>⚡</span> MODULAR CONFLUENCE SIMULATOR (8 EQUAL POI TAGS)
+      </div>
+      <span style="font-size: 0.8rem; color: #94a3b8;">Select multiple POI models overlapping on the same price level to compute confluence score</span>
+    </div>
+
+    <div class="sim-tags-container">
+      <input type="checkbox" id="m1" class="model-tag-checkbox" onchange="calcConfluence()">
+      <label for="m1" class="model-tag-label">M1: Origin Demand/Supply</label>
+
+      <input type="checkbox" id="m2" class="model-tag-checkbox" onchange="calcConfluence()">
+      <label for="m2" class="model-tag-label">M2: RBS/SBR Breaker</label>
+
+      <input type="checkbox" id="m3" class="model-tag-checkbox" onchange="calcConfluence()">
+      <label for="m3" class="model-tag-label">M3: CHOCH Shift Retest</label>
+
+      <input type="checkbox" id="m4" class="model-tag-checkbox" onchange="calcConfluence()">
+      <label for="m4" class="model-tag-label">M4: Quasimodo (QML)</label>
+
+      <input type="checkbox" id="m5" class="model-tag-checkbox" onchange="calcConfluence()">
+      <label for="m5" class="model-tag-label">M5: Equal Highs (Continuation)</label>
+
+      <input type="checkbox" id="m6" class="model-tag-checkbox" onchange="calcConfluence()">
+      <label for="m6" class="model-tag-label">M6: Double Top Neckline</label>
+
+      <input type="checkbox" id="m7" class="model-tag-checkbox" onchange="calcConfluence()">
+      <label for="m7" class="model-tag-label">M7: Equal Resistance Shelf</label>
+
+      <input type="checkbox" id="m8" class="model-tag-checkbox" onchange="calcConfluence()" checked>
+      <label for="m8" class="model-tag-label" style="border-color: #10b981;">M8: HTF Demand/Supply (D1/H4)</label>
+    </div>
+
+    <div class="sim-result-box" id="simResultBox">
+      <div class="sim-score-text" id="simScoreText">
+        Active Tags: <strong>M8 (HTF Demand/Supply)</strong> • Score: <strong>1 Tag (Base Quality)</strong>
+      </div>
+      <div class="sim-score-badge grade-base" id="simScoreBadge">
+        BASE QUALITY (TRADEABLE)
+      </div>
+    </div>
+  </section>
+
+  <!-- MASTER SVG EMBED CONTAINER -->
+  <section class="diagram-container" id="diagram">
+    <!-- Standalone SVG embedded directly with interactive scaling -->
+    <object data="v5_SMC_Master_Architecture_Flowchart.svg" type="image/svg+xml" style="width: 100%; max-width: 2400px; height: auto;"></object>
+  </section>
+
+  <!-- KEY LOCKED RULES SUMMARY -->
+  <section class="summary-grid" id="rules">
+    
+    <div class="summary-card">
+      <h3><span>🎯</span> 1. Stage 0A Structural Liquidity &amp; Base Candle Law</h3>
+      <ul>
+        <li><strong>Structural Liquidity Pools:</strong> Session H/L (Asia/London/NY), PDH/PDL, PWH/PWL, EQH/EQL top &amp; bottom (&le; 4.5 pips on XAUUSD), Structural Swings only (N=5 HTF, N=3 LTF).</li>
+        <li><strong>POI &amp; Zone Sweeps:</strong> OB &amp; FVG sweeps at POI count as liquidity sweeps. If no in-between entry occurs inside Demand/Supply or Order Block, engine waits for boundary/extreme sweep.</li>
+        <li><strong>Stop-Loss Hunting Edge:</strong> Smart money cleans out retail stops clustered at EQH/EQL, OB edges, and D/S boundaries. Once retail stops are eaten, market expands without returning to hunt swept levels.</li>
+        <li><strong>Base Candle &amp; Valid Swing Gate:</strong> Bullish = high candle; Bearish = low candle (bearish + lower wick = still base). Must break opposite extreme with candle body close. Wick only = INVALID SWING.</li>
+      </ul>
+    </div>
+
+    <div class="summary-card">
+      <h3><span>🛡️</span> 2. 5 Frozen Quantitative Pillars</h3>
+      <ul>
+        <li><strong>Pillar 1 (Refinement):</strong> Unmitigated OB/FVG must align within &plusmn;0.5&times; ATR of POI level.</li>
+        <li><strong>Pillar 2 (Displacement):</strong> Impulse &gt; 1.0&times; ATR. (&lt;0.5&times; ATR = Hard Reject).</li>
+        <li><strong>Pillar 3 (Dealing Range):</strong> Coupled to POI TF. Buys in Discount (&lt;45%), Sells in Premium (&gt;55%). 45%–55% = REJECT.</li>
+        <li><strong>Pillar 4 (Freshness):</strong> Strict 1-Touch Law (STATE_FRESH &rarr; STATE_TESTED). Unfilled order expiry deactivates POI. Zero 2nd touches.</li>
+        <li><strong>Pillar 5 (Inducement):</strong> Soft Gate: 100% score with IDM, 70% without IDM. Never hard reject.</li>
+      </ul>
+    </div>
+
+    <div class="summary-card">
+      <h3><span>⚡</span> 3. Surgical Triggers &amp; Model 8</h3>
+      <ul>
+        <li><strong>Chronological Routing:</strong> First valid LTF trigger on M1/M5 wins.</li>
+        <li><strong>Three CHOCH Types:</strong> Rule 1 Standard (Last swing close), Rule 2 Inside Body, Rule 3 Inside Wick (Lowest &mdash; KEPT). Entry at broken structural level.</li>
+        <li><strong>Model 8 (HTF Zone):</strong> D1/H4 zone (single opposing candle) &rarr; M5 approach &rarr; M1 Ending Diagonal sniper (SL 2&ndash;5 pips, RR 1:5+).</li>
+        <li><strong>Two-Bar Reversal:</strong> Limit order at 50% of engulfing body with Volume(Bar 2) &lt; Volume(Bar 1).</li>
+      </ul>
+    </div>
+
+    <div class="summary-card">
+      <h3><span>📈</span> 4. Execution &amp; PureRunner Risk</h3>
+      <ul>
+        <li><strong>News Protocol:</strong> Hard cancel all pending limit orders 15 min before US CPI / NFP / FOMC.</li>
+        <li><strong>Dynamic Lot Sizing:</strong> Fixed 0.5%&ndash;1.0% equity risk. SL at sweep extreme &plusmn; 0.3&times; ATR buffer.</li>
+        <li><strong>PureRunner Exit:</strong> Zero early partials. Move SL &rarr; BE at 1.0&times; ATR favorable move. 100% position runs to structural target.</li>
+        <li><strong>Regime Circuit Breaker:</strong> 3 consecutive losses &rarr; 4h pause (Z-score -2.27). 4-bar same-level cooldown. Friday 20:00 UTC exit.</li>
+      </ul>
+    </div>
+
+  </section>
+
+</main>
+
+<footer>
+  SMC Quantitative Architecture • Revision 5 (2026-09-01) • Source of Truth: SMC_RESEARCH/LOCKED_DECISIONS.md • Dual-Engine Python + MQL5
+</footer>
+
+<script>
+  function calcConfluence() {
+    const models = [
+      { id: 'm1', name: 'M1 (Origin Demand)' },
+      { id: 'm2', name: 'M2 (Breaker RBS/SBR)' },
+      { id: 'm3', name: 'M3 (CHOCH Retest)' },
+      { id: 'm4', name: 'M4 (Quasimodo QML)' },
+      { id: 'm5', name: 'M5 (Equal Highs Cont.)' },
+      { id: 'm6', name: 'M6 (Neckline SBR)' },
+      { id: 'm7', name: 'M7 (Equal Resistance)' },
+      { id: 'm8', name: 'M8 (HTF Demand/Supply)' }
+    ];
+
+    const active = models.filter(m => document.getElementById(m.id).checked);
+    const count = active.length;
+    const textEl = document.getElementById('simScoreText');
+    const badgeEl = document.getElementById('simScoreBadge');
+
+    if (count === 0) {
+      textEl.innerHTML = 'No POI model selected. Please select at least one model tag.';
+      badgeEl.className = 'sim-score-badge';
+      badgeEl.style.display = 'none';
+      return;
+    }
+
+    badgeEl.style.display = 'inline-block';
+    const tagNames = active.map(m => `<strong>${m.name}</strong>`).join(' + ');
+
+    if (count === 1) {
+      textEl.innerHTML = `Active Tags: ${tagNames} • Score: <strong>1 Tag (Base Quality)</strong>`;
+      badgeEl.className = 'sim-score-badge grade-base';
+      badgeEl.innerText = 'BASE QUALITY (TRADEABLE)';
+    } else if (count === 2) {
+      textEl.innerHTML = `Active Tags: ${tagNames} • Score: <strong>2 Tags (Elevated Confluence)</strong>`;
+      badgeEl.className = 'sim-score-badge grade-elevated';
+      badgeEl.innerText = 'ELEVATED QUALITY (PREFERRED)';
+    } else {
+      textEl.innerHTML = `Active Tags: ${tagNames} • Score: <strong>${count} Tags (Institutional-Grade)</strong>`;
+      badgeEl.className = 'sim-score-badge grade-institutional';
+      badgeEl.innerText = '★ INSTITUTIONAL-GRADE CONFLUENCE';
+    }
+  }
+
+  function scrollToElement(id) {
+    if (id === 'top') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      const el = document.getElementById(id);
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
+    }
+  }
+
+  function openSvgDirect() {
+    window.open('v5_SMC_Master_Architecture_Flowchart.svg', '_blank');
+  }
+
+  function toggleFullscreen() {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(err => {
+        alert(`Error attempting to enable full-screen mode: ${err.message}`);
+      });
+    } else {
+      document.exitFullscreen();
+    }
+  }
+
+  // Initialize
+  calcConfluence();
+</script>
+
+</body>
+</html>

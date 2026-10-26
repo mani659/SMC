@@ -1,0 +1,13 @@
+{
+  "bars": 1768123,
+  "date_range": "2021-04-12 11:00:00 to 2026-04-10 20:59:00",
+  "swing_highs": 104114,
+  "swing_lows": 104507,
+  "total_swings": 208621,
+  "total_fvgs": 471475,
+  "total_obs": 471475,
+  "total_bos": 196965,
+  "lookahead_issues": 0,
+  "reproducible": true,
+  "elapsed_s": 158.0
+}

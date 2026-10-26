@@ -1,0 +1,11 @@
+risk_id,risk_category,risk_description,likelihood,impact,mitigation,residual_risk,status
+R1,sample_integrity,Duplicate BOS entries inflate sample,High,Critical,Deduplicate BOS CSV before extraction,Low,MITIGATED
+R2,dependence,Within-day trades not independent,High,Critical,Day-level clustering with cluster-robust inference,Low,MITIGATED
+R3,cost_model,Next-bar-open fill understates execution costs,Medium,High,Three-tier cost reporting; Tier 2 as primary,Low,MITIGATED
+R4,intrabar,M1 OHLC cannot resolve intra-bar sequence,Medium,Medium,Wick-based stop trigger (most conservative),Low,MITIGATED
+R5,sample_size,Day-level aggregation reduces effective N,Medium,Medium,1555 days provides adequate evidence,Low,ACCEPTED
+R6,directionality,Short trades weaker than long,Low,Low,Both directions required for qualification,Low,ACCEPTED
+R7,economic_magnitude,Edge is small (+1 bps),Medium,Low,Reported honestly; not exaggerated,Low,ACCEPTED
+R8,overfitting,Day-level aggregation could mask overfitting,Low,Medium,Zero parameters; no fitting possible,Low,MITIGATED
+R9,walk_forward,Fixed split may not capture regime changes,Low,Low,Yearly consistency check provides stability evidence,Low,ACCEPTED
+R10,cost_sensitivity,Spread assumption may be wrong,Medium,Medium,Report all three tiers; sensitivity explicit,Low,MITIGATED

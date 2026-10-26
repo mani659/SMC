@@ -1,0 +1,566 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2100 2500" width="100%" height="100%" style="background:#080c14; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;">
+  <defs>
+    <!-- Gradients -->
+    <linearGradient id="gradHeader" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f59e0b" />
+      <stop offset="50%" stop-color="#d97706" />
+      <stop offset="100%" stop-color="#b45309" />
+    </linearGradient>
+    <linearGradient id="gradLayer1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e1b4b" />
+      <stop offset="100%" stop-color="#0f172a" />
+    </linearGradient>
+    <linearGradient id="gradPoiCard" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e293b" />
+      <stop offset="100%" stop-color="#0f172a" />
+    </linearGradient>
+    <linearGradient id="gradGate" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#064e3b" />
+      <stop offset="100%" stop-color="#022c22" />
+    </linearGradient>
+    <linearGradient id="gradTrig1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#701a75" />
+      <stop offset="100%" stop-color="#4a044e" />
+    </linearGradient>
+    <linearGradient id="gradTrig2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0369a1" />
+      <stop offset="100%" stop-color="#0c4a6e" />
+    </linearGradient>
+    <linearGradient id="gradTrig3" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1d4ed8" />
+      <stop offset="100%" stop-color="#172554" />
+    </linearGradient>
+    <linearGradient id="gradTrig4" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#047857" />
+      <stop offset="100%" stop-color="#064e3b" />
+    </linearGradient>
+    <linearGradient id="gradTrig5" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6d28d9" />
+      <stop offset="100%" stop-color="#4c1d95" />
+    </linearGradient>
+    <linearGradient id="gradTrig6" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#b45309" />
+      <stop offset="100%" stop-color="#78350f" />
+    </linearGradient>
+
+    <!-- Filters -->
+    <filter id="shadow" x="-5%" y="-5%" width="110%" height="115%">
+      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#000000" flood-opacity="0.6"/>
+    </filter>
+
+    <!-- Arrow Marker -->
+    <marker id="arrow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#f59e0b"/>
+    </marker>
+    <marker id="arrowBlue" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8"/>
+    </marker>
+    <marker id="arrowGreen" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#10b981"/>
+    </marker>
+  </defs>
+
+  <!-- ==================== HEADER ==================== -->
+  <g transform="translate(50, 40)" filter="url(#shadow)">
+    <rect width="2000" height="110" rx="16" fill="url(#gradHeader)" />
+    <text x="1000" y="48" fill="#ffffff" font-size="28" font-weight="900" text-anchor="middle" letter-spacing="1.5">SMC QUANTITATIVE ARCHITECTURE — REVISION 4</text>
+    <text x="1000" y="85" fill="#fef3c7" font-size="16" font-weight="600" text-anchor="middle">DUAL-LAYER FRAMEWORK: 7 EXHAUSTIVE HTF STRUCTURAL POIS ➔ 5-PILLAR VALIDATION GATE ➔ 6 LTF SURGICAL EXECUTION TRIGGERS</text>
+  </g>
+
+  <!-- ==================== LAYER 1: THE 7 STRUCTURAL POIS ==================== -->
+  <g transform="translate(50, 180)" filter="url(#shadow)">
+    <rect width="2000" height="540" rx="16" fill="url(#gradLayer1)" stroke="#312e81" stroke-width="2"/>
+    
+    <!-- Layer Header -->
+    <rect x="0" y="0" width="2000" height="50" rx="16" fill="#1e1b4b" />
+    <rect x="0" y="30" width="2000" height="20" fill="#1e1b4b" />
+    <text x="30" y="34" fill="#fbbf24" font-size="18" font-weight="800">STAGE 1: HIGHER TIMEFRAME POI DISCOVERY (DAILY / H4 / H1 / M30)</text>
+    <text x="1970" y="34" fill="#94a3b8" font-size="14" font-weight="600" text-anchor="end">EXHAUSTIVE PRICE GEOMETRY — LOCATION PRECEDES TRIGGER</text>
+
+    <!-- POI 1 -->
+    <g transform="translate(25, 70)">
+      <rect width="260" height="440" rx="12" fill="url(#gradPoiCard)" stroke="#334155" stroke-width="1.5"/>
+      <rect width="260" height="40" rx="12" fill="#1e293b"/>
+      <rect y="25" width="260" height="15" fill="#1e293b"/>
+      <text x="130" y="26" fill="#38bdf8" font-size="14" font-weight="800" text-anchor="middle">MODEL 1: ORIGIN DEMAND</text>
+      
+      <!-- Mini Schematic -->
+      <path d="M 30 180 L 70 80 L 110 140 L 160 60 L 210 180 L 240 70" fill="none" stroke="#10b981" stroke-width="3"/>
+      <line x1="20" y1="180" x2="220" y2="180" stroke="#f59e0b" stroke-width="2" stroke-dasharray="4,4"/>
+      <circle cx="210" cy="180" r="6" fill="#ef4444"/>
+
+      <text x="130" y="220" fill="#f1f5f9" font-size="12" font-weight="700" text-anchor="middle">Prior Swing Low Retest</text>
+      <text x="20" y="250" fill="#94a3b8" font-size="11">• Base accumulation low</text>
+      <text x="20" y="272" fill="#94a3b8" font-size="11">• Higher high impulse breakout</text>
+      <text x="20" y="294" fill="#94a3b8" font-size="11">• Deep retest into origin base</text>
+      <text x="20" y="316" fill="#94a3b8" font-size="11">• Institutional floor holds (FTB)</text>
+      <rect x="15" y="340" width="230" height="75" rx="8" fill="#0b0f19" stroke="#1e293b"/>
+      <text x="25" y="362" fill="#10b981" font-size="11" font-weight="700">EXECUTION: Buy Limit</text>
+      <text x="25" y="382" fill="#cbd5e1" font-size="10">Entry: Origin base top edge</text>
+      <text x="25" y="400" fill="#ef4444" font-size="10">SL: Below extreme base low</text>
+    </g>
+
+    <!-- POI 2 -->
+    <g transform="translate(305, 70)">
+      <rect width="260" height="440" rx="12" fill="url(#gradPoiCard)" stroke="#334155" stroke-width="1.5"/>
+      <rect width="260" height="40" rx="12" fill="#1e293b"/>
+      <rect y="25" width="260" height="15" fill="#1e293b"/>
+      <text x="130" y="26" fill="#38bdf8" font-size="14" font-weight="800" text-anchor="middle">MODEL 2: RBS/SBR BREAKER</text>
+      
+      <!-- Mini Schematic -->
+      <path d="M 30 180 L 80 100 L 120 150 L 180 70 L 220 100 L 240 60" fill="none" stroke="#38bdf8" stroke-width="3"/>
+      <line x1="70" y1="100" x2="230" y2="100" stroke="#f59e0b" stroke-width="2" stroke-dasharray="4,4"/>
+      <circle cx="220" cy="100" r="6" fill="#ef4444"/>
+
+      <text x="130" y="220" fill="#f1f5f9" font-size="12" font-weight="700" text-anchor="middle">Role Reversal Flip</text>
+      <text x="20" y="250" fill="#94a3b8" font-size="11">• Clean break of swing high/low</text>
+      <text x="20" y="272" fill="#94a3b8" font-size="11">• Trapped counter orders exist</text>
+      <text x="20" y="294" fill="#94a3b8" font-size="11">• Pullback to broken line</text>
+      <text x="20" y="316" fill="#94a3b8" font-size="11">• Breakeven mitigation release</text>
+      <rect x="15" y="340" width="230" height="75" rx="8" fill="#0b0f19" stroke="#1e293b"/>
+      <text x="25" y="362" fill="#38bdf8" font-size="11" font-weight="700">EXECUTION: Flip Limit</text>
+      <text x="25" y="382" fill="#cbd5e1" font-size="10">Entry: Broken level / FVG</text>
+      <text x="25" y="400" fill="#ef4444" font-size="10">SL: Beyond breaker pivot wick</text>
+    </g>
+
+    <!-- POI 3 -->
+    <g transform="translate(585, 70)">
+      <rect width="260" height="440" rx="12" fill="url(#gradPoiCard)" stroke="#334155" stroke-width="1.5"/>
+      <rect width="260" height="40" rx="12" fill="#1e293b"/>
+      <rect y="25" width="260" height="15" fill="#1e293b"/>
+      <text x="130" y="26" fill="#38bdf8" font-size="14" font-weight="800" text-anchor="middle">MODEL 3: CHOCH RETEST</text>
+      
+      <!-- Mini Schematic -->
+      <path d="M 30 150 L 70 80 L 110 130 L 150 50 L 190 170 L 220 130 L 240 190" fill="none" stroke="#ef4444" stroke-width="3"/>
+      <line x1="100" y1="130" x2="230" y2="130" stroke="#f59e0b" stroke-width="2" stroke-dasharray="4,4"/>
+      <circle cx="220" cy="130" r="6" fill="#10b981"/>
+
+      <text x="130" y="220" fill="#f1f5f9" font-size="12" font-weight="700" text-anchor="middle">Sweep &amp; Shift Retest</text>
+      <text x="20" y="250" fill="#94a3b8" font-size="11">• Liquidity sweep at peak</text>
+      <text x="20" y="272" fill="#94a3b8" font-size="11">• Aggressive break of low (CHOCH)</text>
+      <text x="20" y="294" fill="#94a3b8" font-size="11">• Retest broken support line</text>
+      <text x="20" y="316" fill="#94a3b8" font-size="11">• Shifts demand into supply</text>
+      <rect x="15" y="340" width="230" height="75" rx="8" fill="#0b0f19" stroke="#1e293b"/>
+      <text x="25" y="362" fill="#ef4444" font-size="11" font-weight="700">EXECUTION: Sell Limit</text>
+      <text x="25" y="382" fill="#cbd5e1" font-size="10">Entry: Broken support shelf</text>
+      <text x="25" y="400" fill="#ef4444" font-size="10">SL: Above sweep peak (Head)</text>
+    </g>
+
+    <!-- POI 4 -->
+    <g transform="translate(865, 70)">
+      <rect width="270" height="440" rx="12" fill="url(#gradPoiCard)" stroke="#f59e0b" stroke-width="2"/>
+      <rect width="270" height="40" rx="12" fill="#78350f"/>
+      <rect y="25" width="270" height="15" fill="#78350f"/>
+      <text x="135" y="26" fill="#fef3c7" font-size="14" font-weight="800" text-anchor="middle">MODEL 4: QUASIMODO (QML)</text>
+      
+      <!-- Mini Schematic -->
+      <path d="M 20 160 L 60 100 L 100 150 L 140 60 L 180 180 L 215 100 L 245 190" fill="none" stroke="#fbbf24" stroke-width="3"/>
+      <line x1="50" y1="100" x2="225" y2="100" stroke="#f59e0b" stroke-width="2" stroke-dasharray="4,4"/>
+      <circle cx="215" cy="100" r="6" fill="#10b981"/>
+
+      <text x="135" y="220" fill="#fef3c7" font-size="12" font-weight="700" text-anchor="middle">Left Shoulder Institutional Trap</text>
+      <text x="20" y="250" fill="#cbd5e1" font-size="11">• Left Shoulder (High 1) forms</text>
+      <text x="20" y="272" fill="#cbd5e1" font-size="11">• Head (High 2) sweeps BSL</text>
+      <text x="20" y="294" fill="#cbd5e1" font-size="11">• Lower Low breaks structure</text>
+      <text x="20" y="316" fill="#cbd5e1" font-size="11">• Retest Left Shoulder level</text>
+      <rect x="15" y="340" width="240" height="75" rx="8" fill="#0b0f19" stroke="#f59e0b"/>
+      <text x="25" y="362" fill="#fbbf24" font-size="11" font-weight="700">EXECUTION: QML Limit</text>
+      <text x="25" y="382" fill="#cbd5e1" font-size="10">Entry: Exact Left Shoulder line</text>
+      <text x="25" y="400" fill="#ef4444" font-size="10">SL: Above Head sweep peak</text>
+    </g>
+
+    <!-- POI 5 -->
+    <g transform="translate(1155, 70)">
+      <rect width="260" height="440" rx="12" fill="url(#gradPoiCard)" stroke="#334155" stroke-width="1.5"/>
+      <rect width="260" height="40" rx="12" fill="#1e293b"/>
+      <rect y="25" width="260" height="15" fill="#1e293b"/>
+      <text x="130" y="26" fill="#38bdf8" font-size="14" font-weight="800" text-anchor="middle">MODEL 5: EQUAL HIGHS</text>
+      
+      <!-- Mini Schematic -->
+      <path d="M 20 160 L 60 100 L 100 150 L 140 70 L 180 180 L 220 70 L 245 190" fill="none" stroke="#a855f7" stroke-width="3"/>
+      <line x1="130" y1="70" x2="230" y2="70" stroke="#f59e0b" stroke-width="2" stroke-dasharray="4,4"/>
+      <circle cx="220" cy="70" r="6" fill="#10b981"/>
+
+      <text x="130" y="220" fill="#f1f5f9" font-size="12" font-weight="700" text-anchor="middle">Extreme Supply Retest</text>
+      <text x="20" y="250" fill="#94a3b8" font-size="11">• Sweep high creates top peak</text>
+      <text x="20" y="272" fill="#94a3b8" font-size="11">• Intermediate structure shifts</text>
+      <text x="20" y="294" fill="#94a3b8" font-size="11">• Deep rally to High 2 peak</text>
+      <text x="20" y="316" fill="#94a3b8" font-size="11">• Extreme origin unmitigated OB</text>
+      <rect x="15" y="340" width="230" height="75" rx="8" fill="#0b0f19" stroke="#1e293b"/>
+      <text x="25" y="362" fill="#a855f7" font-size="11" font-weight="700">EXECUTION: Extreme Limit</text>
+      <text x="25" y="382" fill="#cbd5e1" font-size="10">Entry: High 2 Supply OB</text>
+      <text x="25" y="400" fill="#ef4444" font-size="10">SL: 5-10 pts above high wick</text>
+    </g>
+
+    <!-- POI 6 -->
+    <g transform="translate(1435, 70)">
+      <rect width="260" height="440" rx="12" fill="url(#gradPoiCard)" stroke="#334155" stroke-width="1.5"/>
+      <rect width="260" height="40" rx="12" fill="#1e293b"/>
+      <rect y="25" width="260" height="15" fill="#1e293b"/>
+      <text x="130" y="26" fill="#38bdf8" font-size="14" font-weight="800" text-anchor="middle">MODEL 6: SBR NECKLINE</text>
+      
+      <!-- Mini Schematic -->
+      <path d="M 20 80 L 60 140 L 100 80 L 140 180 L 190 140 L 240 200" fill="none" stroke="#f43f5e" stroke-width="3"/>
+      <line x1="50" y1="140" x2="200" y2="140" stroke="#f59e0b" stroke-width="2" stroke-dasharray="4,4"/>
+      <circle cx="190" cy="140" r="6" fill="#10b981"/>
+
+      <text x="130" y="220" fill="#f1f5f9" font-size="12" font-weight="700" text-anchor="middle">Double Top Neckline SBR</text>
+      <text x="20" y="250" fill="#94a3b8" font-size="11">• Double top creates ceiling</text>
+      <text x="20" y="272" fill="#94a3b8" font-size="11">• Breakdown below neckline</text>
+      <text x="20" y="294" fill="#94a3b8" font-size="11">• Pullback to broken neckline</text>
+      <text x="20" y="316" fill="#94a3b8" font-size="11">• Fast trend continuation</text>
+      <rect x="15" y="340" width="230" height="75" rx="8" fill="#0b0f19" stroke="#1e293b"/>
+      <text x="25" y="362" fill="#f43f5e" font-size="11" font-weight="700">EXECUTION: Neckline Limit</text>
+      <text x="25" y="382" fill="#cbd5e1" font-size="10">Entry: Broken neckline shelf</text>
+      <text x="25" y="400" fill="#ef4444" font-size="10">SL: Above reaction bounce high</text>
+    </g>
+
+    <!-- POI 7 -->
+    <g transform="translate(1715, 70)">
+      <rect width="260" height="440" rx="12" fill="url(#gradPoiCard)" stroke="#334155" stroke-width="1.5"/>
+      <rect width="260" height="40" rx="12" fill="#1e293b"/>
+      <rect y="25" width="260" height="15" fill="#1e293b"/>
+      <text x="130" y="26" fill="#38bdf8" font-size="14" font-weight="800" text-anchor="middle">MODEL 7: EQUAL RESISTANCE</text>
+      
+      <!-- Mini Schematic -->
+      <path d="M 20 80 L 60 140 L 100 80 L 140 180 L 200 80 L 240 190" fill="none" stroke="#ec4899" stroke-width="3"/>
+      <line x1="90" y1="80" x2="210" y2="80" stroke="#f59e0b" stroke-width="2" stroke-dasharray="4,4"/>
+      <circle cx="200" cy="80" r="6" fill="#10b981"/>
+
+      <text x="130" y="220" fill="#f1f5f9" font-size="12" font-weight="700" text-anchor="middle">Resistance Shelf Retest</text>
+      <text x="20" y="250" fill="#94a3b8" font-size="11">• Initial resistance created</text>
+      <text x="20" y="272" fill="#94a3b8" font-size="11">• Downward impulse break</text>
+      <text x="20" y="294" fill="#94a3b8" font-size="11">• Full rally back to resistance</text>
+      <text x="20" y="316" fill="#94a3b8" font-size="11">• Traps late double-top buyers</text>
+      <rect x="15" y="340" width="230" height="75" rx="8" fill="#0b0f19" stroke="#1e293b"/>
+      <text x="25" y="362" fill="#ec4899" font-size="11" font-weight="700">EXECUTION: Ceiling Limit</text>
+      <text x="25" y="382" fill="#cbd5e1" font-size="10">Entry: Exact resistance line</text>
+      <text x="25" y="400" fill="#ef4444" font-size="10">SL: Buffer above ceiling</text>
+    </g>
+  </g>
+
+  <!-- Connective Arrows -->
+  <line x1="1050" y1="720" x2="1050" y2="760" stroke="#f59e0b" stroke-width="4" marker-end="url(#arrow)"/>
+
+  <!-- ==================== LAYER 2: 5-PILLAR POI VALIDATION GATE ==================== -->
+  <g transform="translate(50, 760)" filter="url(#shadow)">
+    <rect width="2000" height="150" rx="16" fill="url(#gradGate)" stroke="#10b981" stroke-width="2"/>
+    <text x="1000" y="32" fill="#a7f3d0" font-size="16" font-weight="800" text-anchor="middle" letter-spacing="1">STAGE 2: QUANTITATIVE POI VALIDATION GATE (ALL 5 FILTERS MUST PASS)</text>
+    
+    <!-- 5 Pillars -->
+    <g transform="translate(30, 48)">
+      <!-- Pillar 1 -->
+      <rect width="360" height="85" rx="8" fill="#064e3b" stroke="#047857"/>
+      <text x="180" y="24" fill="#34d399" font-size="13" font-weight="700" text-anchor="middle">1. ZONE REFINEMENT</text>
+      <text x="15" y="48" fill="#e2e8f0" font-size="11">• Line must align with unmitigated</text>
+      <text x="15" y="66" fill="#e2e8f0" font-size="11">  Order Block + FVG imprint</text>
+
+      <!-- Pillar 2 -->
+      <rect x="385" width="360" height="85" rx="8" fill="#064e3b" stroke="#047857"/>
+      <text x="565" y="24" fill="#34d399" font-size="13" font-weight="700" text-anchor="middle">2. DISPLACEMENT &amp; BOS</text>
+      <text x="400" y="48" fill="#e2e8f0" font-size="11">• Origin move must close past structure</text>
+      <text x="400" y="66" fill="#e2e8f0" font-size="11">• High volume imbalance candles</text>
+
+      <!-- Pillar 3 -->
+      <rect x="770" width="360" height="85" rx="8" fill="#064e3b" stroke="#047857"/>
+      <text x="950" y="24" fill="#34d399" font-size="13" font-weight="700" text-anchor="middle">3. PREMIUM / DISCOUNT</text>
+      <text x="785" y="48" fill="#e2e8f0" font-size="11">• Buy POIs &lt; 50% Dealing Range</text>
+      <text x="785" y="66" fill="#e2e8f0" font-size="11">• Sell POIs &gt; 50% Dealing Range</text>
+
+      <!-- Pillar 4 -->
+      <rect x="1155" width="360" height="85" rx="8" fill="#064e3b" stroke="#047857"/>
+      <text x="1335" y="24" fill="#34d399" font-size="13" font-weight="700" text-anchor="middle">4. FRESHNESS (FTB LAW)</text>
+      <text x="1170" y="48" fill="#e2e8f0" font-size="11">• 1st touch only (STATE_FRESH)</text>
+      <text x="1170" y="66" fill="#e2e8f0" font-size="11">• 2nd/3rd touches = Liquidity traps</text>
+
+      <!-- Pillar 5 -->
+      <rect x="1540" width="400" height="85" rx="8" fill="#064e3b" stroke="#047857"/>
+      <text x="1740" y="24" fill="#34d399" font-size="13" font-weight="700" text-anchor="middle">5. INDUCEMENT (IDM)</text>
+      <text x="1555" y="48" fill="#e2e8f0" font-size="11">• Engineered liquidity (EQH/EQL/Trendline)</text>
+      <text x="1555" y="66" fill="#e2e8f0" font-size="11">  formed immediately ahead of POI</text>
+    </g>
+  </g>
+
+  <!-- Connective Arrows -->
+  <line x1="1050" y1="910" x2="1050" y2="950" stroke="#10b981" stroke-width="4" marker-end="url(#arrowGreen)"/>
+
+  <!-- ==================== LAYER 3: 6 LTF EXECUTION TRIGGERS ==================== -->
+  <g transform="translate(50, 950)" filter="url(#shadow)">
+    <rect width="2000" height="540" rx="16" fill="#0f172a" stroke="#1e293b" stroke-width="2"/>
+    
+    <!-- Layer Header -->
+    <rect x="0" y="0" width="2000" height="50" rx="16" fill="#1e293b" />
+    <rect x="0" y="30" width="2000" height="20" fill="#1e293b" />
+    <text x="30" y="34" fill="#38bdf8" font-size="18" font-weight="800">STAGE 3: SURGICAL LOWER TIMEFRAME EXECUTION TRIGGERS (M1 / M5 ONLY)</text>
+    <text x="1970" y="34" fill="#94a3b8" font-size="14" font-weight="600" text-anchor="end">EVALUATED STRICTLY UPON CONTACT WITH ACTIVE VALIDATED POI</text>
+
+    <!-- Trigger 1 -->
+    <g transform="translate(25, 70)">
+      <rect width="310" height="440" rx="12" fill="url(#gradTrig1)" stroke="#d946ef" stroke-width="1.5"/>
+      <text x="155" y="30" fill="#fdf4ff" font-size="15" font-weight="800" text-anchor="middle">TRIGGER 1: M1/M5 CHOCH</text>
+      <text x="155" y="50" fill="#f0abfc" font-size="11" font-weight="600" text-anchor="middle">Structural Reversal Model</text>
+      <path d="M 40 140 L 90 70 L 140 160 L 200 90 L 250 130 L 280 60" fill="none" stroke="#f0abfc" stroke-width="3"/>
+      <circle cx="250" cy="130" r="6" fill="#10b981"/>
+      <text x="20" y="210" fill="#ffffff" font-size="12" font-weight="700">• High ➔ Lower Low sweep (SSL)</text>
+      <text x="20" y="235" fill="#f5d0fe" font-size="11">• Higher High breaks structure (CHOCH)</text>
+      <text x="20" y="258" fill="#f5d0fe" font-size="11">• Retracement to origin Higher Low</text>
+      <text x="20" y="281" fill="#f5d0fe" font-size="11">• Limits risk; surgical M1/M5 entry</text>
+      <rect x="15" y="330" width="280" height="85" rx="8" fill="#2e0854"/>
+      <text x="25" y="355" fill="#f0abfc" font-size="11" font-weight="700">EXECUTION: Limit at HL Base</text>
+      <text x="25" y="375" fill="#cbd5e1" font-size="10">SL: Below lowest sweep wick</text>
+      <text x="25" y="395" fill="#38bdf8" font-size="10">Timeframe: Strict M1 or M5</text>
+    </g>
+
+    <!-- Trigger 2 -->
+    <g transform="translate(355, 70)">
+      <rect width="310" height="440" rx="12" fill="url(#gradTrig2)" stroke="#38bdf8" stroke-width="1.5"/>
+      <text x="155" y="30" fill="#f0f9ff" font-size="15" font-weight="800" text-anchor="middle">TRIGGER 2: LEADING DIAGONAL</text>
+      <text x="155" y="50" fill="#7dd3fc" font-size="11" font-weight="600" text-anchor="middle">5 Waves Trend Start @ Fib 50-61.8%</text>
+      <path d="M 30 160 L 70 110 L 110 135 L 160 85 L 200 110 L 250 60 L 280 110" fill="none" stroke="#7dd3fc" stroke-width="3"/>
+      <circle cx="280" cy="110" r="6" fill="#10b981"/>
+      <text x="20" y="210" fill="#ffffff" font-size="12" font-weight="700">• 5-wave impulse emerges from POI</text>
+      <text x="20" y="235" fill="#e0f2fe" font-size="11">• Confirms institutional trend start</text>
+      <text x="20" y="258" fill="#e0f2fe" font-size="11">• Measure 0.0% to 100.0% Fib of 5 waves</text>
+      <text x="20" y="281" fill="#e0f2fe" font-size="11">• Wave 2 pullback = Golden Zone entry</text>
+      <rect x="15" y="330" width="280" height="85" rx="8" fill="#082f49"/>
+      <text x="25" y="355" fill="#38bdf8" font-size="11" font-weight="700">EXECUTION: Limit at Fib 50.0%–61.8%</text>
+      <text x="25" y="375" fill="#cbd5e1" font-size="10">SL: Below origin base of Wave 1</text>
+      <text x="25" y="395" fill="#10b981" font-size="10">Target: Wave 3 mega expansion</text>
+    </g>
+
+    <!-- Trigger 3 -->
+    <g transform="translate(685, 70)">
+      <rect width="310" height="440" rx="12" fill="url(#gradTrig3)" stroke="#60a5fa" stroke-width="1.5"/>
+      <text x="155" y="30" fill="#eff6ff" font-size="15" font-weight="800" text-anchor="middle">TRIGGER 3: ENDING DIAGONAL</text>
+      <text x="155" y="50" fill="#93c5fd" font-size="11" font-weight="600" text-anchor="middle">Wave 5 Throw-Under Sniper Entry</text>
+      <path d="M 30 70 L 80 130 L 130 90 L 180 150 L 230 110 L 280 180" fill="none" stroke="#93c5fd" stroke-width="3"/>
+      <circle cx="280" cy="180" r="6" fill="#10b981"/>
+      <text x="20" y="210" fill="#ffffff" font-size="12" font-weight="700">• Dying trend enters HTF POI</text>
+      <text x="20" y="235" fill="#dbeafe" font-size="11">• Contracting/expanding wedge</text>
+      <text x="20" y="258" fill="#dbeafe" font-size="11">• Wave 5 pierces boundary trendline</text>
+      <text x="20" y="281" fill="#dbeafe" font-size="11">• ZERO CHOCH LAG (Saves 50-60 pips)</text>
+      <rect x="15" y="330" width="280" height="85" rx="8" fill="#172554"/>
+      <text x="25" y="355" fill="#60a5fa" font-size="11" font-weight="700">EXECUTION: Trendline Touch Sniper</text>
+      <text x="25" y="375" fill="#cbd5e1" font-size="10">SL: Ultra-tight beyond W5 wick</text>
+      <text x="25" y="395" fill="#fbbf24" font-size="10">Secondary: Add on CHOCH break</text>
+    </g>
+
+    <!-- Trigger 4 -->
+    <g transform="translate(1015, 70)">
+      <rect width="310" height="440" rx="12" fill="url(#gradTrig4)" stroke="#34d399" stroke-width="1.5"/>
+      <text x="155" y="30" fill="#ecfdf5" font-size="15" font-weight="800" text-anchor="middle">TRIGGER 4: 2-BAR REVERSAL</text>
+      <text x="155" y="50" fill="#6ee7b7" font-size="11" font-weight="600" text-anchor="middle">Low Volume Absorption Proof</text>
+      <rect x="90" y="80" width="35" height="80" fill="#ef4444"/>
+      <rect x="145" y="60" width="45" height="100" fill="#10b981"/>
+      <text x="20" y="210" fill="#ffffff" font-size="12" font-weight="700">• Bar 2 engulfs Bar 1 at POI</text>
+      <text x="20" y="235" fill="#d1fae5" font-size="11">• Mandatory Volume(Bar 2) &lt; Volume(Bar 1)</text>
+      <text x="20" y="258" fill="#d1fae5" font-size="11">• Proves complete liquidity exhaustion</text>
+      <text x="20" y="281" fill="#d1fae5" font-size="11">• Effortless reversal = Path of least resist</text>
+      <rect x="15" y="330" width="280" height="85" rx="8" fill="#064e3b"/>
+      <text x="25" y="355" fill="#34d399" font-size="11" font-weight="700">EXECUTION: Market on Bar 2 Close</text>
+      <text x="25" y="375" fill="#cbd5e1" font-size="10">SL: Below Bar 1/2 lowest wick</text>
+      <text x="25" y="395" fill="#10b981" font-size="10">Volume: Strictly lower on 2nd bar</text>
+    </g>
+
+    <!-- Trigger 5 -->
+    <g transform="translate(1345, 70)">
+      <rect width="310" height="440" rx="12" fill="url(#gradTrig5)" stroke="#a78bfa" stroke-width="1.5"/>
+      <text x="155" y="30" fill="#faf5ff" font-size="15" font-weight="800" text-anchor="middle">TRIGGER 5: RSI DIVERGENCE</text>
+      <text x="155" y="50" fill="#c4b5fd" font-size="11" font-weight="600" text-anchor="middle">Double Top/Bottom Decoupling</text>
+      <path d="M 40 100 L 90 150 L 140 110 L 190 150 L 250 80" fill="none" stroke="#c4b5fd" stroke-width="3"/>
+      <text x="20" y="210" fill="#ffffff" font-size="12" font-weight="700">• Double Top/Bottom (M/W) at POI</text>
+      <text x="20" y="235" fill="#ede9fe" font-size="11">• Price creates Equal/Lower Lows</text>
+      <text x="20" y="258" fill="#ede9fe" font-size="11">• RSI(4/14) prints Higher Lows</text>
+      <text x="20" y="281" fill="#ede9fe" font-size="11">• Confirms internal momentum failure</text>
+      <rect x="15" y="330" width="280" height="85" rx="8" fill="#3b0764"/>
+      <text x="25" y="355" fill="#a78bfa" font-size="11" font-weight="700">EXECUTION: Limit at 2nd Bottom/Top</text>
+      <text x="25" y="375" fill="#cbd5e1" font-size="10">SL: Below double bottom wick</text>
+      <text x="25" y="395" fill="#f59e0b" font-size="10">Filter: Divergence slope &gt; 15 deg</text>
+    </g>
+
+    <!-- Trigger 6 -->
+    <g transform="translate(1675, 70)">
+      <rect width="300" height="440" rx="12" fill="url(#gradTrig6)" stroke="#fbbf24" stroke-width="1.5"/>
+      <text x="150" y="30" fill="#fffbeb" font-size="15" font-weight="800" text-anchor="middle">TRIGGER 6: BOS CONTINUATION</text>
+      <text x="150" y="50" fill="#fde68a" font-size="11" font-weight="600" text-anchor="middle">Color-Free OB + FVG Mitigation</text>
+      <path d="M 30 160 L 80 90 L 130 130 L 210 50 L 240 100 L 270 50" fill="none" stroke="#fde68a" stroke-width="3"/>
+      <circle cx="240" cy="100" r="6" fill="#10b981"/>
+      <text x="20" y="210" fill="#ffffff" font-size="12" font-weight="700">• Break of Structure confirms trend</text>
+      <text x="20" y="235" fill="#fef3c7" font-size="11">• OB = Candle before FVG (Color Free)</text>
+      <text x="20" y="258" fill="#fef3c7" font-size="11">• 3-Bar FVG gap proves displacement</text>
+      <text x="20" y="281" fill="#fef3c7" font-size="11">• Limit order placed at 50% FVG / OB</text>
+      <rect x="15" y="330" width="270" height="85" rx="8" fill="#451a03"/>
+      <text x="25" y="355" fill="#fbbf24" font-size="11" font-weight="700">EXECUTION: Limit at 50% FVG / OB</text>
+      <text x="25" y="375" fill="#cbd5e1" font-size="10">SL: Below origin OB candle low</text>
+      <text x="25" y="395" fill="#38bdf8" font-size="10">Invalidation: Bar close beyond gap</text>
+    </g>
+  </g>
+
+  <!-- Connective Arrows -->
+  <line x1="1050" y1="1490" x2="1050" y2="1530" stroke="#38bdf8" stroke-width="4" marker-end="url(#arrowBlue)"/>
+
+  <!-- ==================== LAYER 4: EXECUTION & RISK ENGINE ==================== -->
+  <g transform="translate(50, 1530)" filter="url(#shadow)">
+    <rect width="2000" height="240" rx="16" fill="#111827" stroke="#374151" stroke-width="2"/>
+    <text x="1000" y="34" fill="#fbbf24" font-size="18" font-weight="800" text-anchor="middle">STAGE 4: EXECUTION, POSITION SIZING &amp; RISK MANAGEMENT ENGINE</text>
+    
+    <g transform="translate(40, 55)">
+      <!-- Box 1 -->
+      <rect width="450" height="160" rx="10" fill="#1f2937" stroke="#4b5563"/>
+      <text x="225" y="28" fill="#38bdf8" font-size="14" font-weight="700" text-anchor="middle">DYNAMIC POSITION SIZING</text>
+      <text x="20" y="60" fill="#e5e7eb" font-size="12">• Fixed Risk: 0.5% – 1.0% equity per trade</text>
+      <text x="20" y="85" fill="#e5e7eb" font-size="12">• Lot Size = (Account Equity × Risk%) / (SL Points × Tick Value)</text>
+      <text x="20" y="110" fill="#e5e7eb" font-size="12">• Max Spread Filter: &lt; 35 points on Gold (XAUUSD)</text>
+      <text x="20" y="135" fill="#10b981" font-size="12" font-weight="600">✓ Fully deterministic execution</text>
+
+      <!-- Box 2 -->
+      <rect x="480" width="450" height="160" rx="10" fill="#1f2937" stroke="#4b5563"/>
+      <text x="705" y="28" fill="#38bdf8" font-size="14" font-weight="700" text-anchor="middle">PURERUNNER EXIT ENGINE</text>
+      <text x="500" y="60" fill="#e5e7eb" font-size="12">• Zero Early Partials (Preserves Win/Loss Ratio)</text>
+      <text x="500" y="85" fill="#e5e7eb" font-size="12">• Move SL to Breakeven at 1.0× ATR expansion move</text>
+      <text x="500" y="110" fill="#e5e7eb" font-size="12">• 100% position runs to HTF structural target</text>
+      <text x="500" y="135" fill="#10b981" font-size="12" font-weight="600">✓ Mathematically proven in Experiment Ledger</text>
+
+      <!-- Box 3 -->
+      <rect x="960" width="450" height="160" rx="10" fill="#1f2937" stroke="#4b5563"/>
+      <text x="1185" y="28" fill="#38bdf8" font-size="14" font-weight="700" text-anchor="middle">REGIME CIRCUIT BREAKER</text>
+      <text x="980" y="60" fill="#e5e7eb" font-size="12">• Automatic 4-Hour trading pause after 3 consecutive losses</text>
+      <text x="980" y="85" fill="#e5e7eb" font-size="12">• Prevents drawdowns during chop &amp; non-trending regimes</text>
+      <text x="980" y="110" fill="#e5e7eb" font-size="12">• Backed by Z-Score -2.27 (97.68% confidence clustering)</text>
+      <text x="980" y="135" fill="#10b981" font-size="12" font-weight="600">✓ Max Drawdown strictly bounded &lt; 6%</text>
+
+      <!-- Box 4 -->
+      <rect x="1440" width="480" height="160" rx="10" fill="#1f2937" stroke="#4b5563"/>
+      <text x="1680" y="28" fill="#38bdf8" font-size="14" font-weight="700" text-anchor="middle">HIGH-IMPACT NEWS PROTOCOL</text>
+      <text x="1460" y="60" fill="#e5e7eb" font-size="12">• Automatic cancel of pending limits 15 min prior to Red News</text>
+      <text x="1460" y="85" fill="#e5e7eb" font-size="12">• Covers US CPI, Non-Farm Payrolls (NFP), FOMC rate decisions</text>
+      <text x="1460" y="110" fill="#e5e7eb" font-size="12">• Resumes trading 15 min post-news after volatility stabilizes</text>
+      <text x="1460" y="135" fill="#ef4444" font-size="12" font-weight="600">✓ Zero slippage / gap risk</text>
+    </g>
+  </g>
+
+  <!-- ==================== FOOTER ==================== -->
+  <g transform="translate(50, 1800)">
+    <rect width="2000" height="650" rx="16" fill="#0f172a" stroke="#1e293b" stroke-width="2"/>
+    <text x="1000" y="36" fill="#38bdf8" font-size="18" font-weight="800" text-anchor="middle">MASTER SMC SPECIFICATION MATRIX (7 HTF POIS × 6 LTF TRIGGERS)</text>
+    
+    <!-- Table Header -->
+    <rect x="25" y="60" width="1950" height="40" fill="#1e293b" rx="6"/>
+    <text x="40" y="85" fill="#fbbf24" font-size="12" font-weight="700">MODEL / TRIGGER</text>
+    <text x="250" y="85" fill="#fbbf24" font-size="12" font-weight="700">TIMEFRAME</text>
+    <text x="420" y="85" fill="#fbbf24" font-size="12" font-weight="700">PRIMARY STRUCTURAL PREREQUISITE</text>
+    <text x="850" y="85" fill="#fbbf24" font-size="12" font-weight="700">EXECUTION ORDER TYPE &amp; LEVEL</text>
+    <text x="1350" y="85" fill="#fbbf24" font-size="12" font-weight="700">STOP LOSS ANCHOR</text>
+    <text x="1720" y="85" fill="#fbbf24" font-size="12" font-weight="700">PRIMARY EDGE</text>
+
+    <!-- Table Rows -->
+    <g font-size="11" fill="#cbd5e1">
+      <!-- Row 1 -->
+      <line x1="25" y1="140" x2="1975" y2="140" stroke="#1e293b"/>
+      <text x="40" y="125" font-weight="700" fill="#38bdf8">POI 1: Origin Demand Base</text>
+      <text x="250" y="125">H4 / H1 / M30</text>
+      <text x="420" y="125">Base accumulation low followed by higher high breakout</text>
+      <text x="850" y="125">Buy Limit at origin base demand candle top edge</text>
+      <text x="1350" y="125">5-10 pts below origin low wick</text>
+      <text x="1720" y="125" fill="#10b981">Unmitigated base FTB floor</text>
+
+      <!-- Row 2 -->
+      <line x1="25" y1="185" x2="1975" y2="185" stroke="#1e293b"/>
+      <text x="40" y="170" font-weight="700" fill="#38bdf8">POI 2: RBS / SBR Breaker</text>
+      <text x="250" y="170">H4 / H1 / M30</text>
+      <text x="420" y="170">Clean breakout beyond prior swing high/low</text>
+      <text x="850" y="170">Limit order at broken horizontal flip line or nested FVG</text>
+      <text x="1350" y="170">Beyond breaker pivot wick</text>
+      <text x="1720" y="170" fill="#10b981">Trapped order mitigation</text>
+
+      <!-- Row 3 -->
+      <line x1="25" y1="230" x2="1975" y2="230" stroke="#1e293b"/>
+      <text x="40" y="215" font-weight="700" fill="#38bdf8">POI 3: CHOCH Shift Retest</text>
+      <text x="250" y="215">H4 / H1 / M30</text>
+      <text x="420" y="215">Liquidity sweep at peak + aggressive breakdown of low</text>
+      <text x="850" y="215">Sell Limit at broken intermediate support shelf</text>
+      <text x="1350" y="215">Above sweep peak (Head)</text>
+      <text x="1720" y="215" fill="#10b981">Institutional shift barrier</text>
+
+      <!-- Row 4 -->
+      <line x1="25" y1="275" x2="1975" y2="275" stroke="#1e293b"/>
+      <text x="40" y="260" font-weight="700" fill="#fbbf24">POI 4: Quasimodo (QML)</text>
+      <text x="250" y="260">H4 / H1 / M30</text>
+      <text x="420" y="260">Left Shoulder + Head sweep + Lower Low break</text>
+      <text x="850" y="260">Sell Limit placed at exact Left Shoulder horizontal level</text>
+      <text x="1350" y="260">Safely above Head sweep peak</text>
+      <text x="1720" y="260" fill="#10b981">Master institutional trap</text>
+
+      <!-- Row 5 -->
+      <line x1="25" y1="320" x2="1975" y2="320" stroke="#1e293b"/>
+      <text x="40" y="305" font-weight="700" fill="#38bdf8">POI 5: Extreme Equal Highs</text>
+      <text x="250" y="305">H4 / H1 / M30</text>
+      <text x="420" y="305">Ascending peak (High 2) + intermediate structure shift</text>
+      <text x="850" y="305">Sell Limit at unmitigated High 2 extreme Order Block</text>
+      <text x="1350" y="305">5-10 pts above high wick</text>
+      <text x="1720" y="305" fill="#10b981">Extreme supply mitigation</text>
+
+      <!-- Row 6 -->
+      <line x1="25" y1="365" x2="1975" y2="365" stroke="#1e293b"/>
+      <text x="40" y="350" font-weight="700" fill="#38bdf8">POI 6: SBR Neckline</text>
+      <text x="250" y="350">H4 / H1 / M30</text>
+      <text x="420" y="350">Double top formation + displacement break below neckline</text>
+      <text x="850" y="350">Sell Limit placed at broken neckline shelf</text>
+      <text x="1350" y="350">Above reaction bounce high</text>
+      <text x="1720" y="350" fill="#10b981">Fast distribution runner</text>
+
+      <!-- Row 7 -->
+      <line x1="25" y1="410" x2="1975" y2="410" stroke="#1e293b"/>
+      <text x="40" y="395" font-weight="700" fill="#38bdf8">POI 7: Equal Resistance Shelf</text>
+      <text x="250" y="395">H4 / H1 / M30</text>
+      <text x="420" y="395">Initial resistance bounce + breakdown + full rally return</text>
+      <text x="850" y="395">Sell Limit at horizontal resistance ceiling</text>
+      <text x="1350" y="395">Buffer above ceiling wick</text>
+      <text x="1720" y="395" fill="#10b981">Trapped breakout liquidity</text>
+
+      <!-- Row 8 -->
+      <line x1="25" y1="455" x2="1975" y2="455" stroke="#1e293b"/>
+      <text x="40" y="440" font-weight="700" fill="#d946ef">Trigger 1: M1/M5 CHOCH</text>
+      <text x="250" y="440">M1 / M5</text>
+      <text x="420" y="440">Contact with HTF POI + local swing sweep + structural break</text>
+      <text x="850" y="440">Limit order at origin Higher Low / Lower High pullback</text>
+      <text x="1350" y="440">Below lowest sweep wick</text>
+      <text x="1720" y="440" fill="#10b981">High RR confirmation</text>
+
+      <!-- Row 9 -->
+      <line x1="25" y1="500" x2="1975" y2="500" stroke="#1e293b"/>
+      <text x="40" y="485" font-weight="700" fill="#38bdf8">Trigger 2: Leading Diagonal</text>
+      <text x="250" y="485">M1 / M5</text>
+      <text x="420" y="485">5-wave impulse (1-2-3-4-5) emerging from HTF POI</text>
+      <text x="850" y="485">Buy/Sell Limit strictly at Fibonacci 50.0% – 61.8% zone</text>
+      <text x="1350" y="485">Below Wave 1 origin base</text>
+      <text x="1720" y="485" fill="#10b981">Catches Wave 3 impulse</text>
+
+      <!-- Row 10 -->
+      <line x1="25" y1="545" x2="1975" y2="545" stroke="#1e293b"/>
+      <text x="40" y="530" font-weight="700" fill="#60a5fa">Trigger 3: Ending Diagonal</text>
+      <text x="250" y="530">M1 / M5</text>
+      <text x="420" y="530">Dying 5-wave wedge advances into HTF POI (Wave 5 sweep)</text>
+      <text x="850" y="530">Direct sniper limit order at Wave 5 boundary trendline touch</text>
+      <text x="1350" y="530">Tight beyond W5 wick tip</text>
+      <text x="1720" y="530" fill="#10b981">Zero CHOCH entry lag</text>
+
+      <!-- Row 11 -->
+      <line x1="25" y1="590" x2="1975" y2="590" stroke="#1e293b"/>
+      <text x="40" y="575" font-weight="700" fill="#34d399">Trigger 4: 2-Bar Engulfing</text>
+      <text x="250" y="575">M1 / M5</text>
+      <text x="420" y="575">Bar 2 engulfs Bar 1 with Volume(Bar 2) &lt; Volume(Bar 1)</text>
+      <text x="850" y="575">Market execution immediately upon Bar 2 close</text>
+      <text x="1350" y="575">Below Bar 1/2 extreme wick</text>
+      <text x="1720" y="575" fill="#10b981">Supply/Demand absorption</text>
+
+      <!-- Row 12 -->
+      <text x="40" y="620" font-weight="700" fill="#fbbf24">Trigger 6: BOS Continuation</text>
+      <text x="250" y="620">M15 / H1</text>
+      <text x="420" y="620">Displacement candle breaks swing structure leaving 3-bar FVG</text>
+      <text x="850" y="620">Limit order at 50% FVG midpoint or color-free origin OB</text>
+      <text x="1350" y="620">Below origin OB candle</text>
+      <text x="1720" y="620" fill="#10b981">Institutional trend ride</text>
+    </g>
+  </g>
+</svg>

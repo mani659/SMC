@@ -1,0 +1,41 @@
+Milestone,SMC-R1
+Status,COMPLETE
+
+POI_Model,Model_1_Origin_Demand,Compatible_with: A B C D E F (all triggers)
+POI_Model,Model_2_RBS_SBR_Flip,Compatible_with: A D E F (most natural); B C less common
+POI_Model,Model_3_CHOCH_Retest,Compatible_with: A D E F; B C unlikely
+POI_Model,Model_4_Quasimodo,Compatible_with: A C D E; B F less natural
+POI_Model,Model_5_Extreme_Equal_Highs,Compatible_with: A D E F; B C unlikely
+POI_Model,Model_6_Double_Top_Neckline,Compatible_with: A D E F; B C unlikely
+POI_Model,Model_7_Equal_Resistance_Shelf,Compatible_with: A D E F; B C unlikely
+
+Entry_Trigger,A_CHOCH_Reversal,Compatible_with: All 8 POI models (universal)
+Entry_Trigger,B_Leading_Diagonal,Compatible_with: Model 1 (most natural); others less common
+Entry_Trigger,C_Ending_Diagonal,Compatible_with: Models 4 5 (extreme POIs); others uncommon
+Entry_Trigger,D_Two_Bar_Reversal,Compatible_with: All 8 POI models (universal micro-trigger)
+Entry_Trigger,E_RSI_Divergence,Compatible_with: All 8 POI models (universal micro-trigger)
+Entry_Trigger,F_BOS_OB_Continuation,Compatible_with: Models 1 2 5 6 7 (trend continuation)
+
+Redundancy_notes,
+  Triggers_D_and_E_are_universal_micro_triggers,
+  Trigger_A_is_universal_LTF_trigger,
+  Trigger_B_naturally_pairs_with_Model_1,
+  Trigger_C_naturally_pairs_with_Models_4_5,
+  Trigger_F_is_natural_continuation_for_trend_models,
+  Models_2_3_6_7_are_structurally_similar_(broken_level_retests)
+
+Ambiguity_ranking,
+  Most_objective: F BOS_OB_Continuation,
+  High_objectivity: A CHOCH_Reversal D Two_Bar E RSI,
+  Moderate_objectivity: B Leading_Diagonal,
+  Most_subjective: C Ending_Diagonal (requires diagonal identification)
+
+Module_candidates,
+  Standalone_possible: A B C F,
+  Module_only: D E,
+  Context_routing: trend_range premium_discount volatility session freshness inducement,
+  Execution: M1_M5_CHOCH FVG_OB_mitigation Fibonacci_50_61 Wave_5_terminal
+
+External_API_calls,0
+New_data_acquired,0
+Spend,$0.00
