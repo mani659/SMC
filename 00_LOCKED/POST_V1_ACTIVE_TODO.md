@@ -460,3 +460,9 @@ True open decisions only — nothing here is decided until dated in the plan:
 - [ ] 6 FAILED files stay unreconstructed (`coupled_mtf.py` fail-loud stub, 2 loss-marker test modules, 2 OPT smoke harnesses, coupled diagnostic). Reviving them is NEW work with fresh pre-registration.
 - [ ] 4 PARTIAL files carry documented gaps: `test_blocked_reason_surface.py` (board half), `poi_timing_early_late_study.py` (harness), `PHASE0_EVENT_SCORE_SHEET.md` (verdict rows), `SMC_Safety_Watchdog.mq5` (~118 post-checkpoint lines, uncompiled).
 - [ ] `test_review_merge_smoke.py` red at collection: 33 chart PNGs deleted and the on-disk ledger script's chart naming is a rolled-back revision. Fix = restore/rebuild the newer ledger script, not re-point the test.
+
+## 16. PR menu spine baseline — READY 2026-11-09
+
+- [ ] **Operator merge when approved:** `recovery/2026-10-26` -> `main` (no force-push). Compare: https://github.com/mani659/SMC/compare/main...recovery/2026-10-26
+- [ ] **Paper ops dry_run** on demo (optional, operator-authorized) — non-blocking.
+- [ ] **S2c longer window** backlog (not blocking) — larger-n lag/label stability before any OPT work.

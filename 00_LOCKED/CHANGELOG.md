@@ -1655,3 +1655,6 @@ Suite: **519 → 525 passed** (`python -m pytest tests` from `04_SRC/`).
 
 ### 2026-11-09 — OPT-4 menu-path rejoin
 - `TASK=OPT4_MENU_REJOIN`, `LOGIC_CHANGED=NO`. Menu queue_menu_candidate submits (not adapter-only), same spine/window as S2b: N_SUBMITS=5, LABEL_COVERAGE_PCT=100%. Confirm ON_WINDOW2/LATE2/BEYOND1; place-frame ON_WINDOW3/LATE2; cross BEYOND_STOP_SIDE->ON_WINDOW=1. Frozen taxonomy, no R7/threshold changes. Diagnostic only.
+
+### 2026-11-09 — PR menu spine baseline -> main (ready)
+- Head `recovery/2026-10-26` -> base `main`. Compare: https://github.com/mani659/SMC/compare/main...recovery/2026-10-26 (gh unavailable). Suite 1382 passed/0 failed/6 skipped. No merge performed. No OPT-2, no R7 change, no PnL claims; no secrets/07_DATA/bulk 06_RESEARCH/results in git.
