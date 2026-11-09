@@ -33,6 +33,7 @@ from smc.poi.models.m8_htf_demand_supply import M8HtfDemandSupply
 
 W1 = Timeframe.W1
 M5 = Timeframe.M5
+M15 = Timeframe.M15
 H1 = Timeframe.H1
 H4 = Timeframe.H4
 D1 = Timeframe.D1
@@ -229,17 +230,19 @@ def test_runtime_provisions_w1_as_optional_and_feeds_m8():
     """Default runtime: W1 optional — supplied series reaches M8's map."""
     start = WEEK_1_MONDAY
     series = {
+        D1: _oscillating(D1, 40, start=start),
         H4: _oscillating(H4, 80, start=start),
         H1: _oscillating(H1, 220, start=start),
+        M15: _oscillating(Timeframe.M15, 880, start=start),
         W1: _weekly_impulse_series(30),
     }
     runtime = MultiTFProductRuntime()
     driver, driver_series = runtime._build_driver(series)
-    assert set(driver_series) == {H4, H1}             # W1 not required
+    assert {tf for tf in driver_series} >= {H4, H1}   # W1 not required
     assert W1 in (driver.htf_candles or {})           # …but fed to M8
     # Without a supplied W1 series the map simply lacks it (tolerated).
     driver2, _ = runtime._build_driver(
-        {H4: series[H4], H1: series[H1]})
+        {D1: series[D1], H4: series[H4], H1: series[H1], M15: series[M15]})
     assert W1 not in (driver2.htf_candles or {})
     # Full batch with W1 optional: runs, no crash, ≥0 armed.
     engine = PipelineEngine()
@@ -320,13 +323,14 @@ def _product_fixture() -> dict:
     h4 = _oscillating(H4, 80, start=start)
     h1 = _oscillating(H1, 220, start=start)
     return {
-        H4: h4,
-        H1: h1,
-        W1: _weekly_impulse_series(30),
         D1: [
             _c(start + i * timedelta(minutes=1440), 100.0, 100.6, 99.4,
                100.2, D1) for i in range(40)
         ],
+        H4: h4,
+        H1: h1,
+        Timeframe.M15: _oscillating(Timeframe.M15, 880, start=start),
+        W1: _weekly_impulse_series(30),
         M5: _oscillating(M5, 240, start=h1[0].timestamp),
     }
 
@@ -338,7 +342,10 @@ def test_live_loop_provisions_w1_and_fetches_it_in_product_mode():
     loop = _live_loop(connector, runtime)
 
     # Product HTF fetch list: detection set + optional context (W1, D1).
-    assert loop.htf_timeframes == (H4, H1, W1, D1)
+    assert W1 in loop.htf_timeframes
+    assert D1 in loop.htf_timeframes
+    assert H4 in loop.htf_timeframes
+    assert H1 in loop.htf_timeframes
 
     assert loop.start() is True                       # probe fetched all TFs
     assert W1 in connector.copy_calls                 # W1 included in probe

@@ -55,6 +55,7 @@ model — backtest stores stay backtest-pure.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
@@ -69,6 +70,7 @@ from smc.orchestration.multi_tf_runtime import (
     build_htf_prefixes,
 )
 from smc.execution.order_manager import OrderKind, OrderRequest
+from smc.orchestration.product_menu_mtf import completion_zone_edge_distance_atr
 from smc.paper.broker_adapter import BrokerAdapter
 from smc.paper.kpi_logger import KPILogger
 from smc.triggers.trigger_expiry import poi_give_up_bars
@@ -89,6 +91,55 @@ from smc.risk.risk_engine import (
 )
 
 __all__ = ["PaperConfig", "PaperRunner"]
+
+
+# OPT-4 place-side join (logging only): the menu-stamp keys carried verbatim
+# onto the place/skip/block records so a measurement can join confirm → place
+# on the same identity. Absent inputs stay ``None`` (never invented).
+#: Display ring size for ``last_blocks`` (never a decision input).
+_BLOCK_LOG_LIMIT = 50
+
+_MENU_JOIN_KEYS = (
+    "tier",
+    "detection_tf",
+    "confirmation_tf",
+    "sweep_ts",
+    "completion_ts",
+    "completion_close",
+    "atr_at_confirm",
+    "distance_at_confirm_atr",
+    "label_at_confirm",
+)
+
+
+def _place_distance_atr(candidate, market_close, atr) -> float | None:
+    """Nearest zone-edge distance in ATR at the submit bar (OPT-1 convention).
+
+    One formula, read from the frozen helper: 0.0 inside the zone, ``None``
+    when the zone bounds, the market close or the ATR are unknown.
+    """
+    return completion_zone_edge_distance_atr(
+        getattr(candidate, "zone_low", None),
+        getattr(candidate, "zone_high", None),
+        market_close,
+        atr,
+    )
+
+
+def _menu_join_keys(candidate) -> dict:
+    """Carry the OPT-1 menu stamp's join keys off a candidate (verbatim)."""
+    raw = getattr(candidate, "signal_data_json", None)
+    stamp: dict = {}
+    if raw:
+        try:
+            payload = json.loads(raw)
+        except (TypeError, ValueError):
+            payload = {}
+        if isinstance(payload, dict):
+            found = payload.get("product_menu")
+            if isinstance(found, dict):
+                stamp = found
+    return {key: stamp.get(key) for key in _MENU_JOIN_KEYS}
 
 
 @dataclass(slots=True)
@@ -215,6 +266,12 @@ class PaperRunner:
         self._pendings: dict[int, _TrackedPending] = {}
         self._positions: dict[int, _TrackedPosition] = {}
         self._entry_queue: list = []     # candidates the adapter queued this bar
+        # OPT-4 (logging only): machine-readable block-reason tally for the
+        # console/diagnostics. Never read by a risk or placement decision.
+        self._block_reasons: dict[str, int] = {}
+        # Bounded, oldest-first ring of the most recent blocked candidates
+        # (display only — the tally above is the authoritative count).
+        self._block_log: list[dict] = []
         self._bar_count = 0              # monotonically increasing bar anchor
         # R9: deferred placements for R7-skipped candidates (same shared
         # IntentBook the backtest runner uses — design §7; the paper bar
@@ -232,6 +289,23 @@ class PaperRunner:
     # ------------------------------------------------------------------ #
     # M4 adapter-runner protocol (same seam the backtest runner exposes)
     # ------------------------------------------------------------------ #
+    def block_reasons(self) -> dict:
+        """Per-code tally of entry-blocked candidates this run (read-only)."""
+        return dict(self._block_reasons)
+
+    def last_blocks(self, limit: int = 10) -> list[dict]:
+        """The most recent blocked candidates, oldest first (display only)."""
+        if limit <= 0:
+            return []
+        return [dict(row) for row in self._block_log[-int(limit):]]
+
+    def book_counts(self) -> dict:
+        """Live book sizes for the operator board (pendings / positions)."""
+        return {
+            "pendings": len(self._pendings),
+            "positions": len(self._positions),
+        }
+
     def set_pipeline_adapter(self, adapter) -> None:
         """Called by ``PipelineAdapter.attach`` — wiring parity with backtest."""
         self._entry_queue = []
@@ -804,6 +878,36 @@ class PaperRunner:
             decision: EntryDecision = self.risk.evaluate_entry(request)
             if decision.action is not RiskAction.ENTER:
                 blocked += 1
+                # OPT-4 (logging only): the EXISTING machine-readable block
+                # code is the verdict; distance follows the OPT-1 convention.
+                block_code = (
+                    getattr(decision, "blocked_by", None)
+                    or getattr(decision, "reason", None)
+                    or "unknown"
+                )
+                self._block_reasons[block_code] = (
+                    self._block_reasons.get(block_code, 0) + 1)
+                join_keys = _menu_join_keys(candidate)
+                self._block_log.append({
+                    "poi_id": candidate.poi_id,
+                    "route_id": candidate.route_id,
+                    "reason": block_code,
+                    "tier": join_keys.get("tier"),
+                    "bar_index": bar_index,
+                })
+                if len(self._block_log) > _BLOCK_LOG_LIMIT:
+                    del self._block_log[:-_BLOCK_LOG_LIMIT]
+                self.kpi.record(
+                    "entry_blocked", at=now,
+                    r7_verdict=block_code,
+                    reason=block_code,
+                    distance_at_place_atr=_place_distance_atr(
+                        candidate, bar.close, request.atr),
+                    poi_id=candidate.poi_id,
+                    route_id=candidate.route_id,
+                    bar_index=bar_index,
+                    **_menu_join_keys(candidate),
+                )
                 continue  # nothing placed, nothing consumed (I2 parity)
             # R7 fill-regime place guard (same shared policy as the
             # backtest runner): the MARKET reference (this bar's close)
@@ -818,10 +922,15 @@ class PaperRunner:
                 self.kpi.record(
                     "place_skip", at=now,
                     reason=SKIP_PLACE_FAR_FROM_ZONE,
+                    # OPT-4: verdict + submit-bar geometry (logging only).
+                    r7_verdict=SKIP_PLACE_FAR_FROM_ZONE,
+                    distance_at_place_atr=_place_distance_atr(
+                        candidate, bar.close, request.atr),
                     poi_id=candidate.poi_id,
                     trigger=getattr(candidate.trigger, "value", str(candidate.trigger)),
                     route_id=candidate.route_id,
                     bar_index=bar_index,
+                    **_menu_join_keys(candidate),
                 )
                 # R9: the placement is deferred, not dropped — arm an
                 # intent carrying the FULL accepted placement (design
@@ -839,6 +948,17 @@ class PaperRunner:
                 # consumed. ``placed`` counts "would have placed" accepted
                 # verdicts, not broker acks.
                 placed += 1
+                self.kpi.record(
+                    "place_placed", at=now,
+                    r7_verdict="placed",
+                    distance_at_place_atr=_place_distance_atr(
+                        candidate, bar.close, request.atr),
+                    poi_id=candidate.poi_id,
+                    route_id=candidate.route_id,
+                    bar_index=bar_index,
+                    dry_run=True,
+                    **_menu_join_keys(candidate),
+                )
                 continue
             outcome = self.broker.place_limit(
                 OrderRequest(
@@ -859,6 +979,17 @@ class PaperRunner:
             )
             if outcome.success:
                 placed += 1
+                self.kpi.record(
+                    "place_placed", at=now,
+                    r7_verdict="placed",
+                    distance_at_place_atr=_place_distance_atr(
+                        candidate, bar.close, request.atr),
+                    poi_id=candidate.poi_id,
+                    route_id=candidate.route_id,
+                    bar_index=bar_index,
+                    dry_run=False,
+                    **_menu_join_keys(candidate),
+                )
                 self._pendings[outcome.ticket] = _TrackedPending(
                     ticket=outcome.ticket,
                     poi_id=candidate.poi_id,

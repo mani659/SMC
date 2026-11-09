@@ -18,6 +18,7 @@ raw file is archived at startup by the entrypoint for auditability.
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -27,13 +28,44 @@ __all__ = [
     "ConfigError",
     "OperatorConfig",
     "REQUIRED_TERMINAL_PATH",
+    "STRATEGY_MODES",
     "load_operator_config",
     "normalize_terminal_dir",
 ]
 
+_logger = logging.getLogger(__name__)
+
 REQUIRED_TERMINAL_PATH = (
     r"C:\Program Files\MetaTrader 5 EXNESS - Copy\terminal64.exe"
 )
+
+# Product-V1 naming (Lead Architect ruling 2026-11-02): config ids are
+# professional only — the old research nickname never renders anywhere.
+#   PRODUCT_V1            default; full multi-TF product runtime (batches
+#                         drive SCAN/ARMED; detection H4+H1 minimum)
+#   ARCHIVE_TIGHT_HTF     demoted tight freeze — archived, NOT a live
+#                         baseline (frequency/edge failed as a baseline)
+#   RESEARCH_H4_ZONE_BOOK H4 zone-book slice machine; product batches
+#                         never run in this mode (research only)
+#   COUPLED_MTF           research/diagnostic full-menu family
+STRATEGY_MODES = (
+    "PRODUCT_V1",
+    "ARCHIVE_TIGHT_HTF",
+    "RESEARCH_H4_ZONE_BOOK",
+    "COUPLED_MTF",
+)
+# One-release compatibility map: legacy ids load mapped to the canonical
+# mode with a ONE-time deprecation warning (print + logger); the next
+# release rejects them. Mapping happens at config load, never at runtime.
+_LEGACY_STRATEGY_MODE_ALIASES = {
+    "COMPLEX": "PRODUCT_V1",
+    "DUMB_MTF_H4": "RESEARCH_H4_ZONE_BOOK",
+    "POLICY_MTF_H4": "ARCHIVE_TIGHT_HTF",
+}
+
+# One-time notice bookkeeping (module-level so repeated loads stay quiet).
+_ALIASES_WARNED: set[str] = set()
+_ALIASES_WARNED: set[str] = set()
 
 # Allowed config keys — everything else is rejected (typo protection).
 ALLOWED_KEYS = frozenset({
@@ -44,6 +76,8 @@ ALLOWED_KEYS = frozenset({
     "require_demo",
     "risk_fraction",
     "timeframe",
+    "strategy_mode",             # PRODUCT_V1 (default) | ARCHIVE_TIGHT_HTF | RESEARCH_H4_ZONE_BOOK | COUPLED_MTF
+    "enable_opt_b_same_bar_confirm",  # OPT-B: hybrid same-bar/as-of confirm (default OFF)
     "detection_timeframes",        # C1: explicit detection TF list (H4+H1)
     "allow_single_tf_degraded",    # C1: test-only single-TF opt-in (default False)
     "allowed_sessions",
@@ -129,12 +163,17 @@ class OperatorConfig:
     require_demo: bool = True
     risk_fraction: float = 0.01
     timeframe: str = "M5"
+    strategy_mode: str = "PRODUCT_V1"
     # C1 product runtime (contract: 00_LOCKED/PRODUCT_RUNTIME_CONTRACT.md).
     # Detection timeframes are operational config, but they are validated
     # against the contract: detect==exec is rejected unless degraded mode is
     # explicitly requested (no silent single-TF detect in product mode).
-    detection_timeframes: tuple[str, ...] = ("H4", "H1")
+    detection_timeframes: tuple[str, ...] = ("D1", "H4", "H1", "M15")
     allow_single_tf_degraded: bool = False
+    # OPT-B (2026-11-04, DEFAULT OFF): hybrid same-bar/as-of confirmation.
+    # False = the serial anchor (first confirm bar closing at/after the sweep
+    # close). True must be an explicit operator decision — never implicit.
+    enable_opt_b_same_bar_confirm: bool = False
     allowed_sessions: tuple[str, ...] | None = None   # None = no session gate
     # Heartbeat is written where the MQL5 Safety Watchdog EA can read it.
     # When ``terminal_path`` is set, the operator resolves the write path to
@@ -238,6 +277,32 @@ def load_operator_config(path: str | Path) -> OperatorConfig:
         kwargs["risk_fraction"] = rf
     if "timeframe" in data:
         kwargs["timeframe"] = str(data["timeframe"]).strip().upper()
+    if "strategy_mode" in data:
+        mode = str(data["strategy_mode"]).strip().upper()
+        if mode in _LEGACY_STRATEGY_MODE_ALIASES:
+            target = _LEGACY_STRATEGY_MODE_ALIASES[mode]
+            if mode not in _ALIASES_WARNED:
+                _ALIASES_WARNED.add(mode)
+                # Professional wording only: the legacy research nickname
+                # never renders, the canonical target id does.
+                notice = (
+                    f"DEPRECATION: legacy strategy_mode value mapped to "
+                    f"'{target}' at config load (accepted one release only)."
+                )
+                print(notice)
+                _logger.warning(notice)
+            mode = target
+        if mode not in STRATEGY_MODES:
+            raise ConfigError(
+                f"config.strategy_mode must be one of {list(STRATEGY_MODES)}, "
+                f"got {data['strategy_mode']!r}"
+            )
+        kwargs["strategy_mode"] = mode
+    if "enable_opt_b_same_bar_confirm" in data:
+        kwargs["enable_opt_b_same_bar_confirm"] = _coerce_bool(
+            data["enable_opt_b_same_bar_confirm"],
+            "enable_opt_b_same_bar_confirm",
+        )
     if "allow_single_tf_degraded" in data:
         kwargs["allow_single_tf_degraded"] = _coerce_bool(
             data["allow_single_tf_degraded"], "allow_single_tf_degraded"
@@ -262,7 +327,7 @@ def load_operator_config(path: str | Path) -> OperatorConfig:
             )
         kwargs["detection_timeframes"] = names
     execution_name = kwargs.get("timeframe", "M5")
-    detection_names = kwargs.get("detection_timeframes", ("H4", "H1"))
+    detection_names = kwargs.get("detection_timeframes", ("D1", "H4", "H1", "M15"))
     degraded = kwargs.get("allow_single_tf_degraded", False)
     if not degraded and set(detection_names) <= {execution_name}:
         raise ConfigError(
@@ -270,6 +335,11 @@ def load_operator_config(path: str | Path) -> OperatorConfig:
             f"({execution_name}) — that is single-TF detect+exec, prohibited by "
             "the product runtime contract; set allow_single_tf_degraded=true "
             "only for tests"
+        )
+    if kwargs.get("strategy_mode", "COMPLEX") == "DUMB_MTF_H4" and execution_name != "M5":
+        raise ConfigError(
+            "config.strategy_mode DUMB_MTF_H4 requires timeframe=M5 "
+            "(the approved first slice is H4 -> M5/M15)"
         )
     if "allowed_sessions" in data:
         raw_sessions = data["allowed_sessions"]
@@ -332,6 +402,20 @@ def load_operator_config(path: str | Path) -> OperatorConfig:
         kwargs["diagnostic_entries"] = _coerce_bool(
             data["diagnostic_entries"], "diagnostic_entries"
         )
+    if (kwargs.get("strategy_mode", "PRODUCT_V1") == "RESEARCH_H4_ZONE_BOOK"
+            and kwargs.get("diagnostic_entries", False)):
+        raise ConfigError(
+            "config.diagnostic_entries cannot be combined with "
+            "RESEARCH_H4_ZONE_BOOK; select exactly one isolated research mode"
+        )
+    if kwargs.get("strategy_mode", "PRODUCT_V1") == "RESEARCH_H4_ZONE_BOOK":
+        # The H4 zone-book slice is an M5 execution engine (its locked
+        # slice semantics assume the M5 bar feed).
+        if str(kwargs.get("timeframe", "M5")).upper() != "M5":
+            raise ConfigError(
+                "strategy_mode RESEARCH_H4_ZONE_BOOK requires timeframe=M5, "
+                f"got {kwargs.get('timeframe')!r}"
+            )
     if "judge_interval_s" in data:
         value = data["judge_interval_s"]
         if isinstance(value, bool) or not isinstance(value, (int, float)):

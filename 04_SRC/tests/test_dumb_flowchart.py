@@ -225,7 +225,11 @@ def test_setup_expires_then_zone_rearms() -> None:
 # Isolation — COMPLEX untouched, DUMB constants DUMB-owned
 # ---------------------------------------------------------------------- #
 
-def test_no_dumb_reference_outside_smc_dumb() -> None:
+def test_no_dumb_reference_outside_the_explicit_operator_bridge() -> None:
+    # The baseline DUMB path remains isolated.  The sole exception is the
+    # owner-authorized `DUMB_MTF_H4` selection in the operator, which imports
+    # the DUMB-MTF adapter only inside that explicit opt-in branch.
+    allowed = {"live\\run_operator.py"}
     smc_root = Path(__file__).resolve().parents[1] / "smc"
     offenders = []
     for path in smc_root.rglob("*.py"):
@@ -236,7 +240,7 @@ def test_no_dumb_reference_outside_smc_dumb() -> None:
         if ("smc.dumb" in text or "from smc import dumb" in text
                 or "smc/dumb" in text):
             offenders.append(str(rel))
-    assert offenders == []
+    assert offenders == sorted(allowed)
 
 
 def test_dumb_constants_not_in_locked_constants() -> None:

@@ -2,9 +2,15 @@
 
 Operator command-prompt view of the LIVE structure state, in four sections:
 
-    POIS    — Weekly / Daily / H4 / H1 armed POIs: direction, kind,
+    STRUCTURE SCAN — Console V2 (2026-11-02): merged detector geometry per
+              detection TF BEFORE the locked pillar definition. CANDIDATES
+              only: never armed, never routed, never tradeable, never a
+              "POI"/"signal"/"entry". Sourced read-only from the batch
+              report's ``scan`` rows (capped per TF).
+    ARMED POI — Weekly / Daily / H4 / H1 ARMED POIs: direction, kind,
               zone_low-high, armed yes/no, short id (W1 first: the weekly
-              provisioning directive's operator must-have).
+              provisioning directive's operator must-have). Locked
+              definition only.
     SWEEPS  — the liquidity sweep linked to each armed POI (POI + TF +
               side) or an honest ``none``.
     SEEKING — armed POIs with their §5 state / arm posture and the trigger
@@ -31,10 +37,14 @@ Design rules (directive 2026-10-06, milestone L1):
 
 from __future__ import annotations
 
+import hashlib
 from datetime import datetime
 
 __all__ = [
     "SECTION_ORDER",
+    "RESEARCH_SLICE_ACTIVE_STATUS_NAMES",
+    "build_dumb_mtf_snapshot",
+    "build_research_h4_zone_book_snapshot",
     "build_structure_snapshot",
     "render_structure_console",
 ]
@@ -42,15 +52,35 @@ __all__ = [
 #: POIS display order — weekly context first (provisioning directive).
 SECTION_ORDER = ("W1", "D1", "H4", "H1")
 
+#: Section rules used by the renderer (ASCII only — Windows console code page).
 _RULE = "=" * 72
 _SUBRULE = "-" * 72
 
+#: Research slice episode statuses that count as live (non-terminal) for the
+#: console ``armed`` annotation. NAME strings only — this module stays
+#: agnostic of the slice package (display must not couple to strategy code).
+RESEARCH_SLICE_ACTIVE_STATUS_NAMES = ("IN_ZONE_PRIMARY", "BOUNDARY_FALLBACK", "WON")
 
+#: POIS display order — weekly context first (provisioning directive).
 def _short(poi_id) -> str:
     """Short id for the console (first 8 chars, ``n/a`` when unknown)."""
     if not poi_id:
         return "n/a"
     return str(poi_id)[:8]
+
+
+def _zone_book_short(poi_id) -> str:
+    """Neutral short display id for the research H4 zone book (Console V2).
+
+    Slice poi ids carry internal package prefixes that must never render on
+    the product surface, so the display layer derives a STABLE neutral id:
+    ``zb-`` + an 8-hex digest of the full internal id. Internal strings are
+    untouched (the full ``poi_id`` stays in the snapshot ``id`` field).
+    """
+    if not poi_id:
+        return "n/a"
+    digest = hashlib.sha1(str(poi_id).encode("utf-8")).hexdigest()[:8]
+    return f"zb-{digest}"
 
 
 def _name(value) -> str | None:
@@ -84,14 +114,46 @@ def _num(value):
         return None
 
 
+def _row_field(row, key):
+    """Read one scan-row field from a dict or a duck-typed object."""
+    if isinstance(row, dict):
+        return row.get(key)
+    return getattr(row, key, None)
+
+
+def _scan_rows(scan) -> list[dict]:
+    """Normalize the runtime's read-only SCAN rows (dicts; never mutated).
+
+    A scan row is a CANDIDATE: detector geometry that has NOT passed the
+    locked pillar definition. Nothing here is armed, routed or tradeable.
+    """
+    rows: list[dict] = []
+    for row in scan or []:
+        rows.append({
+            "tf": _row_field(row, "tf"),
+            "direction": _row_field(row, "direction"),
+            "kind": _row_field(row, "kind"),
+            "zone_low": _num(_row_field(row, "zone_low")),
+            "zone_high": _num(_row_field(row, "zone_high")),
+            "mid": _num(_row_field(row, "mid")),
+            "created_at": _row_field(row, "created_at"),
+        })
+    return rows
+
+
 def build_structure_snapshot(*, engine, adapter=None, sweeps=None,
-                             now: datetime | None = None) -> dict:
+                             scan=None, now: datetime | None = None) -> dict:
     """Read-only snapshot of the live structure state (no MT5, no mutation).
 
     ``engine`` supplies the armed-POI book + §5 state, ``adapter`` the
     routed workflows (optional — absence simply means no SEEKING trigger
     letters and ``PLAN: none``), ``sweeps`` the loop's cumulative
-    sweep-link map (POI id → ``{"side", "magnitude_atr", ...}``).
+    sweep-link map (POI id → ``{"side", "magnitude_atr", ...}``), and
+    ``scan`` the batch report's read-only candidate rows (Console V2).
+
+    Every input is READ; the builder never arms, places, routes or mutates
+    a POI/zone field. ``scan`` rows stay in their own key so no consumer
+    can mistake them for the armed book.
     """
     pois: list[dict] = []
     tracked = list(engine.tracked_pois()) if engine is not None else []
@@ -166,7 +228,136 @@ def build_structure_snapshot(*, engine, adapter=None, sweeps=None,
             "trigger": _letter(getattr(candidate, "trigger", None)),
         })
 
-    return {"now": now, "pois": pois, "sweeps": sweep_rows, "plan": plan}
+    armed_by_tf: dict[str, int] = {}
+    for row in pois:
+        if row.get("armed"):
+            tf_name = str(row.get("tf") or "?")
+            armed_by_tf[tf_name] = armed_by_tf.get(tf_name, 0) + 1
+
+    return {
+        "now": now,
+        "pois": pois,
+        "sweeps": sweep_rows,
+        "plan": plan,
+        "scan": _scan_rows(scan),
+        "armed_by_tf": armed_by_tf,
+    }
+
+
+def build_dumb_mtf_snapshot(*, feed=None, machine=None,
+                            now: datetime | None = None,
+                            mode_note: str | None = None) -> dict:
+    """Console V2 MTF-slice snapshot (display-only, read-only).
+
+    Same contract and shape as :func:`build_research_h4_zone_book_snapshot`
+    — the zone book is the slice's own read-only inventory annotated with its
+    episode machine's status; CANDIDATES only, never armed/routed/tradeable by
+    this builder. Kept as a named entry point because the dedicated slice
+    console and its tests call it directly.
+    """
+    return build_research_h4_zone_book_snapshot(
+        feed=feed, machine=machine, now=now, mode_note=mode_note
+    )
+
+
+def build_research_h4_zone_book_snapshot(*, feed=None, machine=None,
+                                         now: datetime | None = None,
+                                         mode_note: str | None = None) -> dict:
+    """Research H4 zone-book console snapshot (display-only, read-only; V2).
+
+    Research-only slice modes (``research_h4_zone_book``) own NO product
+    engine: no batch report, no locked-Pillar armed book — the product
+    structure console is structurally absent there (operator finding
+    2026-11-02). This builder surfaces the slice's OWN read-only
+    inventories in the same snapshot shape, so the bat-started session
+    still prints SCAN vs ARMED:
+
+    * ``scan`` — the research H4 zone book: merged detector geometry from
+      the read-only M8 H4 scan, REPLACED on every closed H4 slice (exactly
+      the batch-scan shape; CANDIDATES only — never armed, never routed,
+      never tradeable by this builder).
+    * ``pois`` — the same zones annotated with the research slice episode
+      status: ``armed=yes`` iff an ACTIVE episode exists on the zone. That
+      is the research slice book, NOT the product locked-Pillar engine
+      book (the snapshot ``note`` says so verbatim on the board).
+
+    Reads only; never mutates the feed, the machine, or any geometry field;
+    never calls arm/confirm/advance/place.
+    """
+    scan: list[dict] = []
+    pois: list[dict] = []
+
+    # Zone-POI index of the research slice's sequential episode machine
+    # (read-only).
+    by_zone: dict[str, list] = {}
+    if machine is not None:
+        for episode in dict(getattr(machine, "_episodes", {}) or {}).values():
+            key = getattr(episode, "key", None)
+            zone_id = str(getattr(key, "poi_id", "") or "")
+            if zone_id:
+                by_zone.setdefault(zone_id, []).append(episode)
+
+    # Accept either the live feed (attribute ``_h4_pois``) or a plain
+    # zone-book dict (tests / research callers); both are READ-ONLY here.
+    zone_book = feed
+    if not isinstance(feed, dict):
+        zone_book = getattr(feed, "_h4_pois", {}) or {}
+    for poi_id, poi in dict(zone_book).items():
+        zone = getattr(poi, "zone", None)
+        if zone is None:
+            continue                      # display never invents geometry
+        parts = str(poi_id).split("|")
+        kind = parts[1] if len(parts) > 1 and parts[1] else "m8"
+        base = {
+            "id": poi_id,
+            "id_short": _zone_book_short(poi_id),
+            "tf": _name(getattr(zone, "timeframe", None)),
+            "direction": _name(getattr(zone, "direction", None)),
+            "kind": kind,
+            "zone_low": _num(getattr(zone, "bottom", None)),
+            "zone_high": _num(getattr(zone, "top", None)),
+        }
+        scan.append(dict(base, created_at=None, mid=None))
+        episodes = by_zone.get(str(poi_id)) or []
+        chosen = None
+        for episode in episodes:          # prefer a live status; else newest
+            status_name = str(getattr(getattr(episode, "status", None), "name",
+                                      getattr(episode, "status", "")))
+            if status_name in RESEARCH_SLICE_ACTIVE_STATUS_NAMES:
+                chosen = episode
+                chosen_status = status_name
+                break
+        if chosen is None and episodes:
+            chosen = max(
+                (e for e in episodes),
+                key=lambda e: int(getattr(e, "zone_entry_clock_bar", -1) or -1),
+            )
+            chosen_status = str(getattr(getattr(chosen, "status", None), "name",
+                                        getattr(chosen, "status", "")))
+        pois.append(dict(
+            base,
+            armed=bool(chosen_status in RESEARCH_SLICE_ACTIVE_STATUS_NAMES if chosen else False),
+            state=chosen_status if chosen else None,
+            posture=None,                 # research slice has no §5 postures
+            arm_bar=getattr(chosen, "zone_entry_clock_bar", None) if chosen else None,
+            trigger=None,                 # slice confirm geometry, not a route
+        ))
+
+    armed_by_tf: dict[str, int] = {}
+    for row in pois:
+        if row.get("armed"):
+            tf_name = str(row.get("tf") or "?")
+            armed_by_tf[tf_name] = armed_by_tf.get(tf_name, 0) + 1
+
+    return {
+        "now": now,
+        "note": mode_note,
+        "pois": pois,
+        "sweeps": [],                     # sweep links are L1/runtime-owned
+        "plan": [],                       # slice winners flow via candidates
+        "scan": scan,
+        "armed_by_tf": armed_by_tf,
+    }
 
 
 def _fmt_price(value) -> str:
@@ -177,6 +368,41 @@ def _fmt_zone(low, high) -> str:
     if low is None and high is None:
         return "n/a"
     return f"{_fmt_price(low)}-{_fmt_price(high)}"
+
+
+def _scan_time(value) -> str:
+    """Compact scan-row timestamp (``n/a`` when absent; never invented)."""
+    if value is None:
+        return "n/a"
+    return str(value)[:16]
+
+
+def _scan_section_order(rows: list[dict]) -> list[str]:
+    """Console TF order for SCAN rows (W1/D1/H4/H1 first, then any others)."""
+    present = {str(row.get("tf")) for row in rows if row.get("tf")}
+    ordered = [tf for tf in SECTION_ORDER if tf in present]
+    ordered.extend(sorted(present - set(ordered)))
+    return ordered
+
+
+def _push_scan_tf(push, tf, section: list[dict]) -> None:
+    """One TF's SCAN block: candidate count by kind + capped geometry rows."""
+    if not section:
+        push(f"   {str(tf):<3}: (none)")
+        return
+    kinds: dict[str, int] = {}
+    for row in section:
+        kind = str(row.get("kind") or "other")
+        kinds[kind] = kinds.get(kind, 0) + 1
+    kind_txt = " | ".join(f"{name} {count}" for name, count in sorted(kinds.items()))
+    push(f"   {str(tf):<3}: {len(section)} candidate(s)  {kind_txt}")
+    for row in section:
+        push(
+            f"      {str(row.get('direction') or 'n/a'):<5}"
+            f" {str(row.get('kind') or 'n/a'):<14}"
+            f" {_fmt_zone(row.get('zone_low'), row.get('zone_high')):<19}"
+            f" t={_scan_time(row.get('created_at'))}"
+        )
 
 
 def render_structure_console(snapshot: dict) -> str:
@@ -194,9 +420,28 @@ def render_structure_console(snapshot: dict) -> str:
          f" armed {armed_total})")
     push(_RULE)
 
-    # --- POIS --------------------------------------------------------- #
-    push(" POIS")
+    note = snapshot.get("note")
+    if note:                             # mode clarification (Console V2)
+        push(f" {note}")
+
     rows = snapshot.get("pois") or []
+
+    # --- STRUCTURE SCAN (Console V2: candidates, NOT armed) ------------ #
+    # Locked POI definition is deliberately NOT applied here: these rows are
+    # raw merged detector geometry for operator orientation only. The
+    # wording bans (no "armed"/"POI"/"signal"/"entry") are part of the
+    # contract - scan rows are never tradeable and never seek.
+    push(" STRUCTURE SCAN  (candidates - NOT armed)")
+    push("   Locked POI definition NOT applied - not tradeable / not seeking")
+    scan_rows = snapshot.get("scan") or []
+    for tf in _scan_section_order(scan_rows):
+        _push_scan_tf(push, tf, [r for r in scan_rows if str(r.get("tf")) == tf])
+    if not scan_rows:
+        push("   (none) - no merged geometry in the last batch")
+    push(_SUBRULE)
+
+    # --- ARMED POI (locked definition only) ----------------------------- #
+    push(" ARMED POI  (locked definition only)")
     for tf in SECTION_ORDER:
         section = [r for r in rows if r.get("tf") == tf]
         if not section:

@@ -32,6 +32,9 @@ from smc.dumb.constants import (
     DUMB_TP_R_MULTIPLE,
 )
 from smc.dumb.rules import compute_sl_tp, is_confirm, is_expired, is_sweep
+from smc.dumb.mtf import DumbMtfEpisodeKey, DumbMtfStateMachine, DumbMtfStatus
+from smc.dumb.mtf_paper_adapter import DumbMtfPaperAdapter, DumbMtfRoute
+from smc.dumb.mtf_h4_feed import DumbMtfH4Feed
 
 __all__ = [
     "DUMB_ATR_PERIOD",
@@ -42,4 +45,10 @@ __all__ = [
     "is_confirm",
     "is_expired",
     "is_sweep",
+    "DumbMtfEpisodeKey",
+    "DumbMtfStateMachine",
+    "DumbMtfStatus",
+    "DumbMtfPaperAdapter",
+    "DumbMtfRoute",
+    "DumbMtfH4Feed",
 ]

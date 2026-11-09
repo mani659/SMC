@@ -88,6 +88,21 @@ from smc.live.structure_publish import (                     # noqa: E402
 
 __all__ = ["OperatorSession", "main"]
 
+# Console mode clarification (Lead Architect naming ruling 2026-11-02).
+# Professional wording only — the retired research nickname must never render.
+_PRODUCT_NOTE_STATUS = (
+    "PRODUCT V1 (multi-TF) — product runtime batches own SCAN/ARMED; "
+    "sweep -> LTF confirmation on the locked menu"
+)
+_RESEARCH_NOTE_STATUS = (
+    "RESEARCH H4 zone-book — research slice; product batches never run in "
+    "this mode"
+)
+_RESEARCH_SNAPSHOT_NOTE = (
+    "RESEARCH H4 zone-book slice — zone book from the read-only M8 H4 scan; "
+    "episode annotations are the slice book, NOT the product engine book"
+)
+
 # MT5 auto-reconnect (2026-10-17 Lead Architect ruling): a transient terminal
 # drop (terminal restarted, IPC lost, broker weekend reconnect) must self-heal
 # with capped backoff instead of killing the session; a terminal that never
@@ -379,8 +394,16 @@ class OperatorSession:
         sessions = None
         if cfg.allowed_sessions:
             sessions = [Session[name] for name in cfg.allowed_sessions]
-        engine = PipelineEngine()
-        adapter = PipelineAdapter(engine, timeframe=tf)
+        dumb_mtf_feed = None
+        menu_confirmation = None
+        if cfg.strategy_mode == "RESEARCH_H4_ZONE_BOOK":
+            from smc.dumb.mtf_h4_feed import DumbMtfH4Feed
+            from smc.dumb.mtf_paper_adapter import DumbMtfPaperAdapter
+
+            adapter = DumbMtfPaperAdapter()
+        else:
+            engine = PipelineEngine()
+            adapter = PipelineAdapter(engine, timeframe=tf)
         runner = PaperRunner(
             connector=connector,
             risk_engine=RiskEngine(),
@@ -394,6 +417,21 @@ class OperatorSession:
             ),
             runtime=runtime,
         )
+        if cfg.strategy_mode == "RESEARCH_H4_ZONE_BOOK":
+            dumb_mtf_feed = DumbMtfH4Feed(adapter, symbol=cfg.symbol)
+        if cfg.strategy_mode == "PRODUCT_V1":
+            # Product menu layer: sweep -> LTF confirmation. OPT-B posture is
+            # an explicit config decision (default OFF).
+            from smc.orchestration.product_menu_mtf import ProductMenuEngine
+
+            menu_confirmation = ProductMenuEngine(
+                symbol=cfg.symbol,
+                same_bar_asof=cfg.enable_opt_b_same_bar_confirm,
+            )
+            self._log(
+                "MENU CONFIRMATION ACTIVE tier_table=DAY/H4/H1/M15 "
+                f"opt_b_same_bar={cfg.enable_opt_b_same_bar_confirm}"
+            )
         # The watchdog EA reads MQL5/Files/smc_heartbeat.txt in its FileOpen
         # sandbox. For an INSTALLED (non-portable) terminal that sandbox is the
         # terminal DATA folder (mt5.terminal_info().data_path — captured at
@@ -460,7 +498,9 @@ class OperatorSession:
             connector=connector, runner=runner, heartbeat=heartbeat,
             symbol=cfg.symbol, timeframe=tf,
             window_bars=200, poll_interval=cfg.poll_interval_s,
-            runtime=runtime,
+            runtime=None if dumb_mtf_feed is not None else runtime,
+            dumb_mtf_feed=dumb_mtf_feed,
+            menu_confirmation=menu_confirmation,
         )
         self._runner = runner
         self._adapter = adapter
@@ -910,6 +950,8 @@ class OperatorSession:
         loop = self._loop
         if adapter is None or loop is None:
             return
+        if getattr(adapter, "engine", None) is None:
+            return  # DUMB-MTF owns no COMPLEX structure-console state.
         try:
             self.state["structure"] = build_structure_snapshot(
                 engine=adapter.engine,
@@ -988,14 +1030,24 @@ class OperatorSession:
                 "magic": self.config.magic,
                 "dry_run": self.config.dry_run,
                 "tf": self.config.timeframe,
+                "strategy_mode": self.config.strategy_mode,
                 "terminal_path": self.config.terminal_path,
                 "python_pid": os.getpid(),
                 "detection_tfs": list(self.config.detection_timeframes),
                 "allow_single_tf_degraded":
                     self.config.allow_single_tf_degraded,
-                "mode":
-                    "T" if getattr(self.config, "diagnostic_entries", False)
-                    else "A"}
+                "mode": (
+                    "RESEARCH_H4_ZONE_BOOK"
+                    if self.config.strategy_mode == "RESEARCH_H4_ZONE_BOOK"
+                    else "T" if getattr(self.config, "diagnostic_entries", False)
+                    else "A"
+                ),
+                "mode_note": (
+                    _RESEARCH_NOTE_STATUS
+                    if self.config.strategy_mode in (
+                        "RESEARCH_H4_ZONE_BOOK", "COUPLED_MTF")
+                    else _PRODUCT_NOTE_STATUS
+                )}
 
     def run(self, max_seconds: float | None = None) -> None:
         """Identity → stack → poll loop with console cadence → clean stop.

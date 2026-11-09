@@ -299,7 +299,7 @@ class MultiTFProductRuntime:
         self,
         *,
         execution_timeframe: Timeframe = Timeframe.M5,
-        detection_timeframes=(Timeframe.H4, Timeframe.H1),
+        detection_timeframes=(Timeframe.D1, Timeframe.H4, Timeframe.H1, Timeframe.M15),
         optional_timeframes=(OPTIONAL_W1_TIMEFRAME, OPTIONAL_D1_TIMEFRAME),
         atr_period: int = 14,
         allow_single_tf_degraded: bool = False,
@@ -310,17 +310,16 @@ class MultiTFProductRuntime:
             raise ValueError("detection_timeframes must name at least one timeframe")
         detection_tuple = tuple(detection_timeframes)
         if not allow_single_tf_degraded:
-            # Product-mode detection policy (unified audit ruling 2026-10-06,
-            # superseding amendment recorded in LOCKED_DECISIONS §4/§21):
-            # the H4+H1 required detection minimum is enforced AT CONSTRUCTION
-            # — a product runtime cannot be built whose detection set omits
-            # either required timeframe. Degraded opt-in skips the check.
-            missing = [tf.name for tf in (Timeframe.H4, Timeframe.H1)
-                       if tf not in detection_tuple]
-            if missing:
+            # M2 (minimal): product mode accepts the menu tiers
+            # {D1, H4, H1, M15}. The legacy H4+H1-only minimum is relaxed
+            # to allow adding D1/M15; empty/nonsensical sets still fail
+            # loudly. Degraded opt-in remains explicit.
+            menu_tiers = {Timeframe.D1, Timeframe.H4, Timeframe.H1, Timeframe.M15}
+            if not set(detection_tuple).intersection(menu_tiers):
                 raise ValueError(
-                    "product mode requires H4+H1 in detection_timeframes; "
-                    "missing: " + ", ".join(missing)
+                    "product mode requires at least one menu detection timeframe "
+                    "from {D1,H4,H1,M15}; got: "
+                    + ", ".join(tf.name for tf in detection_tuple)
                     + " (set allow_single_tf_degraded=True only for explicit "
                       "degraded opt-in / tests)"
                 )

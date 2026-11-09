@@ -1,6 +1,8 @@
 @echo off
 rem ============================================================
 rem SMC Phase D operator pack launcher (single terminal, demo).
+rem Default: PRODUCT V1 multi-TF (config\live_demo.json -> product_v1;
+rem   HTF batches drive SCAN/ARMED once the first batch lands).
 rem Usage: double-click or run from the repo root.
 rem Ctrl+C stops the session cleanly (heartbeat shutdown marker).
 rem ============================================================

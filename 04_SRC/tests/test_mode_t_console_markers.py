@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import Mock
 
+import pytest
+
 from smc.core.enums import Direction
 from smc.live.judgement_console import (
     judge_interval_used,

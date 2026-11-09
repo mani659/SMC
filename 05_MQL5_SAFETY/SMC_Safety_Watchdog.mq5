@@ -67,15 +67,17 @@ input string InpDrawPrefix          = "SMC_SD_";         // Structure object pre
 input int    InpMaxStructureAgeSec  = 120;               // Draw file older → clear draw objects ONLY
 input bool   InpDrawPOI             = true;              // Draw POI zone rectangles
 input bool   InpDrawSweep           = true;              // Draw sweep level lines
-input bool   InpDrawSeek            = true;              // Draw armed-POI state texts
+input bool   InpDrawSeek            = true;              // Include POI/SEEK states in labels/tooltips
 input bool   InpDrawPlan            = true;              // Draw planned entry/stop/target levels
-input color  InpColorBull           = clrLimeGreen;      // Bull (BUY) zone color
-input color  InpColorBear           = clrTomato;         // Bear (SELL) zone color
+input color  InpColorBull           = clrCornflowerBlue;  // Bull/demand zone color
+input color  InpColorBear           = clrLightCoral;      // Bear/supply zone color
 input color  InpColorSweep          = clrOrange;         // Sweep line color
 input color  InpColorPlanEntry      = clrDeepSkyBlue;    // Plan entry level color
 input color  InpColorPlanSL         = clrRed;            // Plan stop level color
 input color  InpColorPlanTP         = clrLime;           // Plan target level color
-input int    InpZoneWindowHours     = 36;                // Zone rectangle window (hours around now)
+input int    InpMaxZones            = 10;                // Max POI rectangles (publisher order)
+input int    InpZoneExtendBars      = 16;                // Rolling zone width (chart bars)
+input int    InpZoneLabelFontSize   = 9;                 // POI label font size
 
 // Marker duty constants (design lock §4):
 string MARKER_PREFIX          = "SMC_";
@@ -93,6 +95,9 @@ const int ALERT_FLOOD_INTERVAL_SEC = 300; // Alert at most once per 5 minutes wh
 
 // Structure-draw duty state (merge 2026-10-22):
 string g_lastDrawSymbol = ""; // chart symbol at last draw pass (change → wipe)
+string g_lastDrawRenderKey = "";
+datetime g_lastDrawBar = 0;
+int g_lastDrawPeriodSeconds = 0;
 
 //+------------------------------------------------------------------+
 int OnInit()
@@ -524,6 +529,9 @@ void UpdateStructureDraw()
       if(g_lastDrawSymbol != "")
          ObjectsDeleteAll(0, InpDrawPrefix);
       g_lastDrawSymbol = _Symbol;
+      g_lastDrawRenderKey = "";
+      g_lastDrawBar = 0;
+      g_lastDrawPeriodSeconds = 0;
    }
 
    int h = FileOpen(InpStructureFile, FILE_READ | FILE_TXT | FILE_ANSI);
@@ -560,6 +568,13 @@ void UpdateStructureDraw()
       ClearStructureDraw();            // stale → chart says nothing
       return;
    }
+   datetime latestBar = iTime(_Symbol, _Period, 0);
+   int periodSeconds = PeriodSeconds(_Period);
+   if(latestBar <= 0 || periodSeconds <= 0)
+   {
+      ClearStructureDraw();            // no chart time basis → do not invent one
+      return;
+   }
 
    // Records: reread past the two header lines into memory, then paint.
    h = FileOpen(InpStructureFile, FILE_READ | FILE_TXT | FILE_ANSI);
@@ -584,11 +599,25 @@ void UpdateStructureDraw()
    }
    FileClose(h);
 
-   bool anyDrawn = DrawRecords(lines, count);
-   if(anyDrawn)
-      DrawStructureBanner();
-   else
-      ClearStructureDraw();            // zero records → clear, not a ghost banner
+   // ts_utc is freshness metadata only. It is intentionally excluded from
+   // this key because it is not a POI origin and does not change geometry.
+   string renderKey = sym;
+   for(int i = 0; i < count; i++)
+      renderKey += "\n" + lines[i];
+   if(renderKey == g_lastDrawRenderKey
+      && latestBar == g_lastDrawBar
+      && periodSeconds == g_lastDrawPeriodSeconds)
+      return;
+
+   // Full refresh is scoped to this duty's namespace; marker/owner objects
+   // are not touched.
+   ObjectsDeleteAll(0, InpDrawPrefix);
+   int poiCount = 0;
+   DrawRecords(lines, count, latestBar, periodSeconds, poiCount);
+   DrawStructureBanner(poiCount > 0);
+   g_lastDrawRenderKey = renderKey;
+   g_lastDrawBar = latestBar;
+   g_lastDrawPeriodSeconds = periodSeconds;
    ChartRedraw();
 }
 
@@ -639,25 +668,27 @@ void AddSeen(string &seen[], int &seenCount, int &seenMax, const string name)
 }
 
 //+------------------------------------------------------------------+
-//| Draw every structure record; true when at least one object was   |
-//| drawn. Publisher emits POI rows before SWEEP/SEEK/PLAN rows, so   |
-//| the POI lookup array is complete before later rows need it.       |
+//| Draw structure records. Publisher emits POIs before linked rows,  |
+//| so capped POI IDs are known before SEEK enrichment is applied.    |
 //+------------------------------------------------------------------+
-bool DrawRecords(const string &lines[], const int count)
+void DrawRecords(const string &lines[], const int count,
+                 const datetime rightEdge, const int periodSeconds,
+                 int &poiCount)
 {
-   // Display-only time window: recent past → just past now, so zones live
-   // on the visible recent window and follow the chart automatically.
-   datetime now    = TimeCurrent();
-   // Explicit (datetime) casts on both RHS (project style line ~423):
-   // datetime-minus-long yields long, which warns C4240 "possible loss of
-   // data" when assigned back to a datetime — display-only window math.
-   datetime tLeft  = (datetime)(now - (long)InpZoneWindowHours * 3600);
-   datetime tRight = (datetime)(now + 2 * 3600);
-   bool anyDrawn = false;
-
+   // Display-only rolling span. File prices remain the only zone geometry.
+   datetime tRight = rightEdge;
+   int extendBars = InpZoneExtendBars;
+   if(extendBars < 1)
+      extendBars = 1;
+   datetime tLeft = (datetime)((long)tRight
+                               - (long)extendBars * (long)periodSeconds);
    int cap = count > 0 ? count : 1;
    string poiId[]; ArrayResize(poiId, cap);
    int    poiN = 0;
+   int    poiRows = 0;
+   int    zoneLimit = InpMaxZones;
+   if(zoneLimit < 1)
+      zoneLimit = 1;
 
    int seenMax = 64;
    string seen[];
@@ -673,21 +704,29 @@ bool DrawRecords(const string &lines[], const int count)
       string kind = f[0];
 
       // ---- POI|id|tf|side|zlow|zhigh|state ------------------------------
-      if(kind == "POI" && InpDrawPOI && nf >= 7)
+      if(kind == "POI" && nf >= 7)
       {
          string pid  = f[1];
          double low  = StringToDouble(f[4]);
          double high = StringToDouble(f[5]);
-         if(pid == "" || low <= 0 || high <= low)
+         if(pid == "" || (f[3] != "BULL" && f[3] != "BEAR")
+            || low <= 0 || high <= low)
             continue;
-         if(poiN < cap)
-         {
-            poiId[poiN] = pid;
-            poiN++;
-         }
+         poiRows++;
+         if(!InpDrawPOI)
+            continue;
+         if(poiRows > zoneLimit)
+            continue;                    // preserve publisher priority order
          string name = InpDrawPrefix + pid + "_Z";
          if(ObjectFind(0, name) < 0)
-            ObjectCreate(0, name, OBJ_RECTANGLE, 0, tLeft, high, tRight, low);
+         {
+            if(!ObjectCreate(0, name, OBJ_RECTANGLE, 0, tLeft, high, tRight, low))
+            {
+               PrintFormat("SMC watchdog: cannot create POI rectangle %s (error=%d)",
+                           name, GetLastError());
+               continue;
+            }
+         }
          else
          {
             ObjectSetInteger(0, name, OBJPROP_TIME, 0, (long)tLeft);
@@ -695,29 +734,59 @@ bool DrawRecords(const string &lines[], const int count)
             ObjectSetDouble(0, name, OBJPROP_PRICE, 0, high);
             ObjectSetDouble(0, name, OBJPROP_PRICE, 1, low);
          }
+         if(poiN < cap)
+         {
+            poiId[poiN] = pid;
+            poiN++;
+         }
+         string poiType = (f[3] == "BULL") ? "DEMAND" : "SUPPLY";
          ObjectSetInteger(0, name, OBJPROP_COLOR,
                           (f[3] == "BULL") ? InpColorBull : InpColorBear);
-         ObjectSetInteger(0, name, OBJPROP_FILL, false);
+         ObjectSetInteger(0, name, OBJPROP_BGCOLOR,
+                          (f[3] == "BULL") ? InpColorBull : InpColorBear);
+         ObjectSetInteger(0, name, OBJPROP_FILL, true);
+         ObjectSetInteger(0, name, OBJPROP_BACK, true);
          ObjectSetInteger(0, name, OBJPROP_WIDTH, 1);
+         ObjectSetInteger(0, name, OBJPROP_STYLE, STYLE_SOLID);
          ObjectSetString(0, name, OBJPROP_TOOLTIP,
-                         f[2] + " " + f[3] + " POI " + f[6] + " (" + pid + ")");
+                         "POI " + poiType + " " + f[2]
+                         + (f[6] == "" ? "" : " " + f[6])
+                         + " | " + DoubleToString(low, _Digits)
+                         + " - " + DoubleToString(high, _Digits)
+                         + " | " + pid);
          EnsureProps(name);
          AddSeen(seen, seenCount, seenMax, name);
-         anyDrawn = true;
 
-         // State text at the zone's top-left edge (inside the drawing window).
+         // Short label at the rolling left/top edge; state is file-fed.
          string lname = InpDrawPrefix + pid + "_L";
          if(ObjectFind(0, lname) < 0)
-            ObjectCreate(0, lname, OBJ_TEXT, 0, tLeft, high);
+         {
+            if(!ObjectCreate(0, lname, OBJ_TEXT, 0, tLeft, high))
+            {
+               PrintFormat("SMC watchdog: cannot create POI label %s (error=%d)",
+                           lname, GetLastError());
+               continue;
+            }
+         }
          else
             ObjectSetInteger(0, lname, OBJPROP_TIME, 0, (long)tLeft);
          ObjectSetDouble(0, lname, OBJPROP_PRICE, 0, high);
-         ObjectSetInteger(0, lname, OBJPROP_COLOR,
-                          (f[6] == "ARMED") ? clrGold : clrSilver);
-         ObjectSetInteger(0, lname, OBJPROP_FONTSIZE, 8);
-         ObjectSetString(0, lname, OBJPROP_TEXT, f[2] + " " + f[6]);
-         ObjectSetString(0, lname, OBJPROP_TOOLTIP, pid);
+         color zoneColor = (f[3] == "BULL") ? InpColorBull : InpColorBear;
+         ObjectSetInteger(0, lname, OBJPROP_COLOR, zoneColor);
+         ObjectSetInteger(0, lname, OBJPROP_FONTSIZE,
+                          (InpZoneLabelFontSize > 0) ? InpZoneLabelFontSize : 9);
+         ObjectSetString(0, lname, OBJPROP_FONT, "Arial Bold");
+         ObjectSetInteger(0, lname, OBJPROP_ANCHOR, ANCHOR_LEFT_UPPER);
+         string label = poiType + " " + f[2];
+         if(InpDrawSeek && f[6] != "")
+            label += " " + f[6];
+         ObjectSetString(0, lname, OBJPROP_TEXT, label);
+         ObjectSetString(0, lname, OBJPROP_TOOLTIP,
+                         "POI " + poiType + " " + f[2] + " "
+                         + DoubleToString(low, _Digits) + " - "
+                         + DoubleToString(high, _Digits) + " | " + pid);
          EnsureProps(lname);
+         ObjectSetInteger(0, lname, OBJPROP_BACK, false);
          AddSeen(seen, seenCount, seenMax, lname);
       }
       // ---- SWEEP|poi_id|side|price|atr_mult ------------------------------
@@ -739,12 +808,11 @@ bool DrawRecords(const string &lines[], const int count)
                          "SWEEP " + f[2] + " @ zone edge (poi " + pid + ")");
          EnsureProps(name);
          AddSeen(seen, seenCount, seenMax, name);
-         anyDrawn = true;
       }
       // ---- SEEK|poi_id|state|posture — enrich the zone tooltip only: ------
       // the state itself is already on the zone label; never invents an
       // object when the POI zone was capped or absent from this file.
-      else if(kind == "SEEK" && nf >= 4)
+      else if(kind == "SEEK" && InpDrawSeek && nf >= 4)
       {
          string pid = f[1];
          if(pid == "")
@@ -771,15 +839,16 @@ bool DrawRecords(const string &lines[], const int count)
             continue;
          if(DrawPlanLine(InpDrawPrefix + pid + "_PE", entry, InpColorPlanEntry,
                          STYLE_DASH, "PLAN entry (poi " + pid + ")"))
-            { AddSeen(seen, seenCount, seenMax, InpDrawPrefix + pid + "_PE"); anyDrawn = true; }
+            AddSeen(seen, seenCount, seenMax, InpDrawPrefix + pid + "_PE");
          if(DrawPlanLine(InpDrawPrefix + pid + "_PS", sl, InpColorPlanSL,
                          STYLE_DOT, "PLAN stop (poi " + pid + ")"))
-            { AddSeen(seen, seenCount, seenMax, InpDrawPrefix + pid + "_PS"); anyDrawn = true; }
+            AddSeen(seen, seenCount, seenMax, InpDrawPrefix + pid + "_PS");
          if(DrawPlanLine(InpDrawPrefix + pid + "_PT", tp, InpColorPlanTP,
                          STYLE_DOT, "PLAN target (poi " + pid + ")"))
-            { AddSeen(seen, seenCount, seenMax, InpDrawPrefix + pid + "_PT"); anyDrawn = true; }
+            AddSeen(seen, seenCount, seenMax, InpDrawPrefix + pid + "_PT");
       }
    }
+   poiCount = poiRows;
 
    // Orphan reconcile: remove prefix objects this pass did NOT see —
    // expired POIs / cleared sweeps vanish the same tick their row does.
@@ -800,7 +869,6 @@ bool DrawRecords(const string &lines[], const int count)
       if(!isSeen)
          ObjectDelete(0, name);
    }
-   return (anyDrawn);
 }
 
 //+------------------------------------------------------------------+
@@ -827,7 +895,7 @@ bool DrawPlanLine(const string name, const double price, const color clr,
 //| Banner corner label — VISUALIZATION ONLY, NOT A STRATEGY CHANGE. |
 //| y=40: the marker duty's corner label owns y=22 — never overlap.  |
 //+------------------------------------------------------------------+
-void DrawStructureBanner()
+void DrawStructureBanner(const bool hasPois)
 {
    const string name = InpDrawPrefix + "BANNER";
    if(ObjectFind(0, name) < 0)
@@ -837,8 +905,9 @@ void DrawStructureBanner()
    ObjectSetInteger(0, name, OBJPROP_YDISTANCE, 40);
    ObjectSetInteger(0, name, OBJPROP_COLOR, clrSilver);
    ObjectSetInteger(0, name, OBJPROP_FONTSIZE, 9);
-   ObjectSetString(0, name, OBJPROP_TEXT,
-                   "SMC STRUCTURE DRAW — VISUALIZATION ONLY (NOT A STRATEGY CHANGE)");
+   ObjectSetString(0, name, OBJPROP_TEXT, hasPois
+                   ? "SMC STRUCTURE DRAW — VISUALIZATION ONLY (NOT A STRATEGY CHANGE)"
+                   : "SMC bot: no active POI");
    ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
    ObjectSetInteger(0, name, OBJPROP_HIDDEN, true);
 }
@@ -854,6 +923,9 @@ void ClearStructureDraw()
    if(InpDrawPrefix == "")
       return;
    ObjectsDeleteAll(0, InpDrawPrefix);
+   g_lastDrawRenderKey = "";
+   g_lastDrawBar = 0;
+   g_lastDrawPeriodSeconds = 0;
    ChartRedraw();
 }
 //+------------------------------------------------------------------+

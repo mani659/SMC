@@ -257,7 +257,7 @@ def test_runtime_report_collects_sweep_links(monkeypatch):
                        for i in range(10)],
         Timeframe.H1: candles,
     }
-    runtime = runtime_module.MultiTFProductRuntime()
+    runtime = runtime_module.MultiTFProductRuntime(detection_timeframes=(Timeframe.H4, Timeframe.H1))
     report = runtime.run_batch(engine=PipelineEngine(), series_by_tf=series,
                                as_of=candles[-1].timestamp, arm_bar=0)
     link = report.displacements.get(poi.id)
