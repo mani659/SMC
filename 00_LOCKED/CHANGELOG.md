@@ -7,6 +7,16 @@
 
 ## [Unreleased]
 
+### 2026-11-09 (3) — F3 SIZING PINNED TO THE BROKER (`LOGIC_CHANGED`: live start gate only)
+
+- **Authority:** Lead Architect `F3 — PIN SIZING TO BROKER` (money safety) on top of F1/F2. No strategy retune, no structural TP, no F5–F7.
+- **Defect:** `pip_value_per_lot` must be account currency per 1.0 PRICE unit per lot. The live path used a `10.0` default and `OperatorConfig` had no key at all → for a 100 oz gold contract the value is 10× too small, so a wide stop carried 2–5 % risk while the code reported 0.2–0.5 % (`LOT_MAX_SAFETY` masked it).
+- **Derivation:** new `smc/risk/broker_units.py` (pure, no MT5 import) — `trade_tick_value_loss / trade_tick_size` preferred (loss side = the side a stop is charged on), else `trade_tick_value`, else profit side; `trade_contract_size` fallback only when `currency_profit` == account currency; anything else **refuses** (no per-symbol table, no gold default, no guess).
+- **Pin:** `OperatorSession.identity_check` derives the value from `symbol_info` and refuses the session (`SystemExit`) when it disagrees with the configured value by more than 1 % relative — both numbers + derivation logged and printed, `logs/<run>/sizing_pin.json` written on pass, nothing silently overwritten. Applies in dry-run too, no bypass flag. New `pip_value_per_lot` operator key (validated, documented as a broker fact); live default `100.0`; `PaperConfig` now receives the operator's value (it was ignored); `config/live_demo.json` declares `100.0`.
+- **KPI:** `sized_lots_detail` (single formula, `sized_lots` is its reader) returns `uncapped_lots`, `capped`, `effective_risk_fraction`; `EntryDecision` carries them; the paper/live runner records `entry_sized` + `sizing_kpi()` so a binding cap and the risk actually carried are visible.
+- **Incidental:** operator logger name is sequence-based (was `id(self)`, reusable after GC → a later session could inherit a stale `events.log` handler and lose its pin line).
+- **Verify:** `1413 passed, 6 skipped` (+19 `tests/test_f3_sizing_pin.py`); `locked_constants.py` untouched; research/backtest `10.0` default untouched (frozen baseline numerics unchanged). Note: `06_RESEARCH/F3_SIZING_PIN_NOTE.md`. **Live acceptance:** first operator start must print `[sizing] PASS` / `sizing_pin.json ok:true`; `dry_run` stays `true` until then.
+
 ### 2026-11-09 (2) — PHASE 0 + F1 + F2 INFORMATION-SET FIXES (`LOGIC_CHANGED=YES`; Architect approved program)
 
 - **Authority:** Lead Architect — audit accepted (P0-1/P0-2 fixes first; charts scored 0 CORRECT / ~2 PARTIAL / ~3 WRONG) + `P0 FIX PROGRAM — Phase 0 + F1 + F2`. Scope executed exactly: freeze/mitigate, closed-bar HTF, full confirmation evaluation. **NO structural-TP feed, NO OPT-B, NO OPT-2, NO tier/trigger/threshold retune.**

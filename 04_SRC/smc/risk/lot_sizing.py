@@ -20,6 +20,8 @@ The Phase 5 risk engine consumes :func:`sized_lots`; broker lot-grid inputs
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from smc.config.locked_constants import (
     LOT_MAX_SAFETY,
     RISK_PCT_MAX,
@@ -27,7 +29,13 @@ from smc.config.locked_constants import (
 )
 from smc.execution.lot_sizing import risk_lots
 
-__all__ = ["risk_lots", "clamp_risk_fraction", "sized_lots"]
+__all__ = [
+    "risk_lots",
+    "clamp_risk_fraction",
+    "sized_lots",
+    "sized_lots_detail",
+    "SizingDecision",
+]
 
 
 def clamp_risk_fraction(risk_fraction: float) -> float:
@@ -49,6 +57,73 @@ def clamp_risk_fraction(risk_fraction: float) -> float:
     return risk_fraction
 
 
+@dataclass(frozen=True, slots=True)
+class SizingDecision:
+    """One sizing verdict plus the §28.7 diagnostics the KPI needs.
+
+    ``lots`` is the order volume actually used (band-clamped formula, on the
+    lot grid, capped). ``uncapped_lots`` is the same size BEFORE the
+    ``LOT_MAX_SAFETY`` cap, so a binding cap is visible instead of being
+    silently absorbed; ``effective_risk_fraction`` is the risk the placed
+    size really carries (``lots × sl_distance × unit_value / equity``),
+    which differs from the requested fraction exactly when the cap binds.
+    """
+
+    lots: float
+    uncapped_lots: float
+    risk_fraction: float          # clamped band fraction actually used
+    capped: bool                  # LOT_MAX_SAFETY bound the size
+    effective_risk_fraction: float
+
+
+def sized_lots_detail(
+    equity: float,
+    risk_fraction: float,
+    sl_distance: float,
+    pip_value_per_lot: float,
+    min_lots: float,
+    lot_step: float,
+) -> SizingDecision:
+    """The single sizing path WITH §28.7 diagnostics (F3).
+
+    Same arithmetic as :func:`sized_lots` — that function now returns
+    ``sized_lots_detail(...).lots``, so there is still exactly one formula
+    and one cap, and the KPI cannot drift from the traded size.
+
+    Returns ``lots == 0.0`` (and zero diagnostics) when the size is below
+    ``min_lots`` or equity/risk/inputs are non-positive — the same skip
+    contract as ``smc.execution.lot_sizing.risk_lots``.
+    """
+    fraction = clamp_risk_fraction(risk_fraction)
+    lots = risk_lots(
+        equity,
+        fraction,
+        sl_distance,
+        pip_value_per_lot,
+        min_lots,
+        lot_step,
+    )
+    if lots <= 0.0:
+        return SizingDecision(
+            lots=0.0,
+            uncapped_lots=0.0,
+            risk_fraction=fraction,
+            capped=False,
+            effective_risk_fraction=0.0,
+        )
+    capped = lots > LOT_MAX_SAFETY
+    placed = LOT_MAX_SAFETY if capped else lots
+    # equity > 0 is guaranteed by risk_lots returning a positive size.
+    effective = (placed * sl_distance * pip_value_per_lot) / equity
+    return SizingDecision(
+        lots=placed,
+        uncapped_lots=lots,
+        risk_fraction=fraction,
+        capped=capped,
+        effective_risk_fraction=effective,
+    )
+
+
 def sized_lots(
     equity: float,
     risk_fraction: float,
@@ -63,16 +138,15 @@ def sized_lots(
     Returns 0.0 when the computed size is below ``min_lots`` (skip the
     trade) or when equity/risk are non-positive — the same contract as
     ``smc.execution.lot_sizing.risk_lots``, which this wraps.
+
+    F3 (2026-11-09): a thin reader of :func:`sized_lots_detail` — the KPI
+    path and this path share one computation, never two.
     """
-    fraction = clamp_risk_fraction(risk_fraction)
-    lots = risk_lots(
+    return sized_lots_detail(
         equity,
-        fraction,
+        risk_fraction,
         sl_distance,
         pip_value_per_lot,
         min_lots,
         lot_step,
-    )
-    if lots <= 0.0:
-        return 0.0
-    return min(lots, LOT_MAX_SAFETY)
+    ).lots

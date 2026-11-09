@@ -37,6 +37,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import itertools
 import json
 import logging
 import os
@@ -87,6 +88,10 @@ from smc.live.structure_publish import (                     # noqa: E402
 )
 
 __all__ = ["OperatorSession", "main"]
+
+# Unique operator-logger name per session (never per object id — ids are
+# recycled once a session is freed, which would inherit a stale file handler).
+_SESSION_LOGGER_SEQ = itertools.count(1)
 
 # Console mode clarification (Lead Architect naming ruling 2026-11-02).
 # Professional wording only — the retired research nickname must never render.
@@ -202,7 +207,13 @@ class OperatorSession:
     # Backend logging (append-only, gitignored)
     # ------------------------------------------------------------------ #
     def _make_logger(self) -> logging.Logger:
-        logger = logging.getLogger(f"smc.operator.{id(self)}")
+        # Unique per SESSION, not per object id: CPython recycles ``id()``
+        # after a session is freed, and a cached logger name would then reuse
+        # the previous session's file handler (its events.log), silently
+        # dropping this session's lines. The counter cannot collide.
+        logger = logging.getLogger(
+            f"smc.operator.{next(_SESSION_LOGGER_SEQ)}"
+        )
         logger.setLevel(logging.INFO)
         logger.propagate = False
         if not logger.handlers:
@@ -335,6 +346,10 @@ class OperatorSession:
                 f"ABORT: symbol_select({cfg.symbol}) failed: "
                 f"{connector.last_error()}"
             )
+        # F3 MONEY SAFETY GATE: pin the configured unit value to the broker
+        # spec before anything can size a trade. Applies in dry-run too — a
+        # dry run with wrong units teaches the wrong lesson.
+        self.state["sizing_pin"] = self._verify_sizing_pin(connector, acct, cfg)
         self._identity = facts
         self.state["terminal_dir"] = live_dir
         self.state["server"] = facts["server"]
@@ -354,6 +369,76 @@ class OperatorSession:
             f"trade_allowed={facts['trade_allowed']}"
         )
         return facts
+
+    # ------------------------------------------------------------------ #
+    # F3 sizing pin (broker-derived unit value)
+    # ------------------------------------------------------------------ #
+    def _verify_sizing_pin(self, connector, acct, cfg) -> dict:
+        """Derive the broker's price-value-per-lot and pin the config to it.
+
+        Refuses the session (``SystemExit``) when ``symbol_info`` cannot yield
+        a unit value or when the configured ``pip_value_per_lot`` disagrees by
+        more than the tight tolerance. Both values are printed and logged —
+        the config is never overwritten, so a wrong number stays visible
+        instead of being silently corrected.
+        """
+        from smc.risk.broker_units import (
+            BrokerUnitsError,
+            SizingPinError,
+            assert_sizing_pin,
+            derive_price_value_per_lot,
+        )
+
+        try:
+            info = connector.symbol_info(cfg.symbol)
+        except Exception as exc:  # noqa: BLE001 - any broker read failure is fatal here
+            self._log(
+                f"SIZING PIN FAILED: symbol_info({cfg.symbol!r}) raised {exc!r}"
+            )
+            raise SystemExit(
+                f"ABORT: cannot read symbol_info({cfg.symbol!r}) for the sizing "
+                f"pin: {exc}"
+            ) from exc
+        account_currency = str(getattr(acct, "currency", "") or "") or None
+        try:
+            units = derive_price_value_per_lot(
+                info, account_currency=account_currency
+            )
+        except BrokerUnitsError as exc:
+            self._log(f"SIZING PIN FAILED: {exc}")
+            raise SystemExit(f"ABORT: sizing units unverifiable — {exc}") from exc
+        try:
+            verdict = assert_sizing_pin(cfg.pip_value_per_lot, units)
+        except SizingPinError as exc:
+            self._log(f"SIZING PIN MISMATCH: {exc}")
+            raise SystemExit(f"ABORT: {exc}") from exc
+
+        record = {
+            "ok": True,
+            "configured": verdict.configured,
+            "derived": verdict.derived,
+            "relative_diff": verdict.relative_diff,
+            "tolerance": verdict.tolerance,
+            "source": units.source,
+            "contract_size": units.contract_size,
+            "tick_size": units.tick_size,
+            "tick_value": units.tick_value,
+            "currency_profit": units.currency_profit,
+            "account_currency": units.account_currency,
+            "checked_at_utc": _utcnow().isoformat(),
+        }
+        self._log("SIZING PIN OK: " + verdict.summary())
+        self._write_text(
+            self.log_dir / "sizing_pin.json",
+            json.dumps(record, indent=2),
+            "write_sizing_pin",
+        )
+        print(
+            f"[sizing] PASS — configured={verdict.configured:g} "
+            f"broker={verdict.derived:g} source={units.source} "
+            f"diff={verdict.relative_diff:.3%}"
+        )
+        return record
 
     # ------------------------------------------------------------------ #
     # Stack wiring (exactly the Phase 7 test composition)
@@ -412,6 +497,10 @@ class OperatorSession:
             position_manager=PositionManager(connector, symbol=cfg.symbol),
             config=PaperConfig(
                 risk_fraction=cfg.risk_fraction,
+                # F3: the pinned unit value is what the sizing path must use
+                # (the operator config was previously ignored here and the
+                # PaperConfig default applied silently).
+                pip_value_per_lot=cfg.pip_value_per_lot,
                 dry_run=cfg.dry_run,
                 allowed_sessions=sessions,
             ),

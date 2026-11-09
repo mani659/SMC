@@ -273,6 +273,15 @@ class PaperRunner:
         # (display only — the tally above is the authoritative count).
         self._block_log: list[dict] = []
         self._bar_count = 0              # monotonically increasing bar anchor
+        # F3 sizing KPI (logging only): how often the §28.7 safety cap is
+        # the binding constraint and what risk the accepted size really
+        # carries. Never read by a risk or placement decision.
+        self._sizing: dict[str, float] = {
+            "entries_sized": 0,
+            "sizing_capped": 0,
+            "max_effective_risk_fraction": 0.0,
+            "last_effective_risk_fraction": 0.0,
+        }
         # R9: deferred placements for R7-skipped candidates (same shared
         # IntentBook the backtest runner uses — design §7; the paper bar
         # anchor is ``_bar_index`` of the adapter's scan series).
@@ -292,6 +301,44 @@ class PaperRunner:
     def block_reasons(self) -> dict:
         """Per-code tally of entry-blocked candidates this run (read-only)."""
         return dict(self._block_reasons)
+
+    def sizing_kpi(self) -> dict:
+        """F3 sizing KPI: accepted sizes, cap events, effective risk %.
+
+        Read-only measurement surface. ``sizing_capped`` counts accepted
+        entries whose volume was reduced by ``LOT_MAX_SAFETY``;
+        ``max_effective_risk_fraction`` is the largest risk actually carried
+        (``lots × SL × unit value / equity``) — the honest counterpart of the
+        requested ``risk_fraction``.
+        """
+        return dict(self._sizing)
+
+    def _record_sizing(self, now, bar_index, candidate, decision) -> None:
+        """F3: record one accepted size (cap flag + effective risk %).
+
+        Called once per accepted sizing verdict — the same size a dry-run
+        logs, an R9 intent defers, or the broker receives — so the KPI can
+        never disagree with the volume actually used.
+        """
+        capped = bool(getattr(decision, "sizing_capped", False))
+        effective = float(getattr(decision, "effective_risk_fraction", 0.0) or 0.0)
+        self._sizing["entries_sized"] += 1
+        if capped:
+            self._sizing["sizing_capped"] += 1
+        self._sizing["last_effective_risk_fraction"] = effective
+        if effective > self._sizing["max_effective_risk_fraction"]:
+            self._sizing["max_effective_risk_fraction"] = effective
+        self.kpi.record(
+            "entry_sized", at=now,
+            poi_id=candidate.poi_id,
+            route_id=candidate.route_id,
+            bar_index=bar_index,
+            lots=float(decision.lots),
+            uncapped_lots=float(getattr(decision, "uncapped_lots", 0.0) or 0.0),
+            sizing_capped=capped,
+            effective_risk_pct=round(effective * 100.0, 4),
+            **_menu_join_keys(candidate),
+        )
 
     def last_blocks(self, limit: int = 10) -> list[dict]:
         """The most recent blocked candidates, oldest first (display only)."""
@@ -909,6 +956,9 @@ class PaperRunner:
                     **_menu_join_keys(candidate),
                 )
                 continue  # nothing placed, nothing consumed (I2 parity)
+            # F3 sizing KPI at the accepted-size choke point (dry-run,
+            # deferred intent and real placement all carry this volume).
+            self._record_sizing(now, bar_index, candidate, decision)
             # R7 fill-regime place guard (same shared policy as the
             # backtest runner): the MARKET reference (this bar's close)
             # having left the POI zone beyond the EXISTING FR-3 band means

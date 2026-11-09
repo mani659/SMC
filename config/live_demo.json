@@ -5,6 +5,7 @@
   "dry_run": true,
   "require_demo": true,
   "risk_fraction": 0.01,
+  "pip_value_per_lot": 100.0,
   "timeframe": "M5",
   "strategy_mode": "product_v1",
   "enable_opt_b_same_bar_confirm": false,

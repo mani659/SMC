@@ -183,6 +183,16 @@ def test_identity_connect_logs_terminal_and_pid_and_initializes_once(
         )),
         version=Mock(return_value=(5, 0, 0)),
         symbol_select=Mock(return_value=True),
+        # F3 sizing pin: broker spec consistent with the live default
+        # (100.00 per price unit per lot).
+        symbol_info=Mock(return_value=types.SimpleNamespace(
+            name="XAUUSDm",
+            digits=3,
+            trade_contract_size=100.0,
+            trade_tick_size=0.01,
+            trade_tick_value=1.0,
+            currency_profit="USD",
+        )),
         last_error=Mock(return_value=(0, "ok")),
         shutdown=Mock(),
     )

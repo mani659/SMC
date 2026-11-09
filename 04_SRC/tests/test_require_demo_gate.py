@@ -55,6 +55,19 @@ class _FakeMT5:
     def symbol_select(self, symbol, enable):
         return True
 
+    def symbol_info(self, symbol):
+        # F3 sizing pin: standard XAUUSD contract (1 tick = 0.01 price =
+        # 1.00 account currency per lot) → 100.00 per price unit per lot,
+        # which matches OperatorConfig's live default.
+        return types.SimpleNamespace(
+            name=symbol,
+            digits=3,
+            trade_contract_size=100.0,
+            trade_tick_size=0.01,
+            trade_tick_value=1.0,
+            currency_profit="USD",
+        )
+
 
 TRADE_MODE_DEMO = 0
 TRADE_MODE_REAL = 2

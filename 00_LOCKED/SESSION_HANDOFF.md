@@ -1,5 +1,14 @@
 # SESSION HANDOFF — SMC BOT
 
+## 2026-11-09 (3) — F3 SIZING PINNED TO THE BROKER (money safety)
+
+- **Authority:** Lead Architect `F3 — PIN SIZING TO BROKER`; research geometry untouched, live start gate + unit plumbing only.
+- **What changed:** `pip_value_per_lot` is now a first-class operator key derived from `symbol_info` at session start (`trade_tick_value_loss / trade_tick_size`, contract-size fallback only with a matching profit currency) and **pinned**: a disagreement above 1 % relative aborts the session with both numbers printed/logged and `sizing_pin.json` on pass. The old live default `10.0` was 10× too small for a 100 oz gold contract and the operator value was never wired into `PaperConfig`.
+- **KPI:** `sized_lots_detail` exposes `uncapped_lots` / `capped` / `effective_risk_fraction`; the runner records `entry_sized` and `sizing_kpi()` (cap events + real risk %).
+- **Suite:** 1413 passed / 6 skipped; +19 `test_f3_sizing_pin.py`.
+- **Live acceptance pending:** no terminal in this session. On the NEXT operator start, `[sizing] PASS` + `logs/<run>/sizing_pin.json (ok:true)` is the evidence; a mismatch is the intended refusal. `dry_run` stays `true` until then.
+- **Note:** `06_RESEARCH/F3_SIZING_PIN_NOTE.md`. **NEXT:** F4 risk envelope (cap floor interaction is now visible), then F5 `t_arm`/expire ordering, F6 §5 gate, F7 menu retry; post-F1F2 chart re-score when eyes are wanted.
+
 ## 2026-11-09 (2) — PHASE 0 + F1 + F2 DONE (`LOGIC_CHANGED=YES`; information set repaired; re-baselined)
 
 - **Authority:** Lead Architect accepted the independent audit (P0-1/P0-2 first) and issued `P0 FIX PROGRAM — Phase 0 + F1 + F2`. Executed exactly; no structural TP, no OPT-B, no OPT-2, no tier/trigger/threshold change.

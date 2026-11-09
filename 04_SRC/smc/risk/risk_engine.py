@@ -56,7 +56,7 @@ from smc.risk.fvg_invalidation import (
     INVALIDATION_REASON_BULL_BREACHED,
     is_invalidated,
 )
-from smc.risk.lot_sizing import clamp_risk_fraction, sized_lots
+from smc.risk.lot_sizing import clamp_risk_fraction, sized_lots_detail
 from smc.risk.pure_runner import PureRunner
 from smc.risk.same_level_guard import SameLevelGuard
 from smc.risk.spread_grading import SpreadGrade, effective_max_spread, grade_for_score
@@ -134,6 +134,12 @@ class EntryDecision:
     lots: float = 0.0
     blocked_by: str | None = None
     spread_grade: SpreadGrade | None = None
+    # F3 sizing KPI (logging only, never an input to any later gate): was
+    # the §28.7 safety cap the binding constraint, and what risk does the
+    # placed size actually carry at the configured unit value?
+    sizing_capped: bool = False
+    effective_risk_fraction: float = 0.0
+    uncapped_lots: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -243,7 +249,10 @@ class RiskEngine:
                 )
 
         sl_distance = abs(request.entry_price - request.sl_price)
-        lots = sized_lots(
+        # Single sizing path (§28.7). ``sized_lots`` is the reader of
+        # ``sized_lots_detail`` — one formula, one cap, and the KPI fields
+        # below come from that same computation (F3).
+        sizing = sized_lots_detail(
             equity=request.equity,
             risk_fraction=request.risk_fraction,
             sl_distance=sl_distance,
@@ -251,7 +260,7 @@ class RiskEngine:
             min_lots=request.min_lots,
             lot_step=request.lot_step,
         )
-        if lots <= 0.0:
+        if sizing.lots <= 0.0:
             return EntryDecision(
                 action=RiskAction.HOLD,
                 blocked_by=BLOCK_MIN_LOTS,
@@ -259,8 +268,11 @@ class RiskEngine:
             )
         return EntryDecision(
             action=RiskAction.ENTER,
-            lots=lots,
+            lots=sizing.lots,
             spread_grade=grade,
+            sizing_capped=sizing.capped,
+            effective_risk_fraction=sizing.effective_risk_fraction,
+            uncapped_lots=sizing.uncapped_lots,
         )
 
     # ------------------------------------------------------------------ #

@@ -75,6 +75,11 @@ ALLOWED_KEYS = frozenset({
     "dry_run",
     "require_demo",
     "risk_fraction",
+    # F3 (2026-11-09): broker-derived unit value — account currency per 1.0
+    # PRICE unit per 1.0 lot. NOT a strategy threshold: it is a broker fact
+    # that the session verifies against symbol_info at startup and refuses to
+    # start on a mismatch (never silently overwritten).
+    "pip_value_per_lot",
     "timeframe",
     "strategy_mode",             # PRODUCT_V1 (default) | ARCHIVE_TIGHT_HTF | RESEARCH_H4_ZONE_BOOK | COUPLED_MTF
     "enable_opt_b_same_bar_confirm",  # OPT-B: hybrid same-bar/as-of confirm (default OFF)
@@ -162,6 +167,13 @@ class OperatorConfig:
     dry_run: bool = True
     require_demo: bool = True
     risk_fraction: float = 0.01
+    # F3: account-currency value of a 1.0 price-unit move per 1.0 lot. The
+    # live default is the standard XAUUSD contract (100 oz → 100.00); it is
+    # PINNED against symbol_info at session start, so a broker with a
+    # different contract refuses the session instead of silently sizing 10×
+    # too large (the pre-F3 default was 10.0, i.e. a 10× risk error masked
+    # by LOT_MAX_SAFETY). Research/backtest defaults are unchanged.
+    pip_value_per_lot: float = 100.0
     timeframe: str = "M5"
     strategy_mode: str = "PRODUCT_V1"
     # C1 product runtime (contract: 00_LOCKED/PRODUCT_RUNTIME_CONTRACT.md).
@@ -275,6 +287,10 @@ def load_operator_config(path: str | Path) -> OperatorConfig:
                 f"[{RISK_PCT_MIN}% .. {RISK_PCT_MAX}%] — rejected"
             )
         kwargs["risk_fraction"] = rf
+    if "pip_value_per_lot" in data:
+        kwargs["pip_value_per_lot"] = _coerce_positive_number(
+            data["pip_value_per_lot"], "pip_value_per_lot"
+        )
     if "timeframe" in data:
         kwargs["timeframe"] = str(data["timeframe"]).strip().upper()
     if "strategy_mode" in data:
