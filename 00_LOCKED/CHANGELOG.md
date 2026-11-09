@@ -1652,3 +1652,6 @@ Suite: **519 → 525 passed** (`python -m pytest tests` from `04_SRC/`).
 
 ### 2026-11-09 — S2b denser menu confirm-lag
 - `TASK=S2B_MENU_CONFIRM_LAG_DENSE`, `LOGIC_CHANGED=NO`. Same menu spine, 2024-04-01..2024-05-01 (runtime-feasible; 2-3m attempted, too slow in env): REGISTER_ARMED=14, SWEEPS=27, N_WINNERS=5, QUEUE_SUBMITS=5. Lag det bars median=0 p75=1 (n=5); LABEL_MIX ON_WINDOW=2/LATE=2/BEYOND_STOP_SIDE=1, outside-band 60% (known n=5). Soft target n>=20 not met (no threshold fishing). Diagnostic only.
+
+### 2026-11-09 — OPT-4 menu-path rejoin
+- `TASK=OPT4_MENU_REJOIN`, `LOGIC_CHANGED=NO`. Menu queue_menu_candidate submits (not adapter-only), same spine/window as S2b: N_SUBMITS=5, LABEL_COVERAGE_PCT=100%. Confirm ON_WINDOW2/LATE2/BEYOND1; place-frame ON_WINDOW3/LATE2; cross BEYOND_STOP_SIDE->ON_WINDOW=1. Frozen taxonomy, no R7/threshold changes. Diagnostic only.
