@@ -1664,3 +1664,8 @@ Suite: **519 → 525 passed** (`python -m pytest tests` from `04_SRC/`).
 
 ### 2026-11-09 — Plan-complement ledger (sweep+confirm→plan, measurement)
 - `TASK=PLAN_COMPLEMENT_LEDGER`, `LOGIC_CHANGED=NO`. Menu queue_menu_candidate submits only (not adapter-only), window 2024-04-01..2024-05-01. N_EVENTS=5, PCT_PLAN_COMPLETE=100% (5/5), PCT_PLAN_CONSISTENT=100% (5/5, geometry), all F_BOS_OB, tp_source=atr_fallback. Top gap t_arm_not_stamped=5. Diagnostic only; does not validate profitability. Human sample in note for Architect review.
+
+### 2026-11-09 — Plan-complement follow-on (chart pack + TP attribution)
+- `TASK=PLAN_COMPLEMENT_FOLLOWON`, `LOGIC_CHANGED=NO`. 5/5 chart PNGs (detection + confirmation panels, zone band, sweep/confirm, entry/SL/TP) in gitignored `06_RESEARCH/results/plan_complement_charts/`; index note `PLAN_COMPLEMENT_CHART_PACK_NOTE.md`.
+- TP attribution: TP_STRUCTURAL_PRESENT_COUNT=0, TP_ATR_FALLBACK_COUNT=5. Menu path never supplies `structural_target`; only adapter path computes `structural_tp_target(...)`. Note `TP_MENU_PATH_ATTRIBUTION_NOTE.md`. No TP rule/constant change.
+- Task C (`t_arm` stamp) SKIPPED — not logging-only trivial (register_armed has no clock; 9 call sites). Residual recorded.

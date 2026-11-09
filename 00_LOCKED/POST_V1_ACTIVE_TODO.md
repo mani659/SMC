@@ -471,6 +471,9 @@ True open decisions only — nothing here is decided until dated in the plan:
 
 - [x] **Plan-complement ledger (sweep+confirm→plan):** DONE 2026-11-09 — N_EVENTS=5 (same window), 100% plan_complete/consistent (geometry), all F_BOS_OB/atr_fallback; sample for Architect review in `06_RESEARCH/PLAN_COMPLEMENT_LEDGER_NOTE.md`. Diagnostic only; no profitability claim.
 
-## 18. Architect review of plan-complement sample / next — PENDING
+## 18. Architect review of plan-complement sample / next — IN PROGRESS (charts + TP attribution ready 2026-11-09)
 
-- [ ] **Architect review:** do sampled plans match flowchart intent (sweep+confirm→plan)? Decide next: denser window | hold | targeted follow-up (no OPT-2/R7/tuning from n=5).
+- [x] **Chart pack (5/5)** rendered — `06_RESEARCH/PLAN_COMPLEMENT_CHART_PACK_NOTE.md` + gitignored `results/plan_complement_charts/`.
+- [x] **TP attribution:** structural present 0/5, atr_fallback 5/5; menu path never feeds `structural_target` — `06_RESEARCH/TP_MENU_PATH_ATTRIBUTION_NOTE.md`.
+- [ ] **Human chart score:** score each chart CORRECT/PARTIAL/WRONG (flowchart intent only; geometry PASS is not validation). Then decide: denser plan ledger | hold | targeted follow-up (no OPT-2/R7/tuning from n=5).
+- [ ] **Residual:** `t_arm` stamp on `product_menu` (needs `register_armed` clock param + 9 call sites) — parked, not done.
