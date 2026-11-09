@@ -467,6 +467,10 @@ True open decisions only — nothing here is decided until dated in the plan:
 - [ ] **Paper ops dry_run** on demo (optional, operator-authorized) — non-blocking.
 - [ ] **S2c longer window** backlog (not blocking) — larger-n lag/label stability before any OPT work.
 
-## 17. Plan-complement validation (NEXT, not paper expectancy) — PENDING
+## 17. Plan-complement validation (NEXT, not paper expectancy) — DONE 2026-11-09 (ledger; Architect review pending)
 
-- [ ] **Plan-complement ledger (sweep+confirm→plan):** for menu winners/submits record sweep TF, confirm TF, zone, trigger, whether a **trade plan** formed (entry/SL/TP sources) and outcome or why no place — human-readable sample (not only lag bars). Diagnostic; no OPT-2/R7/tuning. **Paper trading NOT required for conviction.**
+- [x] **Plan-complement ledger (sweep+confirm→plan):** DONE 2026-11-09 — N_EVENTS=5 (same window), 100% plan_complete/consistent (geometry), all F_BOS_OB/atr_fallback; sample for Architect review in `06_RESEARCH/PLAN_COMPLEMENT_LEDGER_NOTE.md`. Diagnostic only; no profitability claim.
+
+## 18. Architect review of plan-complement sample / next — PENDING
+
+- [ ] **Architect review:** do sampled plans match flowchart intent (sweep+confirm→plan)? Decide next: denser window | hold | targeted follow-up (no OPT-2/R7/tuning from n=5).

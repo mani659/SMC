@@ -1661,3 +1661,6 @@ Suite: **519 → 525 passed** (`python -m pytest tests` from `04_SRC/`).
 
 ### 2026-11-09 — Merge to main (option2, baseline integration only)
 - `main` adopted `recovery/2026-10-26 @ 4b2e651cd3faf3b37ceb76cb0dbeae017305ec0d` tree (option2_tree_adopt); prior `main` 311d67e100ff7ff710a28c0bbb78c093f607b492 superseded in tree. Menu seam (arm→sweep→confirm→queue) + M2 defaults D1/H4/H1/M15 + diagnostic research (S2/S2b/OPT-4). Suite on main: 1382 passed/0 failed/6 skipped. PUSH_MAIN=PASS. **Baseline only, diagnostic research, no PnL/edge.** No OPT-2, no R7 change. Paper NOT required for conviction; next=plan-complement ledger.
+
+### 2026-11-09 — Plan-complement ledger (sweep+confirm→plan, measurement)
+- `TASK=PLAN_COMPLEMENT_LEDGER`, `LOGIC_CHANGED=NO`. Menu queue_menu_candidate submits only (not adapter-only), window 2024-04-01..2024-05-01. N_EVENTS=5, PCT_PLAN_COMPLETE=100% (5/5), PCT_PLAN_CONSISTENT=100% (5/5, geometry), all F_BOS_OB, tp_source=atr_fallback. Top gap t_arm_not_stamped=5. Diagnostic only; does not validate profitability. Human sample in note for Architect review.
