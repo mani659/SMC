@@ -1649,3 +1649,6 @@ Suite: **519 → 525 passed** (`python -m pytest tests` from `04_SRC/`).
 
 ### 2026-11-09 — S2 menu confirm-lag (measurement)
 - `TASK=S2_MENU_CONFIRM_LAG`, `LOGIC_CHANGED=NO`. Menu-spine measurement (not adapter-only): n=1 winner on documented 2024-04-01..2024-04-15 slice (run-limited), lag median 0 det bars, outside-band 0% (ON_WINDOW, n=1). Diagnostic only; no edge claim. Script+note committed; results gitignored. OPT-B false, OPT-2 deferred.
+
+### 2026-11-09 — S2b denser menu confirm-lag
+- `TASK=S2B_MENU_CONFIRM_LAG_DENSE`, `LOGIC_CHANGED=NO`. Same menu spine, 2024-04-01..2024-05-01 (runtime-feasible; 2-3m attempted, too slow in env): REGISTER_ARMED=14, SWEEPS=27, N_WINNERS=5, QUEUE_SUBMITS=5. Lag det bars median=0 p75=1 (n=5); LABEL_MIX ON_WINDOW=2/LATE=2/BEYOND_STOP_SIDE=1, outside-band 60% (known n=5). Soft target n>=20 not met (no threshold fishing). Diagnostic only.
