@@ -96,21 +96,22 @@ def test_malformed_json_raises(tmp_path):
         load_operator_config(p)
 
 
-def test_dumb_mtf_h4_mode_is_explicit_and_requires_m5(tmp_path):
+def test_research_h4_zone_book_mode_is_explicit_and_requires_m5(tmp_path):
     cfg = load_operator_config(_write_config(tmp_path, {
-        "strategy_mode": "DUMB_MTF_H4", "timeframe": "M5",
+        "strategy_mode": "research_h4_zone_book", "timeframe": "M5",
     }))
-    assert cfg.strategy_mode == "DUMB_MTF_H4"
+    assert cfg.strategy_mode == "RESEARCH_H4_ZONE_BOOK"
     with pytest.raises(ConfigError, match="requires timeframe=M5"):
         load_operator_config(_write_config(tmp_path, {
-            "strategy_mode": "DUMB_MTF_H4", "timeframe": "M1",
+            "strategy_mode": "research_h4_zone_book", "timeframe": "M1",
         }))
 
 
-def test_dumb_mtf_h4_rejects_mode_t_combination(tmp_path):
+def test_research_h4_zone_book_rejects_mode_t_combination(tmp_path):
     with pytest.raises(ConfigError, match="cannot be combined"):
         load_operator_config(_write_config(tmp_path, {
-            "strategy_mode": "DUMB_MTF_H4", "diagnostic_entries": True,
+            "strategy_mode": "research_h4_zone_book",
+            "diagnostic_entries": True,
         }))
 
 

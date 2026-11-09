@@ -49,6 +49,7 @@ from smc.backtest.fill_model import evaluate_position_bar
 from smc.config.timeframe import Timeframe
 from smc.core.candle import Candle
 from smc.core.enums import Direction
+from smc.core.zone import Zone
 from smc.dumb.constants import DUMB_ATR_PERIOD, DUMB_CONFIRM_MAX_BARS
 from smc.dumb.rules import compute_sl_tp, is_confirm, is_expired, is_sweep
 from smc.dumb.types import DumbTrade

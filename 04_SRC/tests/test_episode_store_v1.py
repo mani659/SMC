@@ -302,9 +302,33 @@ class TestMultiTFProductRuntimeIntegrationHook:
             )
             for i in range(80)
         ]
+        candles_d1 = [
+            Candle(
+                timestamp=base_ts + timedelta(days=i),
+                open=2000.0,
+                high=2010.0,
+                low=1995.0,
+                close=2005.0,
+                volume=100.0,
+            )
+            for i in range(40)
+        ]
+        candles_m15 = [
+            Candle(
+                timestamp=base_ts + timedelta(minutes=i * 15),
+                open=2000.0 + (i * 0.0625),
+                high=2005.0 + (i * 0.0625),
+                low=1998.0 + (i * 0.0625),
+                close=2003.0 + (i * 0.0625),
+                volume=50.0,
+            )
+            for i in range(880)
+        ]
         series = {
+            Timeframe.D1: candles_d1,
             Timeframe.H4: candles_h4,
             Timeframe.H1: candles_h1,
+            Timeframe.M15: candles_m15,
         }
 
         # Run 1: Store OFF

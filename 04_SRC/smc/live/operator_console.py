@@ -59,6 +59,11 @@ def render_status_board(s: dict) -> str:
         f" dry_run  : {_fmt(s.get('dry_run'))}"
         f"   started: {_fmt(s.get('session_started_utc'))}"
     )
+    mode_note = s.get("mode_note")
+    if mode_note:
+        # Mode clarification line (naming ruling 2026-11-02): renders ONLY
+        # when the caller supplies one, so empty boards stay unchanged.
+        push(f" note     : {mode_note}")
     push("-" * 68)
     push(
         f" heartbeat: seq {_fmt(s.get('hb_seq'))}"

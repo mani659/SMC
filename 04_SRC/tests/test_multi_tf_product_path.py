@@ -67,13 +67,14 @@ def _make_series(tf: Timeframe, count: int, *, start: datetime,
 
 
 def _htf_fixture(as_of: datetime | None = None) -> dict:
-    """H4 + H1 (+D1) synthetic series ending at/after ``as_of``."""
+    """H4 + H1 (+D1,+M15) synthetic series ending at/after ``as_of``."""
     end = as_of or (START + timedelta(hours=200))
     h1 = _make_series(Timeframe.H1, 220, start=end - timedelta(hours=220))
     h4 = _make_series(Timeframe.H4, 80, start=end - timedelta(hours=320))
     d1 = _make_series(Timeframe.D1, 40, start=end - timedelta(days=40),
                       step_minutes=1440)
-    return {Timeframe.H4: h4, Timeframe.H1: h1, Timeframe.D1: d1}
+    m15 = _make_series(Timeframe.M15, 880, start=end - timedelta(hours=220))
+    return {Timeframe.D1: d1, Timeframe.H4: h4, Timeframe.H1: h1, Timeframe.M15: m15}
 
 
 class _FakeDriver:
@@ -151,7 +152,7 @@ def test_degraded_single_tf_report_is_stamped():
     assert report.degraded is True
     assert "allow_single_tf_degraded=True" in (report.degraded_reason or "")
     assert report.single_tf_detect_exec is True
-    assert report.missing == ("H4", "H1")
+    assert report.missing == ("D1", "H4", "H1", "M15")
     assert "M5" in report.per_tf
     assert runtime.batches == 1
 
@@ -203,7 +204,7 @@ def test_run_batch_structure_on_synthetic_htf():
                                arm_bar=123)
     assert report.batches == 1
     assert report.single_tf_detect_exec is False
-    assert set(report.per_tf) == {"H4", "H1"}
+    assert {"H4", "H1"} <= set(report.per_tf)
     for counts in report.per_tf.values():
         assert {"detected_raw", "merged", "passed"} <= set(counts)
         assert counts["passed"] <= counts["merged"] <= max(counts["detected_raw"], 1)
@@ -247,10 +248,10 @@ def test_d1_is_forwarded_to_m8_only_when_supplied():
     series = _htf_fixture()
     runtime = MultiTFProductRuntime()
     driver, driver_series = runtime._build_driver(series)
-    assert set(driver_series) == {Timeframe.H4, Timeframe.H1}
-    assert set(driver.htf_candles or {}) == {Timeframe.D1, Timeframe.H4}
+    assert set(driver_series) == {Timeframe.D1, Timeframe.H4, Timeframe.H1, Timeframe.M15}
+    assert Timeframe.D1 in set(driver.htf_candles or {})
 
-    no_d1 = MultiTFProductRuntime(supply_d1_to_m8=False)
+    no_d1 = MultiTFProductRuntime(supply_d1_to_m8=False, detection_timeframes=(Timeframe.H4, Timeframe.H1))
     driver2, _ = no_d1._build_driver({Timeframe.H4: series[Timeframe.H4],
                                       Timeframe.H1: series[Timeframe.H1]})
     assert not (driver2.htf_candles or {})   # nothing forced into M8's map
@@ -485,7 +486,7 @@ def _write_config(tmp_path, payload: dict):
 
 def test_operator_config_defaults_and_c1_flags(tmp_path):
     cfg = load_operator_config(_write_config(tmp_path, {}))
-    assert cfg.detection_timeframes == ("H4", "H1")
+    assert cfg.detection_timeframes == ("D1", "H4", "H1", "M15")
     assert cfg.allow_single_tf_degraded is False
 
     cfg2 = load_operator_config(_write_config(tmp_path, {

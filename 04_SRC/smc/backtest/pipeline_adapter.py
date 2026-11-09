@@ -96,6 +96,7 @@ class PipelineAdapter:
         *,
         timeframe: Timeframe = Timeframe.M5,
         atr_period: int = 14,
+        menu_confirmation=None,
     ) -> None:
         self.engine = engine
         self.timeframe = timeframe
@@ -143,6 +144,66 @@ class PipelineAdapter:
         # inflate ``retire_misses``). Pure dedup bookkeeping — retirement
         # itself is idempotent either way.
         self._retire_sent: set[str] = set()
+        # Product menu confirmation wiring & dedup (Phase C seam):
+        self.menu_confirmation = menu_confirmation
+        self._menu_candidates: list[CandidateEntry] = []
+        self._menu_claimed_pois: set[str] = set()
+        self._menu_covered_timeframes: set[Timeframe] = set()
+        if menu_confirmation is not None:
+            self.set_menu_confirmation(menu_confirmation)
+
+    def set_menu_confirmation(self, menu) -> None:
+        """Attach the product menu engine for dedup and candidate routing."""
+        self.menu_confirmation = menu
+        if menu is not None:
+            det_tfs = getattr(menu, "detection_timeframes", None)
+            if det_tfs:
+                self._menu_covered_timeframes.update(det_tfs)
+
+    def claim_poi_for_menu(self, poi_id: str) -> None:
+        """Explicitly claim a POI for menu confirmation (skips adapter scan)."""
+        if poi_id:
+            self._menu_claimed_pois.add(str(poi_id))
+
+    def menu_covers_poi(self, poi) -> bool:
+        """True when this POI is claimed or covered by the menu confirmation flow."""
+        poi_id = getattr(poi, "id", None)
+        if poi_id is not None and str(poi_id) in self._menu_claimed_pois:
+            return True
+        zone_tf = getattr(getattr(poi, "zone", None), "timeframe", None)
+        if zone_tf is not None and zone_tf in self._menu_covered_timeframes:
+            return True
+        menu = self.menu_confirmation
+        if menu is not None:
+            if poi_id is not None:
+                pid = str(poi_id)
+                if pid in getattr(menu, "_armed", {}):
+                    return True
+                if pid in getattr(menu, "_consumed", set()):
+                    return True
+                for ep in getattr(menu, "_episodes", ()) or ():
+                    if getattr(ep, "poi_id", None) == pid:
+                        return True
+            tier_fn = getattr(menu, "tier_for", None)
+            if callable(tier_fn) and zone_tf is not None and tier_fn(zone_tf) is not None:
+                return True
+        return False
+
+    def queue_menu_candidate(self, candidate: CandidateEntry) -> None:
+        """Receive a winner candidate confirmed by the product menu."""
+        if candidate is None:
+            return
+        poi_id = getattr(candidate, "poi_id", None)
+        if poi_id:
+            pid = str(poi_id)
+            self._menu_claimed_pois.add(pid)
+            self._routed.add(pid)
+            self._scan_cursor.pop(pid, None)
+            self._workflows.pop(pid, None)
+        if self._runner is not None:
+            self._runner.submit_entry(candidate)
+        else:
+            self._menu_candidates.append(candidate)
 
     # ------------------------------------------------------------------ #
     # Runner adapter protocol
@@ -152,6 +213,11 @@ class PipelineAdapter:
     ) -> None:
         """Per-bar pipeline step (called by the runner's entry step)."""
         state = self._ensure_state(bar_index)
+        if self._runner is not None and self._menu_candidates:
+            while self._menu_candidates:
+                cand = self._menu_candidates.pop(0)
+                self._runner.submit_entry(cand)
+
         for poi in self.engine.tracked_pois():
             # Pre-feed §5 state: governs whether a NEW route may be sought.
             state_machine = self.engine.state_machine
@@ -174,10 +240,12 @@ class PipelineAdapter:
                 self._scan_cursor.pop(poi.id, None)
 
             # 1. Trigger scan — only while the POI may still route and
-            #    only when no route was ever produced (§11 one-shot).
+            #    only when no route was ever produced (§11 one-shot)
+            #    and NOT claimed or covered by menu confirmation.
             seek_route = (
                 workflow is None
                 and poi.id not in self._routed
+                and not self.menu_covers_poi(poi)
                 and self._may_route(
                     poi, state_machine.current(poi), bar_index, bar=bar)
             )
@@ -257,7 +325,10 @@ class PipelineAdapter:
     def on_candidate_accepted(self, candidate: CandidateEntry) -> None:
         """Consume the POI one-shot — called ONLY on an accepted placement."""
         if candidate.poi_id is not None:
+            pid = str(candidate.poi_id)
             self._workflows.pop(candidate.poi_id, None)
+            self._menu_claimed_pois.add(pid)
+            self._routed.add(pid)
 
     def active_workflows(self) -> dict:
         """Public read-only snapshot: POI id → live CandidateEntry.
@@ -551,9 +622,15 @@ class PipelineAdapter:
     # Wiring
     # ------------------------------------------------------------------ #
     def attach(self, runner) -> None:
-        """Attach to a :class:`~smc.backtest.runner.BacktestRunner`."""
+        """Attach to a runner (:class:`~smc.backtest.runner.BacktestRunner` or PaperRunner)."""
         self._runner = runner
-        runner.set_pipeline_adapter(self)
+        set_adapter = getattr(runner, "set_pipeline_adapter", None)
+        if callable(set_adapter):
+            set_adapter(self)
+        if self._runner is not None and self._menu_candidates:
+            while self._menu_candidates:
+                cand = self._menu_candidates.pop(0)
+                self._runner.submit_entry(cand)
 
     def set_candles(self, candles: list[Candle]) -> None:
         """Point the adapter at the execution-TF series (scan input).

@@ -54,6 +54,7 @@ the demo window size.
 
 from __future__ import annotations
 
+import json
 import logging
 import time
 from datetime import datetime, timedelta, timezone
@@ -94,6 +95,7 @@ class LiveLoop:
         include_d1: bool = True,
         allow_single_tf_degraded: bool | None = None,
         dumb_mtf_feed=None,
+        menu_confirmation=None,
     ) -> None:
         self.connector = connector
         self.runner = runner
@@ -108,6 +110,17 @@ class LiveLoop:
         self._started = False
         self._running = False
         self.dumb_mtf_feed = dumb_mtf_feed
+        # Product menu (sweep → LTF confirmation). Optional: absent in
+        # research/legacy modes and in every pre-menu test seam.
+        self.menu_confirmation = menu_confirmation
+        if menu_confirmation is not None:
+            adapter = getattr(runner, "adapter", None)
+            if adapter is not None:
+                set_menu = getattr(adapter, "set_menu_confirmation", None)
+                if callable(set_menu):
+                    set_menu(menu_confirmation)
+                elif hasattr(adapter, "menu_confirmation"):
+                    adapter.menu_confirmation = menu_confirmation
         # C1 product seam. Resolution order: explicit runtime → the runner's
         # own runtime (paper builds one by default) → legacy single-TF path.
         self.runtime = (
@@ -125,6 +138,12 @@ class LiveLoop:
         # batch CADENCE is untouched — still keyed on the H1 close; W1 is
         # fetched/detected only and never becomes an execution timeframe.
         tfs: list[Timeframe] = []
+        if menu_confirmation is not None:
+            # Product menu streams: detection TFs (sweeps) + confirmation TFs
+            # (trigger evaluation). The execution TF is the polled bar itself
+            # and is never fetched as an HTF series.
+            tfs.extend(menu_confirmation.detection_timeframes)
+            tfs.extend(menu_confirmation.confirmation_timeframes)
         if dumb_mtf_feed is not None:
             # DUMB-MTF first slice: H4 source POIs plus optional M15
             # confirmation. The M5 execution feed is already polled.
@@ -228,6 +247,9 @@ class LiveLoop:
                 self._drive_dumb_mtf(bar)
             else:
                 self._detect_and_arm(bar)
+                # Product menu runs AFTER the detection batch armed this
+                # bar's POIs (one-shot sweep → confirm window).
+                self._drive_menu_confirmation(bar)
             self.runner.run_one_cycle(bar)
             processed += 1
         if self.heartbeat is not None:
@@ -294,6 +316,16 @@ class LiveLoop:
             <= reference.timestamp
         ]
 
+    @staticmethod
+    def _closed_at(bars: list[Candle], as_of: datetime) -> list[Candle]:
+        """Bars CLOSED at or before ``as_of`` (menu stream prefix, no lookahead)."""
+        out: list[Candle] = []
+        for bar in bars or ():
+            close = bar.timestamp + timedelta(minutes=bar.timeframe.minutes)
+            if close <= as_of:
+                out.append(bar)
+        return out
+
     def _latest_closed_before(self, bars: list[Candle], reference: Candle) -> Candle | None:
         closed = self._closed_before(bars, reference)
         return closed[-1] if closed else None
@@ -356,7 +388,119 @@ class LiveLoop:
         if isinstance(links, dict) and links:
             self.sweep_links.update(links)
         logger.info("multi-TF batch: %s", report.summary())
+        if self.menu_confirmation is not None:
+            for poi in getattr(report, "armed", ()) or ():
+                det_tf = getattr(getattr(poi, "zone", None), "timeframe", None)
+                if det_tf is not None:
+                    self.menu_confirmation.register_armed(poi, det_tf)
         return report.armed_count
+
+    def _drive_menu_confirmation(self, bar: Candle) -> None:
+        """Feed the product menu its closed detection + confirmation streams.
+
+        Runs once per closed execution bar, AFTER the detection batch armed
+        this bar's POIs: the layer checks the newly closed detection bar for a
+        locked R2 sweep, opens the tier's one-shot window (20 detection-TF
+        bars), evaluates A/D/F on the tier's own confirmation streams, and
+        queues the first valid winner into the pipeline adapter so it enters
+        the SAME risk/order seam as a routed POI (nothing is placed here).
+        """
+        menu = self.menu_confirmation
+        if menu is None:
+            return
+        needed = tuple(dict.fromkeys(
+            (*menu.detection_timeframes, *menu.confirmation_timeframes)
+        ))
+        # The execution bar IS closed (the runner only ever sees closed bars),
+        # so the honest "as of" instant is its close, not its open.
+        as_of = bar.timestamp + timedelta(minutes=self.timeframe.minutes)
+        closed: dict = {}
+        for tf in needed:
+            if tf is self.timeframe:
+                # Never fetched as an HTF series — it is the bar being processed.
+                closed[tf] = [bar]
+                continue
+            try:
+                series = self._fetch_htf(tf, self.htf_window_bars)
+            except Exception as exc:  # noqa: BLE001 — one stream never kills the loop
+                logger.error(
+                    "menu stream fetch failed operation=copy_rates "
+                    "timeframe=%s error=%r", tf.name, exc, exc_info=True,
+                )
+                closed[tf] = []
+                continue
+            closed[tf] = self._closed_at(series, as_of)
+        try:
+            winners = menu.on_execution_bar(closed, as_of=as_of)
+        except Exception as exc:  # noqa: BLE001 — loud, never fatal mid-session
+            self.arm_errors += 1
+            self.last_arm_error = f"menu_confirmation: {type(exc).__name__}: {exc}"
+            logger.error("menu confirmation failed: %r", exc, exc_info=True)
+            return
+        if not winners:
+            return
+        adapter = getattr(self.runner, "adapter", None)
+        queue = getattr(adapter, "queue_menu_candidate", None)
+        if not callable(queue):
+            self.arm_errors += 1
+            self.last_arm_error = (
+                "menu confirmation produced winners but the pipeline adapter "
+                "cannot queue them (no queue_menu_candidate)"
+            )
+            logger.error("menu confirmation cannot deliver winners (no adapter seam)")
+            return
+        for winner in winners:
+            queue(winner.candidate)
+            logger.info(
+                "menu confirmation WON tier=%s detect=%s confirm=%s trigger=%s "
+                "poi=%s",
+                winner.tier_name, winner.detection_tf.name,
+                winner.confirmation_tf.name, winner.trigger, winner.poi_id,
+            )
+        self._record_menu_confirm_kpi(winners, as_of)
+
+    def _record_menu_confirm_kpi(self, winners, now: datetime) -> None:
+        """OPT-1 confirm-vs-zone export: one structured KPI event per winner.
+
+        Audit only, same class as the existing ``entry_blocked`` /
+        ``place_skip`` records: the KPI log is never read by a risk verdict,
+        a placement or an eligibility decision (exercised by test). Fields are
+        carried from the candidate's ``product_menu`` enrich stamp verbatim —
+        missing/unresolvable values stay ``None`` (never invented here).
+        """
+        kpi = getattr(self.runner, "kpi", None)
+        if kpi is None:
+            return   # KPI-less runners (test stubs) lose nothing but the log
+        for winner in winners:
+            try:
+                payload = json.loads(winner.candidate.signal_data_json or "{}")
+                stamp = payload.get("product_menu") or {}
+            except (TypeError, ValueError):
+                stamp = {}
+            try:
+                kpi.record(
+                    "menu_confirm",
+                    at=now,
+                    episode_id=winner.episode_id,
+                    poi_id=winner.poi_id,
+                    tier=winner.tier_name,
+                    detection_tf=winner.detection_tf.name,
+                    confirmation_tf=winner.confirmation_tf.name,
+                    trigger=winner.trigger,
+                    route_id=winner.candidate.route_id,
+                    sweep_ts=stamp.get("sweep_ts"),
+                    completion_ts=stamp.get("completion_ts"),
+                    completion_close=stamp.get("completion_close"),
+                    atr_at_confirm=stamp.get("atr_at_confirm"),
+                    distance_at_confirm_atr=stamp.get(
+                        "distance_at_confirm_atr"),
+                    label_at_confirm=stamp.get("label_at_confirm"),
+                )
+            except Exception as exc:  # noqa: BLE001 — audit log never fatal
+                logger.warning(
+                    "menu_confirm KPI record failed poi=%s error=%r",
+                    winner.poi_id, exc,
+                )
 
     def _run_seam_batch(self, series_by_tf: dict, *, as_of, arm_bar: int):
         """Dispatch the batch to the SHARED seam (paper runner or runtime)."""
@@ -479,6 +623,9 @@ class LiveLoop:
                          pillar_path=pillar_path_summary(res) if res is not None else None)
                 engine.arm_at(poi, arm_bar=len(self._window) - 1)
                 armed += 1
+                if self.menu_confirmation is not None:
+                    det_tf = getattr(getattr(poi, "zone", None), "timeframe", None) or self.timeframe
+                    self.menu_confirmation.register_armed(poi, det_tf)
         return armed
 
     @staticmethod
