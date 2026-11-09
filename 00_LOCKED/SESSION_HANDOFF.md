@@ -1612,3 +1612,5 @@ patch note) for details.
 - **RECOVERY_GAP:** 1,378 vs **1,486** last recorded pre-loss = **−108 tests** (four destroyed test modules; only 18 of their tests rebuilt; plus the unreachable smoke). The 1,462 figure quoted in the brief was the pre-OPT-1 baseline, so the gap vs 1,462 is −84. **No byte-parity claimed.**
 - **Integrity:** `locked_constants.py` diff vs `380b3e1` = 1 line (trailing newline only, zero value changes); `live_demo.json` flag `false`; OPT-4 wider artifacts untouched; OPT-1 (13) + OPT-4 (11) suites green; fragments of all 53 damaged files archived in `ARCHIVE/RECOVERY_FRAGMENTS_2026-11-08/`.
 - **NEXT:** Architect OPT-2 decision on the frozen OPT-4 wider table (unchanged by this recovery). Reviving COUPLED_MTF or the OPT-1/OPT-4 smoke harnesses is NEW work with fresh pre-registration.
+
+- 2026-11-09 PUSH_STATUS: FAIL (NO_REMOTE→origin added https://github.com/mani659/SMC.git; push rejected: auth `Invalid username or token; password auth not supported` for recovery/2026-10-26 @ 8d34df0,ecd1c07). Baseline local; NO_PUSH until credentials fixed or Architect NO_PUSH exception. NEXT_READY after push: S2 confirm-lag on menu path.
