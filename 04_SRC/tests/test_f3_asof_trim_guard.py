@@ -137,7 +137,7 @@ def test_pillar1_mitigation_is_suffix_sensitive(candle_factory, swing_factory):
 # 2 — the product trim seam never delivers a future bar
 # ---------------------------------------------------------------------- #
 def test_build_htf_prefixes_last_bar_never_exceeds_as_of():
-    """Every TF prefix ends at or before as_of (F3 trim contract)."""
+    """Every TF prefix ends at a bar that has CLOSED by as_of (F1 contract)."""
     end = START + timedelta(hours=300)
     series_by_tf = {
         Timeframe.H4: _make_series(Timeframe.H4, 90, start=end - timedelta(hours=360)),
@@ -150,15 +150,24 @@ def test_build_htf_prefixes_last_bar_never_exceeds_as_of():
     prefixes = build_htf_prefixes(series_by_tf, as_of)
     for tf, prefix in prefixes.items():
         assert prefix, f"{tf.name} prefix unexpectedly empty"
-        last = prefix[-1].timestamp
-        assert last <= as_of, f"{tf.name} prefix includes a future bar ({last} > {as_of})"
+        last = prefix[-1]
+        closes_at = last.timestamp + timedelta(minutes=tf.minutes)
+        assert closes_at <= as_of, (
+            f"{tf.name} prefix includes an UNCLOSED bar "
+            f"(closes {closes_at} > as_of {as_of})")
 
-    # When a bar lands exactly ON as_of, it is the inclusive last bar.
+    # When as_of is exactly a bar's OPEN, that bar has not closed → excluded.
     exact = series_by_tf[Timeframe.H1][-2].timestamp
     prefixes2 = build_htf_prefixes(series_by_tf, exact)
     for tf, prefix in prefixes2.items():
-        assert prefix[-1].timestamp <= exact
-    assert prefixes2[Timeframe.H1][-1].timestamp == exact
+        closes_at = prefix[-1].timestamp + timedelta(minutes=tf.minutes)
+        assert closes_at <= exact
+    assert prefixes2[Timeframe.H1][-1].timestamp < exact
+
+    # At that bar's CLOSE it becomes the inclusive last bar.
+    at_close = exact + timedelta(minutes=Timeframe.H1.minutes)
+    prefixes3 = build_htf_prefixes(series_by_tf, at_close)
+    assert prefixes3[Timeframe.H1][-1].timestamp == exact
 
 
 # ---------------------------------------------------------------------- #

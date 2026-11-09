@@ -161,11 +161,19 @@ def test_degraded_single_tf_report_is_stamped():
 # Prefixes + dedup rules
 # ---------------------------------------------------------------------- #
 def test_build_htf_prefixes_cutoff_semantics():
+    """F1 closed-bar contract: a bar is eligible only once it has CLOSED."""
     series = _make_series(Timeframe.H1, 10, start=START)
-    as_of = series[4].timestamp
+    # Decision instant = the CLOSE of bar 4 (open + 1 h): bar 4 has closed.
+    as_of = series[4].timestamp + timedelta(minutes=series[4].timeframe.minutes)
     prefixes = build_htf_prefixes({Timeframe.H1: series}, as_of)
-    assert len(prefixes[Timeframe.H1]) == 5        # bars <= as_of (inclusive)
-    assert prefixes[Timeframe.H1][-1].timestamp == as_of
+    assert len(prefixes[Timeframe.H1]) == 5
+    assert prefixes[Timeframe.H1][-1].timestamp == series[4].timestamp
+    # Mid-bar: the bar in progress is EXCLUDED (its OHLC is not knowable).
+    mid = series[4].timestamp + timedelta(minutes=30)
+    assert len(build_htf_prefixes({Timeframe.H1: series}, mid)[Timeframe.H1]) == 4
+    # The instant a bar opens is NOT its close: it is still forming.
+    at_open = series[4].timestamp
+    assert len(build_htf_prefixes({Timeframe.H1: series}, at_open)[Timeframe.H1]) == 4
     # Empty input stays empty (policy decision is the runtime's, not here).
     assert build_htf_prefixes({Timeframe.H1: []}, as_of)[Timeframe.H1] == []
 

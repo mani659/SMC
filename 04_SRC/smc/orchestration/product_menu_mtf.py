@@ -100,6 +100,21 @@ def _close_ts(bar: Candle) -> datetime:
     return bar.timestamp + timedelta(minutes=bar.timeframe.minutes)
 
 
+def confirmation_order_key(
+    completed_at: datetime, tf: Timeframe, route_id
+) -> tuple:
+    """Deterministic cross-TF winner order (F2, 2026-11-09).
+
+    The earliest COMPLETION instant wins; an exact timestamp tie chooses the
+    lower timeframe, then the stable route id. This is the same batch rule the
+    sweep-episode coordinator already documents
+    (``SweepEpisodeCoordinator.resolve_confirmations``) — feed arrival order
+    must never decide between two eligible confirmations, and the product
+    engine must not carry a second, divergent ordering.
+    """
+    return (completed_at, tf.minutes, str(route_id or ""))
+
+
 def _is_zone_sweep(bar: Candle, zone: Zone) -> bool:
     """Locked R2 sweep: one bar wicks beyond the zone extreme and closes back.
 
@@ -359,6 +374,16 @@ class ProductMenuEngine:
         self.winners: list[MenuWinner] = []
         self.sweeps_total = 0
         self._episode_seq = 0
+        # F0.2 funnel counters (measurement only — no decision reads them).
+        # Names mirror the audit's funnel: seen → evaluated → opened/expired.
+        self._counters: dict[str, int] = {
+            "detection_bars_seen": 0,
+            "confirm_bars_seen": 0,
+            "confirm_bars_evaluated": 0,
+            "episodes_opened": 0,
+            "episodes_expired": 0,
+            "sweeps_out_of_window": 0,
+        }
 
     # ------------------------------------------------------------------ #
     # Read-only surface
@@ -376,6 +401,17 @@ class ProductMenuEngine:
         return sum(
             1 for e in self._episodes if e.status is MenuEpisodeStatus.ACTIVE
         )
+
+    def counters(self) -> dict:
+        """Funnel counters (F0.2): measurement surface, never an input."""
+        return {
+            **self._counters,
+            "sweeps_total": self.sweeps_total,
+            "episodes_total": len(self._episodes),
+            "winners_total": len(self.winners),
+            "active_episodes": self.active_count(),
+            "armed_pois": len(self._armed),
+        }
 
     # ------------------------------------------------------------------ #
     # Arming
@@ -439,13 +475,17 @@ class ProductMenuEngine:
 
         for tf, bars in (closed or {}).items():
             if tf in self.detection_timeframes:
-                detection_new[tf] = self._append_new(
+                added = self._append_new(
                     self._series, self._det_closes, tf, bars, as_of
                 )
+                detection_new[tf] = added
+                self._counters["detection_bars_seen"] += len(added)
             if tf in self.confirmation_timeframes:
-                confirm_new[tf] = self._append_new(
+                added = self._append_new(
                     self._confirm, self._closes, tf, bars, as_of
                 )
+                confirm_new[tf] = added
+                self._counters["confirm_bars_seen"] += len(added)
 
         self._expire(detection_new)
         self._open_episodes(detection_new)
@@ -454,13 +494,26 @@ class ProductMenuEngine:
         for episode in self._episodes:
             if episode.status is not MenuEpisodeStatus.ACTIVE:
                 continue
+            # F2 (2026-11-09): every eligible confirmation bar of THIS batch is
+            # evaluated, and the winner across the tier's confirmation TFs is
+            # the EARLIEST completion — never the tier list order and never
+            # merely the batch tail.
+            best: tuple | None = None
             for ctf in episode.tier.confirmation_tfs:
                 if not confirm_new.get(ctf):
                     continue
-                winner = self._evaluate_episode(episode, ctf, as_of)
-                if winner is not None:
-                    new_winners.append(winner)
-                    break
+                route = self._route_for(episode, ctf)
+                if route is None:
+                    continue
+                key = confirmation_order_key(
+                    self._route_completion_ts(episode, route, ctf),
+                    ctf,
+                    getattr(route, "route_id", None),
+                )
+                if best is None or key < best[0]:
+                    best = (key, route, ctf)
+            if best is not None:
+                new_winners.append(self._win(episode, best[1], best[2]))
         return new_winners
 
     # ------------------------------------------------------------------ #
@@ -483,6 +536,7 @@ class ProductMenuEngine:
             if index > episode.sweep_index + episode.tier.expiry_bars:
                 episode.status = MenuEpisodeStatus.EXPIRED
                 episode.decisions.append("expired")
+                self._counters["episodes_expired"] += 1
 
     def _open_episodes(self, detection_new: dict[Timeframe, list[int]]) -> None:
         """Open a one-shot episode on the first R2 sweep seen after arming."""
@@ -507,6 +561,17 @@ class ProductMenuEngine:
                     if not _is_zone_sweep(bar, poi.zone):
                         continue
                     self.sweeps_total += 1
+                    # F2 window-open guard (2026-11-09): a one-shot window
+                    # that has ALREADY closed (sweep older than
+                    # ``expiry_bars`` detection bars at the newest closed
+                    # bar) must not open. Batched/backfilled feeds (startup,
+                    # research step 0) otherwise open on months-old sweeps and
+                    # then evaluate bars from that closed window — the P1-2
+                    # stale-window defect, and a compute blow-up. The arm
+                    # timestamp half of P1-2 remains F5 scope.
+                    if index < indexes[-1] - tier.expiry_bars:
+                        self._counters["sweeps_out_of_window"] += 1
+                        continue
                     self._episode_seq += 1
                     episode = MenuEpisode(
                         episode_id=f"{poi_id}#{self._episode_seq}",
@@ -520,6 +585,7 @@ class ProductMenuEngine:
                         f"armed_{tier.name}_sweep@{index}"
                     )
                     self._episodes.append(episode)
+                    self._counters["episodes_opened"] += 1
                     break
 
     # ------------------------------------------------------------------ #
@@ -605,10 +671,32 @@ class ProductMenuEngine:
         episode.sweep_anchor[ctf] = anchor
         return anchor
 
-    def _evaluate_episode(
-        self, episode: MenuEpisode, ctf: Timeframe, as_of: datetime
-    ) -> MenuWinner | None:
-        """Evaluate the confirmation stream for one episode on one TF."""
+    def _window_end_ts(self, episode: MenuEpisode) -> datetime | None:
+        """Close of the last detection bar inside the one-shot window.
+
+        Expiry counts DETECTION-TF bars (locked policy), so the window holds
+        through the close of the bar at ``sweep_index + expiry_bars``. A
+        confirmation bar closing after that instant is ineligible even while
+        ``_expire`` has not run yet (episodes opened in the same batch are
+        evaluated immediately — audit P1-2). ``None`` = that detection bar has
+        not closed yet, so the window is still open.
+        """
+        det = self._series[episode.tier.detection_tf]
+        end_index = episode.sweep_index + episode.tier.expiry_bars
+        if 0 <= end_index < len(det):
+            return _close_ts(det[end_index])
+        return None
+
+    def _route_for(self, episode: MenuEpisode, ctf: Timeframe) -> TriggerRoute | None:
+        """First valid route on ``ctf`` for bars not yet evaluated (F2).
+
+        Non-OPT-B (default): evaluate EVERY confirmation bar that closed at or
+        after the sweep and is still inside the window, in ascending close
+        order, skipping bars already evaluated. The pre-F2 branch evaluated
+        only the batch tail, so batched feeds sampled M5 1-in-3 and M1 1-in-15
+        (locked policy: the FIRST valid confirmation wins). Returns the route
+        without consuming the episode — the caller orders across TFs.
+        """
         series = self._confirm[ctf]
         if not series:
             return None
@@ -632,12 +720,14 @@ class ProductMenuEngine:
             )
             if from_index is None:
                 return None
-            tail = len(series) - 1
-            if tail < from_index:
+            start = max(from_index, episode._evaluated.get(ctf, -1) + 1)
+            end_ts = self._window_end_ts(episode)
+            upper = len(series)
+            if end_ts is not None:
+                upper = min(upper, bisect_right(self._closes[ctf], end_ts))
+            if start >= upper:
                 return None
-            if episode._evaluated.get(ctf, -1) >= tail:
-                return None
-            starts = [tail]
+            starts = range(start, upper)
 
         router = self._router_for(episode.tier)
         swings = self._swings_for(ctf)
@@ -646,10 +736,36 @@ class ProductMenuEngine:
                 episode.poi, series, swings, index, from_index
             )
             episode._evaluated[ctf] = index
-            if route is None:
-                continue
-            return self._win(episode, route, ctf)
+            self._counters["confirm_bars_evaluated"] += 1
+            if route is not None:
+                return route
         return None
+
+    def _route_completion_ts(
+        self, episode: MenuEpisode, route: TriggerRoute, ctf: Timeframe
+    ) -> datetime:
+        """Close instant of the bar the route completed on (ordering key)."""
+        series = self._confirm[ctf]
+        index = getattr(getattr(route, "signal", None), "completion_index", None)
+        if isinstance(index, int) and 0 <= index < len(series):
+            return _close_ts(series[index])
+        last = episode._evaluated.get(ctf)
+        if isinstance(last, int) and 0 <= last < len(series):
+            return _close_ts(series[last])
+        return _close_ts(series[-1])
+
+    def _evaluate_episode(
+        self, episode: MenuEpisode, ctf: Timeframe, as_of: datetime
+    ) -> MenuWinner | None:
+        """Single-TF convenience wrapper: first route on ``ctf`` → winner.
+
+        The multi-TF batch path uses ``_route_for`` directly so it can order
+        candidates across TFs before consuming the episode.
+        """
+        route = self._route_for(episode, ctf)
+        if route is None:
+            return None
+        return self._win(episode, route, ctf)
 
     # ------------------------------------------------------------------ #
     # Winner bridge

@@ -475,5 +475,11 @@ True open decisions only — nothing here is decided until dated in the plan:
 
 - [x] **Chart pack (5/5)** rendered — `06_RESEARCH/PLAN_COMPLEMENT_CHART_PACK_NOTE.md` + gitignored `results/plan_complement_charts/`.
 - [x] **TP attribution:** structural present 0/5, atr_fallback 5/5; menu path never feeds `structural_target` — `06_RESEARCH/TP_MENU_PATH_ATTRIBUTION_NOTE.md`.
-- [ ] **Human chart score:** score each chart CORRECT/PARTIAL/WRONG (flowchart intent only; geometry PASS is not validation). Then decide: denser plan ledger | hold | targeted follow-up (no OPT-2/R7/tuning from n=5).
-- [ ] **Residual:** `t_arm` stamp on `product_menu` (needs `register_armed` clock param + 9 call sites) — parked, not done.
+- [x] **Human chart score:** Architect 2026-11-09 — **0 CORRECT · ~2 PARTIAL · ~3 WRONG/weak** (flowchart intent only). Sample does not validate the product idea; measurement integrity first.
+- [x] **Independent audit accepted** (6 P0 + P1 backlog; see `06_RESEARCH/PHASE01_INFORMATION_SET_NOTE.md` §4 for the handed-forward list).
+- [x] **Phase 0 + F1 + F2 executed** (2026-11-09): freeze (`baseline_pre_fix`), counters, `dry_run: true`, closed-bar HTF, full confirmation evaluation + earliest-completion order + window bound; re-baselined on the same window to new paths (armed 13 / sweeps 13 / winners 7; confirm times off the 15-min grid). Suite 1394/6.
+- [ ] **F3 next (blocking live):** pin `pip_value_per_lot` to the broker's contract/tick value at session start (refuse on mismatch), expose effective risk and `sizing_capped`; `LOT_MAX_SAFETY=0.10` currently masks a possible 10× unit error.
+- [ ] **F4:** risk-envelope ruling (daily loss / max trades/day / DD cooldown / consec-loss backstop) — needs dated lock before porting v25 gates.
+- [ ] **F5:** `t_arm` stamp on `product_menu` (needs `register_armed` clock param + 9 call sites) + `_expire`/`_open_episodes` ordering.
+- [ ] **F6/F7:** menu §5 state gate + engine reconciliation; retry a risk-blocked menu candidate instead of destroying it.
+- [ ] **Residual:** `t_arm` stamp (now also a F5 causality input, not just logging).

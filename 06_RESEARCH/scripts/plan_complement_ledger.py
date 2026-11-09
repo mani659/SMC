@@ -9,6 +9,7 @@ from __future__ import annotations
 import csv
 import json
 import math
+import os
 import sys
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
@@ -35,8 +36,24 @@ from smc.orchestration.product_menu_mtf import (  # noqa: E402
 DETECTION_TFS = [Timeframe.D1, Timeframe.H4, Timeframe.H1, Timeframe.M15]
 EXEC_TF = Timeframe.M5
 DATA_PATH = ROOT / "07_DATA" / "XAUUSD_M1.parquet"
-OUT_DIR = ROOT / "06_RESEARCH" / "results" / "plan_complement_ledger"
-NOTE_PATH = ROOT / "06_RESEARCH" / "PLAN_COMPLEMENT_LEDGER_NOTE.md"
+
+def _env_path(name: str, default: Path) -> Path:
+    """Path from env (relative paths resolve against the repo root)."""
+    raw = os.environ.get(name)
+    if not raw:
+        return default
+    path = Path(raw)
+    return path if path.is_absolute() else ROOT / path
+
+
+# F1/F2 re-baseline runs MUST write to new paths (never overwrite the frozen
+# ``baseline_pre_fix`` artifacts): set PLAN_COMPLEMENT_OUT / PLAN_COMPLEMENT_NOTE.
+OUT_DIR = _env_path("PLAN_COMPLEMENT_OUT",
+                    ROOT / "06_RESEARCH" / "results" / "plan_complement_ledger")
+NOTE_PATH = _env_path("PLAN_COMPLEMENT_NOTE",
+                      ROOT / "06_RESEARCH" / "PLAN_COMPLEMENT_LEDGER_NOTE.md")
+RUN_LABEL = os.environ.get("PLAN_COMPLEMENT_LABEL", "baseline_pre_fix")
+RUN_LOGIC_CHANGED = os.environ.get("PLAN_COMPLEMENT_LOGIC_CHANGED", "NO")
 
 # Documented runtime-feasible window (same spine/method as S2b/OPT-4); extend if runtime allows.
 WARMUP_START = datetime(2023, 12, 1, tzinfo=timezone.utc)
@@ -255,6 +272,8 @@ def main():
     sample = rows[:10]
     summary = {
         "PLAN_STATUS": "PASS", "diagnostic_only": True, "not_profitability": True,
+        "run_label": RUN_LABEL, "logic_changed": RUN_LOGIC_CHANGED,
+        "menu_counters": menu.counters(),
         "opt_b": False, "opt2": "deferred", "r7_threshold_changed": False,
         "path": "menu queue_menu_candidate submits only (not adapter-only)",
         "window": {"warmup_start": WARMUP_START.date().isoformat(), "start": WINDOW_START.date().isoformat(), "end": WINDOW_END.date().isoformat()},
@@ -277,7 +296,7 @@ def main():
     sample_lines = "\n".join(_fmt_row(r) for r in sample) if sample else "(none)"
     note = f"""# Plan-Complement Ledger — sweep + confirm → plan (Measurement Only)
 
-**Diagnostic only — does NOT validate profitability or edge.** Menu `ProductMenuEngine` / `queue_menu_candidate` → `submit_entry` path only (not adapter-only). Read-only; no OPT-2, no band/R7/pillar/threshold tuning, OPT-B false. `LOGIC_CHANGED=NO`. Plan completeness/consistency are **geometry/field checks only** (not a claim sweep+confirm "works" without Architect review of the sample).
+**Diagnostic only — does NOT validate profitability or edge.** Menu `ProductMenuEngine` / `queue_menu_candidate` → `submit_entry` path only (not adapter-only). Read-only; no OPT-2, no band/R7/pillar/threshold tuning, OPT-B false. `RUN={RUN_LABEL}`, `LOGIC_CHANGED={RUN_LOGIC_CHANGED}`. Plan completeness/consistency are **geometry/field checks only** (not a claim sweep+confirm "works" without Architect review of the sample).
 
 ## Goal
 Record whether HTF/structure arm + sweep + LTF confirm → winner/submit produces a coherent trade PLAN (entry/SL/TP identity) and how often, with human-readable rows.
@@ -285,6 +304,7 @@ Record whether HTF/structure arm + sweep + LTF confirm → winner/submit produce
 ## Scope / data
 - Window `2024-04-01 .. 2024-05-01` (warmup `2023-12-01`), `07_DATA/XAUUSD_M1.parquet` (fail-loud). Same spine/method as S2b/OPT-4 (runtime-feasible); extend if runtime allows.
 - Path: menu `run_batch` → `register_armed` → `on_execution_bar` → `queue_menu_candidate` → `submit_entry` capture. `place_or_queue=submitted(harness)` = delivered to submit_entry in measurement harness (live runner may still block; not measured here).
+- Funnel counters (measurement only): `{menu.counters()}`.
 
 ## Summary
 - `N_EVENTS` (menu submits): **{n}** | `REGISTER_ARMED` **{register_armed}** | `SWEEPS` **{menu.sweeps_total}** | `N_WINNERS` **{len(menu.winners)}**
@@ -312,7 +332,8 @@ Count: {len(sample)} (up to 10 / all if n≤10)
     print(json.dumps({
         "PLAN_STATUS": "PASS", "N_EVENTS": n, "PCT_PLAN_COMPLETE": pct_complete,
         "PCT_PLAN_CONSISTENT": pct_consistent, "TOP_GAPS": [f"{k}={v}" for k,v in top_gaps],
-        "SAMPLE_ROWS": len(sample), "LOGIC_CHANGED": "NO", "NOTE_PATH": str(NOTE_PATH),
+        "SAMPLE_ROWS": len(sample), "LOGIC_CHANGED": RUN_LOGIC_CHANGED,
+        "RUN": RUN_LABEL, "NOTE_PATH": str(NOTE_PATH),
     }, indent=2))
     return 0
 

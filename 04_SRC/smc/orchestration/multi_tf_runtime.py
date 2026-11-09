@@ -32,7 +32,7 @@ from __future__ import annotations
 
 import bisect
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from smc.config.timeframe import Timeframe
 from smc.core.candle import Candle
@@ -111,15 +111,29 @@ def _timestamps(series: list[Candle]) -> list[datetime]:
     return stamps
 
 
+def bar_close_ts(candle, timeframe: Timeframe | None = None) -> datetime:
+    """Close instant of a bar: open timestamp + the timeframe's length."""
+    tf = timeframe if timeframe is not None else candle.timeframe
+    return candle.timestamp + timedelta(minutes=tf.minutes)
+
+
 def build_htf_prefixes(
     series_by_tf: dict, as_of: datetime
 ) -> dict:
-    """Honest prefixes: bars with ``timestamp <= as_of`` (per timeframe).
+    """Honest prefixes: only bars CLOSED at or before ``as_of``.
 
-    Mirrors the accepted research cadence exactly (bisect on timestamps,
-    ``bisect_right`` semantics) — the current FORMING HTF bar is included,
-    future bars never are. Timestamps are assumed ascending; disorder
-    raises loudly (never silently reorder).
+    CLOSED-BAR CONTRACT (F1, 2026-11-09 — Architect approved):
+    a bar is eligible when ``timestamp + timeframe length <= as_of``. The
+    still-forming bar is EXCLUDED, because its OHLC is not knowable at the
+    decision instant. In a resampled historical series that bar is complete,
+    so including it (the pre-F1 ``timestamp <= as_of`` cut) handed detection
+    up to one full future HTF bar; in live it handed detection a repainting
+    partial bar. Closed-only is the single contract for research, paper and
+    live, and the runtime (not each caller) enforces it.
+
+    Timestamps are assumed ascending; disorder raises loudly (never silently
+    reorder). Empty input stays empty (the missing-series policy is the
+    runtime's, not this helper's).
     """
     prefixes: dict = {}
     for tf, series in (series_by_tf or {}).items():
@@ -127,7 +141,8 @@ def build_htf_prefixes(
             prefixes[tf] = []
             continue
         stamps = _timestamps(series)
-        cut = bisect.bisect_right(stamps, as_of)
+        cutoff = as_of - timedelta(minutes=tf.minutes)
+        cut = bisect.bisect_right(stamps, cutoff)
         prefixes[tf] = list(series[:cut])
     return prefixes
 
@@ -253,6 +268,10 @@ class MultiTFBatchReport:
     # displacement context paired it with a liquidity sweep this batch.
     # Logging/display ONLY — never read by scan, risk, or fill decisions.
     displacements: dict = field(default_factory=dict)
+    # F1 closed-bar contract (2026-11-09): last bar CLOSE instant delivered
+    # to the driver per detection TF. Observability only — proves the batch
+    # never consumed a bar that had not closed at ``as_of``.
+    last_closed_ts: dict = field(default_factory=dict)
 
     @property
     def armed_count(self) -> int:
@@ -274,6 +293,11 @@ class MultiTFBatchReport:
             "single_tf_detect_exec": self.single_tf_detect_exec,
             "skipped_models": dict(self.skipped_models),
             "errors": dict(self.errors),
+            "last_closed_ts": {
+                name: stamp.isoformat()
+                for name, stamp in (self.last_closed_ts or {}).items()
+                if hasattr(stamp, "isoformat")
+            },
         }
 
 
@@ -387,6 +411,13 @@ class MultiTFProductRuntime:
             bind = getattr(adapter, "bind_dedup_registry", None)
             if callable(bind):
                 bind(zone_dedup)
+        # F1 closed-bar contract: the RUNTIME owns the trim so live, paper and
+        # research cannot disagree. ``as_of`` is the decision instant; every
+        # delivered bar must have closed at or before it. ``as_of=None``
+        # means the caller supplied closed prefixes verbatim (harness/tests)
+        # — no clock is invented.
+        if as_of is not None:
+            series_by_tf = build_htf_prefixes(dict(series_by_tf or {}), as_of)
         missing = self.missing_series(series_by_tf)
         if missing:
             names = ", ".join(tf.name for tf in missing)
@@ -424,6 +455,7 @@ class MultiTFProductRuntime:
             single_tf_detect_exec=bool(result.single_tf_detect_exec),
             skipped_models=skipped_models,
             errors=dict(getattr(result, "errors", {}) or {}),
+            last_closed_ts=self._last_closed_map(series_by_tf),
         )
         self._arm_passed(
             engine=engine,
@@ -459,6 +491,16 @@ class MultiTFProductRuntime:
             atr_period=self.atr_period,
         )
         return driver, driver_series
+
+    def _last_closed_map(self, series_by_tf: dict) -> dict:
+        """Last CLOSED bar instant per detection TF actually delivered."""
+        out: dict = {}
+        for tf in self.detection_timeframes:
+            series = (series_by_tf or {}).get(tf)
+            if not series:
+                continue
+            out[tf.name] = bar_close_ts(series[-1], tf)
+        return out
 
     def _per_tf_counts(self, result) -> dict:
         counts: dict = {}

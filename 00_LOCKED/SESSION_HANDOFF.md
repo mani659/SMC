@@ -1,5 +1,15 @@
 # SESSION HANDOFF — SMC BOT
 
+## 2026-11-09 (2) — PHASE 0 + F1 + F2 DONE (`LOGIC_CHANGED=YES`; information set repaired; re-baselined)
+
+- **Authority:** Lead Architect accepted the independent audit (P0-1/P0-2 first) and issued `P0 FIX PROGRAM — Phase 0 + F1 + F2`. Executed exactly; no structural TP, no OPT-B, no OPT-2, no tier/trigger/threshold change.
+- **F0:** tag `baseline_pre_fix` (`bf011ef`); pre-fix ledger/charts frozen under `06_RESEARCH/results/baseline_pre_fix/`; funnel counters only; `live_demo.json dry_run: true` until F3.
+- **F1:** closed-bar HTF contract — `build_htf_prefixes` = `timestamp + tf <= as_of`, enforced by `MultiTFProductRuntime.run_batch` for live/paper/research alike; `last_closed_ts` on the batch report. The forming/future HTF bar bug is closed.
+- **F2:** every newly closed confirmation bar is evaluated (no tail-only sampling) and the winner is the earliest completion across the tier's TFs (`confirmation_order_key`); eligibility bounded by the locked 20-detection-bar window; stale-sweep window opening blocked (`sweeps_out_of_window`). `t_arm` + expire/open ordering = F5.
+- **Suite:** 1394 passed / 6 skipped (`--ignore=test_review_merge_smoke.py`); +12 tests `tests/test_phase01_information_set.py`.
+- **Re-baseline (same window, new paths):** armed 13, sweeps 13, winners 7 (baseline 14/27/5); confirm times off the 15-min grid (proof of per-bar evaluation); M15/M1 now 6 of 7 wins. `PCT_PLAN_COMPLETE` 100% in both — **no improvement claim, no cross-phase comparison**.
+- **Notes:** `06_RESEARCH/PHASE01_INFORMATION_SET_NOTE.md`, `06_RESEARCH/PLAN_COMPLEMENT_LEDGER_POST_F1F2_NOTE.md`. **NEXT:** F3 sizing-unit pin first (live is dry-run only), then F4 risk envelope, then F5 lifecycle/F6 §5 gate/F7 menu retry.
+
 ## 2026-11-09 — BASELINE `menu-spine-structural-2026-11-09` (menu spine structural PASS; SAFE_TO_RESUME_MENU_RESEARCH YES)
 
 - **M2 + seam + smoke baseline frozen (local commits).** M2 detection defaults `D1/H4/H1/M15`; menu seam register/queue/dedup proven; funnel debug CLASS A (REGISTER_ARMED 8); confirm-stream smoke proved **arm→sweep→confirm→winner→queue submit** structurally (interim: winners 5, queue_submits 5 — see `06_RESEARCH/MENU_CONFIRM_STREAM_SMOKE_RUN.log`; run may still be completing). **Diagnostic, not edge.** OPT2 deferred, OPT_B default false, W1 context_only.
