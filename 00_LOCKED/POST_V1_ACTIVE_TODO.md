@@ -463,6 +463,10 @@ True open decisions only — nothing here is decided until dated in the plan:
 
 ## 16. PR menu spine baseline — READY 2026-11-09
 
-- [ ] **Operator merge when approved:** `recovery/2026-10-26` -> `main` (no force-push). Compare: https://github.com/mani659/SMC/compare/main...recovery/2026-10-26
+- [x] **Operator merge when approved:** DONE 2026-11-09 (option2 tree-adopt onto `main`, no force-push). See compare/history; recovery branch retained.
 - [ ] **Paper ops dry_run** on demo (optional, operator-authorized) — non-blocking.
 - [ ] **S2c longer window** backlog (not blocking) — larger-n lag/label stability before any OPT work.
+
+## 17. Plan-complement validation (NEXT, not paper expectancy) — PENDING
+
+- [ ] **Plan-complement ledger (sweep+confirm→plan):** for menu winners/submits record sweep TF, confirm TF, zone, trigger, whether a **trade plan** formed (entry/SL/TP sources) and outcome or why no place — human-readable sample (not only lag bars). Diagnostic; no OPT-2/R7/tuning. **Paper trading NOT required for conviction.**

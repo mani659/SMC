@@ -1658,3 +1658,6 @@ Suite: **519 → 525 passed** (`python -m pytest tests` from `04_SRC/`).
 
 ### 2026-11-09 — PR menu spine baseline -> main (ready)
 - Head `recovery/2026-10-26` -> base `main`. Compare: https://github.com/mani659/SMC/compare/main...recovery/2026-10-26 (gh unavailable). Suite 1382 passed/0 failed/6 skipped. No merge performed. No OPT-2, no R7 change, no PnL claims; no secrets/07_DATA/bulk 06_RESEARCH/results in git.
+
+### 2026-11-09 — Merge to main (option2, baseline integration only)
+- `main` adopted `recovery/2026-10-26 @ 4b2e651cd3faf3b37ceb76cb0dbeae017305ec0d` tree (option2_tree_adopt); prior `main` 311d67e100ff7ff710a28c0bbb78c093f607b492 superseded in tree. Menu seam (arm→sweep→confirm→queue) + M2 defaults D1/H4/H1/M15 + diagnostic research (S2/S2b/OPT-4). Suite on main: 1382 passed/0 failed/6 skipped. PUSH_MAIN=PASS. **Baseline only, diagnostic research, no PnL/edge.** No OPT-2, no R7 change. Paper NOT required for conviction; next=plan-complement ledger.
