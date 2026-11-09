@@ -1646,3 +1646,6 @@ Suite: **519 → 525 passed** (`python -m pytest tests` from `04_SRC/`).
 - Old flowcharts (v1–v4) archived to `ARCHIVE/Old_Flowcharts/`
 - Old reports/logs archived to `ARCHIVE/Old_Reports_Logs/`
 - Superseded docs archived to `ARCHIVE/Superseded_Docs/`
+
+### 2026-11-09 — S2 menu confirm-lag (measurement)
+- `TASK=S2_MENU_CONFIRM_LAG`, `LOGIC_CHANGED=NO`. Menu-spine measurement (not adapter-only): n=1 winner on documented 2024-04-01..2024-04-15 slice (run-limited), lag median 0 det bars, outside-band 0% (ON_WINDOW, n=1). Diagnostic only; no edge claim. Script+note committed; results gitignored. OPT-B false, OPT-2 deferred.
