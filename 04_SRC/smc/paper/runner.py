@@ -231,6 +231,12 @@ class PaperRunner:
     backtest and the paper path.
     """
 
+    #: F7 capability: this runner reports a per-candidate outcome
+    #: (``notify_candidate_outcome``), so a confirmed menu winner can be
+    #: resubmitted until it is accepted or its window closes. Research
+    #: submit-captures do NOT set this and keep one-submit semantics.
+    supports_candidate_outcomes = True
+
     def __init__(
         self,
         *,
@@ -312,6 +318,17 @@ class PaperRunner:
         requested ``risk_fraction``.
         """
         return dict(self._sizing)
+
+    def _notify_candidate_outcome(self, candidate, *, accepted, reason=None) -> None:
+        """F7 runner→adapter seam: did this candidate get accepted this bar?
+
+        Adapters without the seam (protocol stubs) simply keep their own
+        semantics — the call is optional by contract.
+        """
+        notify = getattr(self.adapter, "notify_candidate_outcome", None)
+        if not callable(notify):
+            return
+        notify(candidate, accepted=accepted, reason=reason)
 
     def _record_sizing(self, now, bar_index, candidate, decision) -> None:
         """F3: record one accepted size (cap flag + effective risk %).
@@ -955,6 +972,11 @@ class PaperRunner:
                     bar_index=bar_index,
                     **_menu_join_keys(candidate),
                 )
+                # F7: a risk block does not destroy the confirmation — the
+                # adapter resubmits it next bar while its window is open.
+                self._notify_candidate_outcome(
+                    candidate, accepted=False, reason=block_code
+                )
                 continue  # nothing placed, nothing consumed (I2 parity)
             # F3 sizing KPI at the accepted-size choke point (dry-run,
             # deferred intent and real placement all carry this volume).
@@ -991,6 +1013,11 @@ class PaperRunner:
                     candidate, decision.lots, bar_index,
                     rest_bars_for(candidate.detection_tf, candidate.is_m8,
                                   execution_tf=self.timeframe))
+                # F7: the R9 intent already owns the per-bar retry for this
+                # candidate, so the menu must stop resubmitting it.
+                self._notify_candidate_outcome(
+                    candidate, accepted=True, reason="deferred_intent"
+                )
                 continue
             if self.config.dry_run:
                 # dry-run: the decision was evaluated and logged, but no
@@ -1008,6 +1035,9 @@ class PaperRunner:
                     bar_index=bar_index,
                     dry_run=True,
                     **_menu_join_keys(candidate),
+                )
+                self._notify_candidate_outcome(
+                    candidate, accepted=True, reason="dry_run"
                 )
                 continue
             outcome = self.broker.place_limit(
@@ -1079,6 +1109,12 @@ class PaperRunner:
                     self.intents.mark_replaced(intent, bar_index)
             else:
                 rejected += 1
+                # F7: a broker rejection is not acceptance — the adapter
+                # retries next bar while the confirmation's window is open.
+                self._notify_candidate_outcome(
+                    candidate, accepted=False,
+                    reason=f"order_rejected:{outcome.retcode}",
+                )
         latency = (self._perf() - start) * 1000.0 if self._perf else 0.0
         self.kpi.record_decision(
             at=now, latency_ms=latency, candidates=len(queued),

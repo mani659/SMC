@@ -349,7 +349,7 @@ class LiveLoop:
                     "configured) — not compliant with the product runtime "
                     "contract"
                 )
-            return self._arm_new_pois()
+            return self._arm_new_pois(bar)
         try:
             return self._arm_product(bar)
         except MissingHtfSeriesError as exc:
@@ -389,10 +389,16 @@ class LiveLoop:
             self.sweep_links.update(links)
         logger.info("multi-TF batch: %s", report.summary())
         if self.menu_confirmation is not None:
+            # F5: the batch's decision instant is the arm instant
+            # (``as_of`` above = this closed execution bar's open stamp, the
+            # same instant the closed-bar HTF prefixes were cut at). A sweep
+            # that closed at or before it is pre-arm and cannot open the POI.
             for poi in getattr(report, "armed", ()) or ():
                 det_tf = getattr(getattr(poi, "zone", None), "timeframe", None)
                 if det_tf is not None:
-                    self.menu_confirmation.register_armed(poi, det_tf)
+                    self.menu_confirmation.register_armed(
+                        poi, det_tf, armed_ts=bar.timestamp
+                    )
         return report.armed_count
 
     def _drive_menu_confirmation(self, bar: Candle) -> None:
@@ -585,7 +591,7 @@ class LiveLoop:
         rows.sort(key=lambda b: b.timestamp)
         return rows
 
-    def _arm_new_pois(self) -> int:
+    def _arm_new_pois(self, bar: Candle) -> int:
         """LEGACY single-TF arming (pre-C1): validate the rolling window.
 
         Kept only for the legacy mode (no runtime) — the product path is
@@ -625,7 +631,12 @@ class LiveLoop:
                 armed += 1
                 if self.menu_confirmation is not None:
                     det_tf = getattr(getattr(poi, "zone", None), "timeframe", None) or self.timeframe
-                    self.menu_confirmation.register_armed(poi, det_tf)
+                    # F5: same contract — the arm instant is the instant this
+                    # closed-bar pass decided on (the bar's open stamp, i.e.
+                    # the batch ``as_of`` convention).
+                    self.menu_confirmation.register_armed(
+                        poi, det_tf, armed_ts=bar.timestamp
+                    )
         return armed
 
     @staticmethod

@@ -154,9 +154,12 @@ def test_loop_arm_product_registers_armed_into_menu():
     count = loop._arm_product(bar)
     assert count == 1
     assert "poi-h4-001" in menu._armed
-    stored_poi, tier = menu._armed["poi-h4-001"]
+    stored_poi, tier, armed_ts = menu._armed["poi-h4-001"]
     assert stored_poi.id == "poi-h4-001"
     assert tier.name == "H4"
+    # F5: the live seam threads the decision instant as the arm instant
+    # (the execution bar this batch was decided on).
+    assert armed_ts == bar.timestamp
 
 
 def test_pipeline_adapter_queue_menu_candidate_and_dedup():

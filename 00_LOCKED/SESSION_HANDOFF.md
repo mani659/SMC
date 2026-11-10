@@ -1,5 +1,16 @@
 # SESSION HANDOFF — SMC BOT
 
+## 2026-11-10 — F5–F7 MENU LIFECYCLE (`LOGIC_CHANGED=YES`; menu causality)
+
+- **Authority:** Lead Architect `F5–F7 LIFECYCLE — menu causality (one PR)`; executed verbatim. No structural TP / OPT-B / OPT-2 / tier-trigger-threshold retune / sizing change. `dry_run` still `true` (F3 live pin pending).
+- **F5:** `register_armed(..., armed_ts=)` + `MenuEpisode.armed_ts`; a window opens only on a sweep closing AFTER the arm instant (`sweeps_pre_arm`), expire/open order unchanged and now arm-aware. Live threads `bar.timestamp` (the same instant as the batch's `as_of`); harness threads `as_of`; older scripts keep the `None` default, counted as `armed_without_ts` (never guessed). `product_menu.armed_ts` is now stamped on winners/candidates and the ledger reads it
+  (the `post_f5f7` artifact predates that one-line reader fix, so its rows still carry the
+  old `t_arm_not_stamped` annotation — a harness artifact, not a missing stamp).
+- **F6:** menu reads §5 from the pipeline's ONE `POIStateMachine` via `set_state_source` (wired by the adapter); evaluation allowed only for FRESH/TESTED (`menu_blocked_by_state`); `retire(poi_id)` called from the prune path so `_armed` stays bounded; `_consumed` never cleared. Unwired resolver = gate off; resolver fault ≠ block.
+- **F7:** a confirmed winner blocked by risk/broker/routing is no longer destroyed — the adapter resubmits the same candidate each bar while the menu window is open (deadline = `MenuWinner.window_end_ts`), and releases the claim on expiry (`menu_expired_unplaced`). Retry needs a runner that reports outcomes (`supports_candidate_outcomes`): `PaperRunner` yes, research submit-captures no (single-submit preserved). R9 intent deferral counts as accepted (the intent owns its retry).
+- **Suite:** 1437 passed / 6 skipped; +24 `tests/test_f5_f7_menu_lifecycle.py`.
+- **Note:** `06_RESEARCH/F5_F7_LIFECYCLE_NOTE.md`. **NEXT:** F3 live pin acceptance on the first operator start (`[sizing] PASS`), then F4 risk envelope (cap floor now visible), then Architect re-review of the plan-complement sample on the post-F5–F7 ledger.
+
 ## 2026-11-09 (3) — F3 SIZING PINNED TO THE BROKER (money safety)
 
 - **Authority:** Lead Architect `F3 — PIN SIZING TO BROKER`; research geometry untouched, live start gate + unit plumbing only.

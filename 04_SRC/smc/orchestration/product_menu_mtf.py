@@ -48,7 +48,7 @@ from smc.backtest.pipeline_bridge import candidate_from_route
 from smc.config.locked_constants import ZONE_REFINEMENT_ATR
 from smc.config.timeframe import Timeframe
 from smc.core.candle import Candle
-from smc.core.enums import Direction, TriggerType
+from smc.core.enums import Direction, POIState, TriggerType
 from smc.core.poi import POI
 from smc.core.zone import Zone
 from smc.detection.structural_swing_detector import detect_swings
@@ -93,6 +93,12 @@ PRODUCT_MENU_PILLAR_PATH = "PRODUCT_MTF_MENU"
 
 #: Detection-TF bar count every tier's one-shot window lives for.
 MENU_EXPIRY_BARS = 20
+
+#: §5 states in which a POI may be evaluated by the menu (F6). FRESH is the
+#: live state; TESTED is included because the first touch may already have
+#: registered when the confirmation fires. CREATED has not been validated as
+#: fresh yet and VIOLATED is dead, so neither may open or win a window.
+MENU_ALLOWED_POI_STATES = frozenset({POIState.FRESH, POIState.TESTED})
 
 
 def _close_ts(bar: Candle) -> datetime:
@@ -281,6 +287,10 @@ class MenuEpisode:
     sweep_index: int
     sweep_ts: datetime
     sweep_close_ts: datetime
+    # F5: the instant the POI was armed. A sweep that closed at or before it
+    # is pre-arm and may not open this window (``None`` = unknown arm instant,
+    # counted as ``armed_without_ts`` — never invented).
+    armed_ts: datetime | None = None
     status: MenuEpisodeStatus = MenuEpisodeStatus.ACTIVE
     decisions: list[str] = field(default_factory=list)
     winner_tf: Timeframe | None = None
@@ -316,6 +326,10 @@ class MenuWinner:
     route_id: str | None
     trigger: str
     candidate: object
+    # F7: last instant this confirmation may still be submitted. The menu
+    # window's end (sweep close + the locked expiry in detection bars); the
+    # adapter drops an unaccepted confirmation at this instant.
+    window_end_ts: datetime | None = None
 
 
 # --------------------------------------------------------------------------- #
@@ -326,7 +340,10 @@ class ProductMenuEngine:
 
     Public surface used by the runtime/harness:
 
-    * ``register_armed(poi, detection_tf)`` — arm a POI for one shot;
+    * ``register_armed(poi, detection_tf, armed_ts=instant)`` — arm a POI for
+      one shot (F5: the arm instant bounds which sweeps may open it);
+    * ``set_state_source(resolver)`` / ``retire(poi_id)`` — §5 gate + pruning
+      wiring (F6); the menu never owns POI state or keeps dead arms;
     * ``on_execution_bar({tf: [closed bars]}, as_of=instant)`` — ingest closed
       bars, expire windows, detect sweeps, evaluate confirmations, return any
       new winners;
@@ -358,8 +375,14 @@ class ProductMenuEngine:
         self._router: TriggerRouter | None = None
         self._tier_routers: dict[str, TriggerRouter] = {}
 
-        self._armed: dict[str, tuple[POI, MenuTier]] = {}
+        # F5: po_id → (poi, tier, armed_ts). ``armed_ts`` is the batch
+        # decision instant; None means the caller could not supply it.
+        self._armed: dict[str, tuple[POI, MenuTier, datetime | None]] = {}
         self._consumed: set[str] = set()
+        # F6: optional §5 state resolver wired by the adapter (the menu never
+        # owns POI state). None = gate not wired (research/stub), and the
+        # absence is reported rather than guessed.
+        self._state_source = None
 
         # Detection and confirmation streams are separate stores even when a
         # TF serves both roles (H1/M15): the same bar feeds sweeps AND
@@ -383,6 +406,12 @@ class ProductMenuEngine:
             "episodes_opened": 0,
             "episodes_expired": 0,
             "sweeps_out_of_window": 0,
+            # F5: sweeps that closed at/before the arm instant (pre-arm).
+            "sweeps_pre_arm": 0,
+            # F5: arms registered without an arm instant (guard inactive).
+            "armed_without_ts": 0,
+            # F6: evaluations skipped because the POI was not FRESH/TESTED.
+            "menu_blocked_by_state": 0,
         }
 
     # ------------------------------------------------------------------ #
@@ -416,11 +445,23 @@ class ProductMenuEngine:
     # ------------------------------------------------------------------ #
     # Arming
     # ------------------------------------------------------------------ #
-    def register_armed(self, poi: POI, detection_tf: Timeframe) -> bool:
+    def register_armed(
+        self,
+        poi: POI,
+        detection_tf: Timeframe,
+        armed_ts: datetime | None = None,
+    ) -> bool:
         """Arm ``poi`` for a one-shot window on ``detection_tf``'s tier.
 
-        Returns ``False`` when the TF is not a menu tier or the POI was already
-        consumed by an earlier sweep (one-shot discipline).
+        ``armed_ts`` is the instant the POI became armable (the batch's
+        decision instant). F5: a sweep that closed at or before it can never
+        open this POI's window, so a backfilled/batched feed cannot attach a
+        months-old sweep to a POI that did not exist yet. ``None`` leaves the
+        guard inactive and is counted (``armed_without_ts``), never guessed.
+
+        Returns ``False`` when the TF is not a menu tier or the POI was
+        already consumed by an earlier sweep (one-shot discipline).
+        Re-arming the same POI is idempotent: the ORIGINAL arm instant wins.
         """
         tier = self.tier_for(detection_tf)
         if tier is None:
@@ -428,8 +469,46 @@ class ProductMenuEngine:
         poi_id = getattr(poi, "id", None)
         if poi_id is None or poi_id in self._consumed:
             return False
-        self._armed[str(poi_id)] = (poi, tier)
+        key = str(poi_id)
+        existing = self._armed.get(key)
+        if existing is not None:
+            poi0, tier0, armed0 = existing
+            if armed0 is None and armed_ts is not None:
+                # Late-arriving arm instant: keep the POI, adopt the stamp.
+                self._armed[key] = (poi0, tier0, armed_ts)
+                self._counters["armed_without_ts"] -= 1
+            return True
+        if armed_ts is None:
+            self._counters["armed_without_ts"] += 1
+        self._armed[key] = (poi, tier, armed_ts)
         return True
+
+    def set_state_source(self, resolver) -> None:
+        """Wire the §5 state resolver (F6): ``resolver(poi) -> POIState``.
+
+        The menu does not own §5 state — the pipeline engine's
+        ``POIStateMachine`` does. The adapter binds it here, so the menu can
+        evaluate only live POIs without keeping a second state store.
+        """
+        self._state_source = resolver if callable(resolver) else None
+
+    def _poi_state(self, poi) -> POIState | None:
+        """§5 state from the wired resolver, or ``None`` when unwired."""
+        if self._state_source is None:
+            return None
+        try:
+            return self._state_source(poi)
+        except Exception:  # noqa: BLE001 — a resolver fault must not fake a block
+            return None
+
+    def retire(self, poi_id) -> bool:
+        """Drop a POI's arming bookkeeping (F6): the engine retired it.
+
+        Called from the adapter's prune path so ``_armed`` stays bounded by
+        live POIs instead of growing for the whole session. ``_consumed`` is
+        NOT cleared — a consumed POI must never be re-armed.
+        """
+        return self._armed.pop(str(poi_id), None) is not None
 
     # ------------------------------------------------------------------ #
     # Ingestion
@@ -494,6 +573,12 @@ class ProductMenuEngine:
         for episode in self._episodes:
             if episode.status is not MenuEpisodeStatus.ACTIVE:
                 continue
+            # F6 (§5): a POI that died (VIOLATED / consumed elsewhere) must
+            # not be confirmed. The window simply expires.
+            state = self._poi_state(episode.poi)
+            if state is not None and state not in MENU_ALLOWED_POI_STATES:
+                self._counters["menu_blocked_by_state"] += 1
+                continue
             # F2 (2026-11-09): every eligible confirmation bar of THIS batch is
             # evaluated, and the winner across the tier's confirmation TFs is
             # the EARLIEST completion — never the tier list order and never
@@ -546,10 +631,17 @@ class ProductMenuEngine:
             if not indexes:
                 continue
             series = self._series[tf]
-            for poi_id, (poi, tier) in self._armed.items():
+            for poi_id, (poi, tier, armed_ts) in list(self._armed.items()):
                 if tier.detection_tf is not tf:
                     continue
                 if poi_id in self._consumed:
+                    continue
+                # F6 (§5): the menu may only evaluate live POIs. FRESH and
+                # TESTED are allowed (the menu's sweep IS the first touch);
+                # CREATED has not been validated fresh, VIOLATED is dead.
+                state = self._poi_state(poi)
+                if state is not None and state not in MENU_ALLOWED_POI_STATES:
+                    self._counters["menu_blocked_by_state"] += 1
                     continue
                 if any(
                     e.status is MenuEpisodeStatus.ACTIVE and e.poi_id == poi_id
@@ -559,6 +651,13 @@ class ProductMenuEngine:
                 for index in indexes:
                     bar = series[index]
                     if not _is_zone_sweep(bar, poi.zone):
+                        continue
+                    # F5: the sweep must have closed AFTER the arm instant.
+                    # A backfilled feed can hand a batch months of detection
+                    # bars; without this a POI would claim a sweep that
+                    # happened before it existed (pre-arm window).
+                    if armed_ts is not None and _close_ts(bar) <= armed_ts:
+                        self._counters["sweeps_pre_arm"] += 1
                         continue
                     self.sweeps_total += 1
                     # F2 window-open guard (2026-11-09): a one-shot window
@@ -580,6 +679,7 @@ class ProductMenuEngine:
                         sweep_index=index,
                         sweep_ts=bar.timestamp,
                         sweep_close_ts=_close_ts(bar),
+                        armed_ts=armed_ts,
                     )
                     episode.decisions.append(
                         f"armed_{tier.name}_sweep@{index}"
@@ -774,7 +874,15 @@ class ProductMenuEngine:
         self, episode: MenuEpisode, route: TriggerRoute, tf: Timeframe
     ) -> MenuWinner:
         """Consume the episode one-shot and build its candidate (frozen bridge)."""
-        candidate = self._candidate(episode, route, tf)
+        window_end = self._window_end_ts(episode)
+        if window_end is None:
+            # The window's last detection bar has not closed yet: stamp the
+            # window's nominal end (enough detection-TF bars after the sweep).
+            # F7 uses it only to bound resubmission of an unaccepted winner.
+            window_end = episode.sweep_close_ts + timedelta(
+                minutes=episode.tier.detection_tf.minutes * episode.tier.expiry_bars
+            )
+        candidate = self._candidate(episode, route, tf, window_end_ts=window_end)
         episode.status = MenuEpisodeStatus.WON
         episode.winner_tf = tf
         episode.winner_route_id = candidate.route_id
@@ -782,6 +890,9 @@ class ProductMenuEngine:
             f"won_{tf.name}_{route.signal.trigger.value}"
         )
         self._consumed.add(episode.poi_id)
+        # F6 bounding: a consumed POI never opens another window, so its
+        # arming record has no job left.
+        self._armed.pop(episode.poi_id, None)
         winner = MenuWinner(
             episode_id=episode.episode_id,
             poi_id=episode.poi_id,
@@ -791,6 +902,7 @@ class ProductMenuEngine:
             route_id=candidate.route_id,
             trigger=str(getattr(route.signal.trigger, "value", route.signal.trigger)),
             candidate=candidate,
+            window_end_ts=window_end,
         )
         self.winners.append(winner)
         return winner
@@ -845,7 +957,12 @@ class ProductMenuEngine:
         }
 
     def _candidate(
-        self, episode: MenuEpisode, route: TriggerRoute, tf: Timeframe
+        self,
+        episode: MenuEpisode,
+        route: TriggerRoute,
+        tf: Timeframe,
+        *,
+        window_end_ts: datetime | None = None,
     ) -> object:
         """Frozen bridge output + menu identity stamp (never re-derived edges)."""
         series = self._confirm[tf]
@@ -870,6 +987,17 @@ class ProductMenuEngine:
             "zone": [float(zone.bottom), float(zone.top)],
             "sweep_ts": episode.sweep_ts.isoformat(),
             "zone_direction": getattr(zone.direction, "value", str(zone.direction)),
+            # F5/F7: when the POI was armed and when this confirmation's
+            # window closes (the adapter's retry bound). Reported for audit;
+            # no risk, geometry or sizing decision reads them.
+            "armed_ts": (
+                episode.armed_ts.isoformat()
+                if episode.armed_ts is not None
+                else None
+            ),
+            "window_end_ts": (
+                window_end_ts.isoformat() if window_end_ts is not None else None
+            ),
             **completion,
         }
         try:

@@ -294,7 +294,10 @@ def test_cross_tf_winner_is_the_earliest_completion_not_tier_order():
     menu = ProductMenuEngine()
     menu._series[Timeframe.H4] = list(det)
     menu._episodes.append(episode)
-    menu._armed[episode.poi_id] = (episode.poi, episode.tier)
+    # F5: the arming book entry carries the arm instant (F5 3-tuple shape).
+    menu._armed[episode.poi_id] = (
+        episode.poi, episode.tier, episode.armed_ts
+    )
 
     # M5 completes LATE, M15 completes EARLY — both in the same batch.
     m5_ts = _closes(m5)[120]

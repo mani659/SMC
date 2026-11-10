@@ -61,8 +61,9 @@ series reproduces the same orders, fills and closes.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from smc.backtest.pipeline_bridge import candidate_from_route, structural_tp_target
 from smc.backtest.runner import CandidateEntry
@@ -149,12 +150,37 @@ class PipelineAdapter:
         self._menu_candidates: list[CandidateEntry] = []
         self._menu_claimed_pois: set[str] = set()
         self._menu_covered_timeframes: set[Timeframe] = set()
+        # F7: confirmed menu winners awaiting an accepted placement. Only
+        # populated when the runner reports per-candidate outcomes (the live
+        # paper runner does; research submit-captures do not, and keep the
+        # historical one-submit semantics).
+        self._menu_pending: dict[str, dict] = {}
+        self._menu_stats: dict[str, int] = {
+            "menu_submitted": 0,
+            "menu_accepted": 0,
+            "menu_retry_blocked": 0,
+            "menu_resubmitted": 0,
+            "menu_expired_unplaced": 0,
+            "menu_dropped_poi_retired": 0,
+        }
         if menu_confirmation is not None:
             self.set_menu_confirmation(menu_confirmation)
 
     def set_menu_confirmation(self, menu) -> None:
         """Attach the product menu engine for dedup and candidate routing."""
         self.menu_confirmation = menu
+        # F6: the menu must read the ONE §5 state store (the pipeline
+        # engine's machine), never keep a second copy. Binding here means
+        # every adapter (live, paper, research) gates identically.
+        state_machine = getattr(self.engine, "state_machine", None)
+        set_source = getattr(menu, "set_state_source", None)
+        if callable(set_source):
+            if state_machine is not None and callable(
+                getattr(state_machine, "current", None)
+            ):
+                set_source(lambda poi, _m=state_machine: _m.current(poi))
+            else:
+                set_source(lambda poi: getattr(poi, "state", None))
         if menu is not None:
             det_tfs = getattr(menu, "detection_timeframes", None)
             if det_tfs:
@@ -190,9 +216,16 @@ class PipelineAdapter:
         return False
 
     def queue_menu_candidate(self, candidate: CandidateEntry) -> None:
-        """Receive a winner candidate confirmed by the product menu."""
+        """Receive a winner candidate confirmed by the product menu.
+
+        F7: the confirmation is submitted now and, when the runner reports
+        per-candidate outcomes, resubmitted each bar until it is accepted or
+        its menu window closes — a risk gate (news/session/breaker) must not
+        silently destroy a confirmation that is still inside its window.
+        """
         if candidate is None:
             return
+        self._menu_stats["menu_submitted"] += 1
         poi_id = getattr(candidate, "poi_id", None)
         if poi_id:
             pid = str(poi_id)
@@ -201,9 +234,132 @@ class PipelineAdapter:
             self._scan_cursor.pop(pid, None)
             self._workflows.pop(pid, None)
         if self._runner is not None:
+            if poi_id and self._runner_reports_outcomes():
+                # No window stamp → no bounded retry. Never invent a deadline.
+                deadline = self._menu_deadline(candidate)
+                if deadline is not None:
+                    # The pending entry owns the submission: this bar's
+                    # ``generate_candidates`` submits it ONCE (before the
+                    # runner drains its queue), and every later bar resubmits
+                    # it once more. Submitting here as well would double-enter
+                    # the same confirmation within one bar.
+                    self._menu_pending[str(poi_id)] = {
+                        "candidate": candidate,
+                        "deadline": deadline,
+                        "attempted": False,
+                    }
+                    return
             self._runner.submit_entry(candidate)
         else:
             self._menu_candidates.append(candidate)
+
+    # ------------------------------------------------------------------ #
+    # F7 — menu winner resubmission
+    # ------------------------------------------------------------------ #
+    def menu_counters(self) -> dict:
+        """F7 measurement surface (never read by a decision)."""
+        return {**self._menu_stats, "menu_pending": len(self._menu_pending)}
+
+    def _runner_reports_outcomes(self) -> bool:
+        """True when the runner can say accepted/rejected per candidate."""
+        # ONLY the explicit capability counts: a stub runner (research
+        # submit-capture) never reports outcomes, so retrying there would
+        # only inflate its submit count.
+        return bool(getattr(self._runner, "supports_candidate_outcomes", False))
+
+    def _menu_deadline(self, candidate):
+        """Last instant the confirmation may still be submitted.
+
+        Read from the candidate's own menu stamp (``window_end_ts`` — the
+        engine's window end). When the stamp cannot supply it, fall back to
+        the locked expiry over the stamped detection timeframe; when even
+        that is missing the confirmation is not retried (no invented
+        deadline).
+        """
+        raw = getattr(candidate, "signal_data_json", None)
+        stamp: dict = {}
+        if raw:
+            try:
+                payload = json.loads(raw)
+            except (TypeError, ValueError):
+                payload = {}
+            if isinstance(payload, dict):
+                found = payload.get("product_menu")
+                if isinstance(found, dict):
+                    stamp = found
+        end = stamp.get("window_end_ts")
+        if end:
+            try:
+                return datetime.fromisoformat(str(end))
+            except ValueError:
+                pass
+        sweep = stamp.get("sweep_ts")
+        det_name = stamp.get("detection_tf")
+        if sweep and det_name:
+            try:
+                det = Timeframe[str(det_name).upper()]
+                start = datetime.fromisoformat(str(sweep))
+            except (KeyError, ValueError):
+                return None
+            from smc.orchestration.product_menu_mtf import MENU_EXPIRY_BARS
+
+            return start + timedelta(
+                minutes=(det.minutes * MENU_EXPIRY_BARS) + det.minutes
+            )
+        return None
+
+    def _settle_menu_candidate(self, poi_id, accepted: bool, reason) -> None:
+        """Settle one pending menu confirmation (F7)."""
+        pending = self._menu_pending.pop(str(poi_id), None)
+        if pending is None:
+            return
+        if accepted:
+            self._menu_stats["menu_accepted"] += 1
+            return
+        # Not accepted: keep it pending for the next bar's resubmission.
+        self._menu_pending[str(poi_id)] = pending
+        self._menu_stats["menu_retry_blocked"] += 1
+
+    def notify_candidate_outcome(self, candidate, *, accepted: bool, reason=None) -> None:
+        """Runner seam (F7): did the runner accept this candidate this bar?
+
+        ``accepted=False`` keeps the confirmation pending for the next bar;
+        ``accepted=True`` settles it (placed, deferred to an R9 intent, or a
+        dry-run placement that the runner counts as placed).
+        """
+        poi_id = getattr(candidate, "poi_id", None)
+        if poi_id is None:
+            return
+        self._settle_menu_candidate(poi_id, accepted, reason)
+
+    def on_candidate_accepted(self, candidate) -> None:
+        """Existing accept seam: a real placement consumes the §11 one-shot.
+
+        Also settles an F7 pending confirmation (a placed winner must not be
+        resubmitted).
+        """
+        poi_id = getattr(candidate, "poi_id", None)
+        if poi_id is not None:
+            self._settle_menu_candidate(poi_id, True, "placed")
+
+    def _resubmit_menu_pending(self, now: datetime) -> None:
+        """F7: one resubmission attempt per bar, bounded by the window."""
+        if not self._menu_pending or self._runner is None:
+            return
+        for poi_id, pending in list(self._menu_pending.items()):
+            deadline = pending.get("deadline")
+            if deadline is not None and now > deadline:
+                self._menu_pending.pop(poi_id, None)
+                self._menu_stats["menu_expired_unplaced"] += 1
+                # Release the claim: the menu window is closed, so the normal
+                # scan may own this POI again if it is still live.
+                self._menu_claimed_pois.discard(poi_id)
+                self._routed.discard(poi_id)
+                continue
+            self._runner.submit_entry(pending["candidate"])
+            if pending["attempted"]:
+                self._menu_stats["menu_resubmitted"] += 1
+            pending["attempted"] = True
 
     # ------------------------------------------------------------------ #
     # Runner adapter protocol
@@ -213,6 +369,8 @@ class PipelineAdapter:
     ) -> None:
         """Per-bar pipeline step (called by the runner's entry step)."""
         state = self._ensure_state(bar_index)
+        # F7: retry confirmed-but-unaccepted menu winners before the scan.
+        self._resubmit_menu_pending(now)
         if self._runner is not None and self._menu_candidates:
             while self._menu_candidates:
                 cand = self._menu_candidates.pop(0)
@@ -451,6 +609,15 @@ class PipelineAdapter:
             self._tested_bar.pop(poi_id, None)
             self._routed.discard(poi_id)
             self._scan_cursor.pop(poi_id, None)
+            # F6: keep the menu's arming book bounded by live POIs.
+            menu = self.menu_confirmation
+            retire = getattr(menu, "retire", None)
+            if callable(retire):
+                retire(poi_id)
+            # F7: a dead POI's pending confirmation dies with it.
+            if self._menu_pending.pop(poi_id, None) is not None:
+                self._menu_stats["menu_dropped_poi_retired"] += 1
+                self._menu_claimed_pois.discard(poi_id)
         # LEG 5 (design R3.2): engine first, registry second — the ids this
         # prune just released lose their ZoneDedup keys in the SAME step,
         # then the still-tracked episodes that satisfy the R3.1 death

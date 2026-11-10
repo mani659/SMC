@@ -164,7 +164,11 @@ def main():
             if report is not None:
                 for poi in (report.armed or []):
                     det_tf = getattr(getattr(poi, "zone", None), "timeframe", None)
-                    if det_tf is not None and menu.register_armed(poi, det_tf):
+                    # F5: the batch decision instant is the arm instant; a
+                    # sweep that closed at/before it is pre-arm.
+                    if det_tf is not None and menu.register_armed(
+                        poi, det_tf, armed_ts=as_of
+                    ):
                         register_armed += 1
         feed = {}
         for tf in set(PRODUCT_MENU_DETECTION_TIMEFRAMES) | set(PRODUCT_MENU_CONFIRMATION_TIMEFRAMES):
@@ -209,6 +213,12 @@ def main():
         entry_anchor = getattr(cand, "entry_anchor", None)
         direction = getattr(cand, "direction", None)
 
+        # F5: the engine now stamps the arm instant into ``product_menu``.
+        # Absent → note the gap (honest), never invent one.
+        t_arm = stamp.get("armed_ts")
+        if not t_arm:
+            gap_notes.append("t_arm_not_stamped")
+
         plan_complete = _is_finite(entry) and _is_finite(sl) and _is_finite(tp)
         if not plan_complete:
             missing = [k for k, v in [("entry", entry), ("sl", sl), ("tp", tp)] if not _is_finite(v)]
@@ -224,7 +234,7 @@ def main():
             "tier": stamp.get("tier"),
             "detection_tf": stamp.get("detection_tf"),
             "confirmation_tf": stamp.get("confirmation_tf"),
-            "t_arm": None,  # arm time not stamped in product_menu; honest gap
+            "t_arm": t_arm,  # F5 arm instant (None only when unstamped)
             "t_sweep": stamp.get("sweep_ts"),
             "t_confirm": stamp.get("completion_ts"),
             "trigger_type": stamp.get("trigger_type") or (getattr(getattr(cand, "trigger", None), "name", None) or getattr(cand, "trigger", None)),
@@ -238,8 +248,6 @@ def main():
             "place_or_queue": place_or_queue,
             "notes": ";".join(gap_notes),
         })
-        if "t_arm_missing" not in ";".join(gap_notes):
-            rows[-1]["notes"] = ("t_arm_not_stamped;" + rows[-1]["notes"]).strip(";") if rows[-1]["notes"] else "t_arm_not_stamped"
 
     csv_path = OUT_DIR / "plan_complement_ledger.csv"
     fields = list(rows[0].keys()) if rows else ["submit_index","poi_id","plan_complete","plan_consistent","notes"]
@@ -274,6 +282,7 @@ def main():
         "PLAN_STATUS": "PASS", "diagnostic_only": True, "not_profitability": True,
         "run_label": RUN_LABEL, "logic_changed": RUN_LOGIC_CHANGED,
         "menu_counters": menu.counters(),
+        "menu_retry": adapter.menu_counters(),
         "opt_b": False, "opt2": "deferred", "r7_threshold_changed": False,
         "path": "menu queue_menu_candidate submits only (not adapter-only)",
         "window": {"warmup_start": WARMUP_START.date().isoformat(), "start": WINDOW_START.date().isoformat(), "end": WINDOW_END.date().isoformat()},
@@ -322,7 +331,7 @@ Count: {len(sample)} (up to 10 / all if n≤10)
 {sample_lines}
 
 ## Caveats
-- `t_arm` not stamped in `product_menu`; reported as gap note (honest). Small n (same window). Consistency is geometric only (directional side checks). No expectancy, no edge, no PnL. **Do not claim sweep+confirm "works" from plan_complete alone without Architect review of the sample.**
+- `t_arm` read from `product_menu.armed_ts` (F5); absent values are reported as a gap note (honest). Small n (same window). Consistency is geometric only (directional side checks). No expectancy, no edge, no PnL. **Do not claim sweep+confirm "works" from plan_complete alone without Architect review of the sample.**
 
 ## Artifacts (gitignored)
 - `{csv_path}`
