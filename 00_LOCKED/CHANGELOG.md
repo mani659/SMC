@@ -8,6 +8,16 @@
 
 ## [Unreleased]
 
+### 2026-11-10 — STAGE 0A CODE↔FLOWCHART MAP + ENRICHED L1 H4 (docs/research; `LOGIC_CHANGED: NO`)
+
+- **Authority:** Lead Architect / Design Architect; `06_RESEARCH/LAYERED_FIDELITY_PLAN.md` (L1, H4 enriched chain audit). Measurement only — no expectancy, no LTF wiring, no orders/PnL, no L2–L5.
+- **Added (committed):** `06_RESEARCH/STAGE_0A_CODE_FLOWCHART_MAP.md` (Stage 0A intent, code inventory, pool families master-structural mapping, sweep/displacement as-coded vs flowchart, POI link honesty ORPHAN_SWEEP/IMPLICIT_ONLY directional attribution, gaps, non-goals/decision inputs; all claims cited to paths/symbols or NOT IN CODE). `06_RESEARCH/scripts/l1_h4_stage0a_enriched.py`, `06_RESEARCH/L1_H4_STAGE0A_ENRICHED_NOTE.md`.
+- **Method (read-only existing APIs):** `plan_complement_ledger.load_m1`, `smc.data.resample.resample_ohlcv` (M1→H4), `structural_swing_detector.detect_swings`, `liquidity_scanner.scan` (ALL_FAMILIES), `sweep_detector.detect_sweeps`, per-sweep `displacement_checker.check_displacement` (BOS = prior swing extreme of move direction, pre-sweep ATR/FVGs hoisted), `M8HtfDemandSupply` (H4 series) for POI emission. Explicit joins: sweep↔displacement same bar/sweep_index; POI linked when H4 M8 zone contains swept level (Zone.contains, direction-compatible SSL→LONG/BSL→SHORT, deterministic tie-break, stable research poi key for UUID determinism; no 04_SRC change).
+- **Window:** exec `2025-06-01T00:00:00Z..2025-11-30T23:59:59Z`, warm-up from `2025-03-01T00:00:00Z`.
+- **Results:** rows 754 (753 sweep rows + 1 ORPHAN_POI), chain `FULL_0A=5 / SWEEP_PLUS_DISPLACEMENT=149 / SWEEP_PLUS_POI=23 / SWEEP_ONLY=576 / ORPHAN_POI=1`; displacement Y 154 (20.4515%) / N 599 / UNKNOWN 0; sweeps with POI link 28 (3.7185%); `FULL_0A` 5 (0.6640%). Families: SESSION 684, STRUCTURAL_SWING 63, EQUAL_HIGHS_LOWS 6. Charts 40 (stratified). Deterministic dual-run hash `884fe366…84d981ad`. Artifacts gitignored: `06_RESEARCH/results/l1_h4_stage0a_enriched/`.
+- **Human gate:** score enriched charts `CORRECT_0A/PARTIAL_0A/WRONG_0A/UNCLEAR`; no pass % invented. NEXT = human score enriched Stage 0A chain (not L2 until Architect gates).
+- **Bans honored:** no 04_SRC decision-path edits, `locked_constants.py` diff empty.
+
 ### 2026-11-10 — L1 H4 SWEEP-ONLY FIDELITY PACK (docs/research; `LOGIC_CHANGED: NO`)
 
 - **Authority:** Lead Architect; plan `06_RESEARCH/LAYERED_FIDELITY_PLAN.md` (L1, H4 first). Observation only — no LTF, no orders, no PnL, no L2–L5.
