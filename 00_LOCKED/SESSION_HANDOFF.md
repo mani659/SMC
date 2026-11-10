@@ -1,5 +1,13 @@
 # SESSION HANDOFF — SMC BOT
 
+## 2026-11-10 — LAYERED FIDELITY PLAN ACTIVE (docs-only; `LOGIC_CHANGED: NO`)
+
+- **Authority:** Lead Architect directive 2026-11-10 (validation restart, method lock).
+- **Current phase:** **Layered Fidelity Plan ACTIVE** (L1→L2→L3→L4→L5; no phase starts before prior written PASS/FAIL + required human score gate). Binding plan: `06_RESEARCH/LAYERED_FIDELITY_PLAN.md`. This is a method restart (layered verification), not a greenfield rewrite.
+- **Retained evidence:** menu-path stage success (9 fills/closes, 1m, explained stages) stands but is **not** idea proof; human quality **0 CORRECT / 5 PARTIAL / 4 WRONG** (`06_RESEARCH/MENU_TRADE_SCORECARD_1M.md`). Do not score mixed trades first and do not tune entries before independent HTF sweep/pattern fidelity.
+- **NEXT ACTION (single):** **Phase L1 H4 sweep-only fidelity pack** (await Architect prompt). Not 3m edge, not live `dry_run=false`/size-on, not entry-constant edits, not OPT-2/structural-TP/risk retune.
+
+
 ## 2026-11-10 — F5–F7 MENU LIFECYCLE (`LOGIC_CHANGED=YES`; menu causality)
 
 - **Authority:** Lead Architect `F5–F7 LIFECYCLE — menu causality (one PR)`; executed verbatim. No structural TP / OPT-B / OPT-2 / tier-trigger-threshold retune / sizing change. `dry_run` still `true` (F3 live pin pending).

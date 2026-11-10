@@ -1,11 +1,20 @@
 # CHANGELOG
 
+
 **Last Updated:** 2026-11-08
 **Rules:** Every change to the project is recorded here. Format: date, session title, what was added/changed/fixed.
 
 ---
 
 ## [Unreleased]
+
+### 2026-11-10 — LAYERED FIDELITY RESEARCH PLAN LOCKED (docs-only; `LOGIC_CHANGED: NO`)
+
+- **Authority:** Lead Architect directive 2026-11-10 (method restart, not greenfield rewrite).
+- **Added:** `06_RESEARCH/LAYERED_FIDELITY_PLAN.md` — binding ordered plan L1→L2→L3→L4→L5 (L1 HTF sweep fidelity per TF, H4→D1→H1, M15 only if Architect rules structure TF; L2 HTF pattern/POI vs locked model cards; L3 HTF→LTF wiring on accepted events only; L4 entry geometry measure-only on wiring-pass sample; L5 edge/expectancy only after L1–L4 honest pass or explicit waiver). No phase starts before prior written PASS/FAIL + required human score gate. Locked sweep/POI/model references cited (not reinvented): `00_LOCKED/LOCKED_DECISIONS.md`, `00_LOCKED/SMC_R1_STRUCTURAL_MODEL_SPECIFICATIONS.md`, `00_LOCKED/MODEL_8_HTF_DEMAND_SUPPLY.md`, `00_LOCKED/PRODUCT_POLICY_MULTI_TF_CONFIRMATION.md`, `00_LOCKED/PRODUCT_RUNTIME_CONTRACT.md`, `00_LOCKED/FOUNDATION_RESET_PLAN.md`.
+- **Governance:** `00_LOCKED/SESSION_HANDOFF.md` and `00_LOCKED/POST_V1_ACTIVE_TODO.md` updated — current phase = Layered Fidelity Plan ACTIVE; NEXT ACTION = **L1 H4 sweep-only pack** (await Architect prompt). Stage success retained (9 fills/closes, 1m) as plumbing evidence only; quality 0 CORRECT / 5 PARTIAL / 4 WRONG demoted from optimization target.
+- **Bans honored:** no 04_SRC strategy edits, no `locked_constants.py` changes, no threshold/tier/trigger/OPT-2/structural-TP/risk retune, no expectancy run.
+
 
 ### 2026-11-10 — F5–F7 MENU LIFECYCLE (`LOGIC_CHANGED=YES`; menu causality only)
 
