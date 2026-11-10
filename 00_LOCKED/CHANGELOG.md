@@ -8,6 +8,22 @@
 
 ## [Unreleased]
 
+### 2026-11-10 — P1 VISUAL LEVEL FIDELITY PACK (liquidity LEVEL labeling only; `LOGIC_CHANGED: NO`)
+
+- **Authority:** Lead Architect ruling — code existence ≠ acceptance; chart/sample-run visual fidelity required per concept. **P2 blocked until Architect accepts P1 labels.** Research/evidence only — no detector/strategy fixes in this pack.
+- **Added (committed):** `06_RESEARCH/scripts/p1_visual_level_fidelity.py`, `06_RESEARCH/P1_VISUAL_LEVEL_FIDELITY_NOTE.md` (scoring rubric CORRECT/PARTIAL/WRONG/UNCLEAR, how-to-score, known limitations, no expectancy). Artifacts gitignored: `06_RESEARCH/results/p1_visual_levels/`.
+- **Method (read-only production constructors, no reimplementation):** `session_levels.detect_session_levels(m1_exec, Timeframe.M1)` (exec-window formed_at), `periodic_levels.detect_periodic_levels(m1_all, Timeframe.M1, as_of=each UTC day start)` → PDH/PDL & PWH/PWL deduped by formed extreme, `structural_swing_detector.detect_swings(h4_all, Timeframe.H4)` (`is_valid` only), `eqh_eql_detector.detect_equal_levels(swings, Timeframe.H4)` (EQH_EQL_TOLERANCE 4.5 pips, clusters ≥2). `plan_complement_ledger.load_m1`, `smc.data.resample.resample_ohlcv` (M1→H4). `liquidity_scanner.scan` referenced as canonical emitter.
+- **Window:** exec `2025-06-01T00:00:00Z..2025-11-30T23:59:59Z`, warm-up from `2025-03-01T00:00:00Z`. M1 268108 (exec 178605), H4 1208.
+- **Results:** levels 1239 total — session 780, pdh_pdl 314, pwh_pwl 54, eqh_eql 8, structural_swing 83. Charts (≤15/family, stratified month×pool): session 15, pdh_pdl 15, pwh_pwl 15, eqh_eql 8, structural_swing 15. Level CSV SHA256 `3b8e8a0c3d0f252f908691d3814ee8107fc6f9cc83d57d94c1c72edc51305b85`, deterministic dual-run PASS.
+- **Out of scope (this pack):** sweep overlay/arrows, displacement, FVG/OB as trade labels, trigger A–F, expectancy, P2.
+- **Bans honored:** no edits to `04_SRC/smc/**` or `locked_constants.py`.
+
+### 2026-11-10 — CODE PROBE P0+P1 (INVENTORY + LIQUIDITY LEVEL CONSTRUCTION) (docs-only; `LOGIC_CHANGED: NO`)
+
+- **Authority:** Lead Architect read-only code probe (Stage 0–3 inventory + §2 liquidity level construction). No strategy/threshold/logic edits.
+- **Added:** `06_RESEARCH/CODE_PROBE_P0_P1_LIQUIDITY_LEVELS.md` (P0 inventory table across 10 concerns + orphans/gaps; P1 10-question audit of all 7 §2 level types; scoreboard: `{IMPLEMENTED: 5, PARTIAL: 2, MISSING: 0, CONTRADICTS_LOCK: 0}`; top 5 ranked gaps; explicit P2 boundary).
+- **Suite:** 1437 passed / 7 skipped. `locked_constants.py` diff empty. NEXT = P2 sweep-interaction probe.
+
 ### 2026-11-10 — STAGE 0A CODE↔FLOWCHART MAP + ENRICHED L1 H4 (docs/research; `LOGIC_CHANGED: NO`)
 
 - **Authority:** Lead Architect / Design Architect; `06_RESEARCH/LAYERED_FIDELITY_PLAN.md` (L1, H4 enriched chain audit). Measurement only — no expectancy, no LTF wiring, no orders/PnL, no L2–L5.
