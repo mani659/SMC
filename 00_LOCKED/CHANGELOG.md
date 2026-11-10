@@ -8,6 +8,15 @@
 
 ## [Unreleased]
 
+### 2026-11-10 — L1 H4 SWEEP-ONLY FIDELITY PACK (docs/research; `LOGIC_CHANGED: NO`)
+
+- **Authority:** Lead Architect; plan `06_RESEARCH/LAYERED_FIDELITY_PLAN.md` (L1, H4 first). Observation only — no LTF, no orders, no PnL, no L2–L5.
+- **Added (committed):** `06_RESEARCH/scripts/l1_h4_sweep_fidelity.py`, `06_RESEARCH/L1_H4_SWEEP_FIDELITY_NOTE.md`. Uses existing detection APIs as-is (evaluation mode): `plan_complement_ledger.load_m1`, `smc.data.resample.resample_ohlcv` (M1→H4), `smc.detection.liquidity_scanner.scan` (H4, ALL_FAMILIES), `smc.detection.sweep_detector.detect_sweeps` (wick-pierce + body-close-back, first per level, formed_at bound). Locked definition cited in note: `00_LOCKED/LOCKED_DECISIONS.md` (liquidity levels/sweep, Stage 0A) and `04_SRC/smc/detection/sweep_detector.py` (+ scanner/structural validity context); no new sweep rule invented.
+- **Window:** exec `2025-06-01T00:00:00Z..2025-11-30T23:59:59Z`, warm-up from `2025-03-01T00:00:00Z` (H4 1,208 bars from M1 268,108).
+- **Results:** `N_SWEEPS=753` exec-window events (bull_ssl 359 / bear_bsl 394), sample 40 (stratified + time-spread, seed 20260601), charts 40. Deterministic dual-run (hash `2515fdfd…d177f90`). Artifacts gitignored: `06_RESEARCH/results/l1_h4_sweep_fidelity/{events_h4_sweep.csv,summary.json,charts/,run.log}`.
+- **Human gate:** score CORRECT/PARTIAL/WRONG/UNCLEAR on sampled charts; no pass threshold invented (Architect sets after scoring). NEXT = human score L1 H4 sweeps.
+- **Bans honored:** no 04_SRC strategy/threshold/tier/trigger edits, no `locked_constants.py` changes, no LTF/orders/PnL.
+
 ### 2026-11-10 — LAYERED FIDELITY RESEARCH PLAN LOCKED (docs-only; `LOGIC_CHANGED: NO`)
 
 - **Authority:** Lead Architect directive 2026-11-10 (method restart, not greenfield rewrite).
