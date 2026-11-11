@@ -46,6 +46,16 @@
 - **Not wired:** no production import of `smc.liquidity`; `liquidity_scanner.scan` untouched.
 - **Verification:** `locked_constants.py` diff empty; detection/trigger/risk diff empty; suite **1452 passed, 7 skipped**.
 
+### 2026-11-11 — P2b SWEEP ATTRIBUTION (enter_at-safe) + CO-LOCATION CENSUS (`LOGIC_CHANGED: NO` for detection)
+
+- **Authority:** P2 design amendments R1–R5 (P2a accepted). Additive attribution phase; no detector, trigger, risk, live or paper changes.
+- **Added:** `04_SRC/smc/liquidity/attribution.py` (`SweepHit`, `AttributionReport`, `resolve_start_index`, `attribute_sweeps`, `sweeps_on_bar`), exports in `smc/liquidity/__init__.py`, `04_SRC/tests/test_liquidity_sweep_attribution.py` (11 tests), `06_RESEARCH/scripts/p2b_sweep_attribution.py`, `06_RESEARCH/P2B_SWEEP_ATTRIBUTION_NOTE.md`.
+- **R4 bound:** scan `start_index` = first bar with `timestamp >= level.enter_at`; `formed_at` is never forwarded (adapter level has `formed_at=None`). Pre-`enter_at` pierces are ignored (proven by test); past-series-end levels are `not_applicable`; unordered series fail closed.
+- **Multi-hit:** all hits emitted, ordered by `(bar_index, family, side, period_id)`; no winner selection (ranking not frozen).
+- **Census (2025-06-01→2025-11-30, event-driven per level):** 1305 levels scanned → 637 hits (PD 54/51, PW 16/11, Session 253/216, Structural 19/17); 590 bars with hits; 42 multi-hit bars, max 3; `eqh_hits: 0`; not-applicable 0; deterministic (summary SHA256 `3869955…`, hits CSV `c098003…`).
+- **Residuals:** structural broken-exit, ranking, live wiring, H4/H1 identity collision, single-sweep semantics.
+- **Verification:** `locked_constants.py` diff empty; detection/trigger/risk/orchestration diff empty; suite **1463 passed, 7 skipped** (26 liquidity tests).
+
 ## [Unreleased]
 
 ### 2026-11-10 — P1 VISUAL LEVEL FIDELITY PACK (liquidity LEVEL labeling only; `LOGIC_CHANGED: NO`)

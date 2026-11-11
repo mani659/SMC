@@ -18,6 +18,13 @@ R-EQH-C: equal highs/lows are **not** pool members. Offering one raises.
 
 from __future__ import annotations
 
+from smc.liquidity.attribution import (
+    AttributionReport,
+    SweepHit,
+    attribute_sweeps,
+    resolve_start_index,
+    sweeps_on_bar,
+)
 from smc.liquidity.pool import (
     POOL_FAMILIES,
     LiquidityPool,
@@ -34,6 +41,8 @@ from smc.liquidity.pool import (
 )
 
 __all__ = [
+    "AttributionReport",
+    "SweepHit",
     "POOL_FAMILIES",
     "LiquidityPool",
     "PoolFamily",
@@ -42,6 +51,9 @@ __all__ = [
     "PoolSide",
     "PoolStatus",
     "from_pdh_pdl",
+    "attribute_sweeps",
+    "resolve_start_index",
+    "sweeps_on_bar",
     "from_pwh_pwl",
     "from_session",
     "from_structural",
