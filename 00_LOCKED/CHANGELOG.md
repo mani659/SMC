@@ -34,6 +34,18 @@
 - **Survey (ABSENT surfaces):** pool registry / `active_pool` query, level ranking scorer, directional bias module. PRESENT: `liquidity_scanner.scan`, periodic/session/structural constructors, `sweep_detector`, `displacement_checker`, `atr`, `detection_driver.stage0`, `multi_tf_runtime` (§4a H4+H1), `sweep_episode_coordinator`, `confluence_scorer` (POIs only), `sweep_guard`.
 - **P1 context recorded:** PDH/PDL, PWH/PWL, Session H/L, Structural = PASS (pool YES); EQH/EQL = HOLD (pool NO, R-EQH-C).
 
+### 2026-11-11 — P2a POOL REGISTRY + LIFECYCLE + FROZEN-WINDOW INVENTORY (`LOGIC_CHANGED: NO` for detection)
+
+- **Authority:** P2 design lock accepted with amendments R1–R5. Additive-only implementation phase (P2a); no detector, trigger, risk, live or paper changes.
+- **Added:** `04_SRC/smc/liquidity/__init__.py`, `04_SRC/smc/liquidity/pool.py` (PoolFamily/PoolSide/PoolStatus/PoolLevel/LiquidityPool + builders), `04_SRC/tests/test_liquidity_pool.py` (15 tests), `06_RESEARCH/scripts/p2a_pool_inventory.py`, `06_RESEARCH/P2A_POOL_REGISTRY_NOTE.md`.
+- **Membership:** PDH, PDL, PWH, PWL, Session H/L (Asia/London/NY), Structural BSL/SSL (`is_valid`). EQH/EQL hard-rejected (R-EQH-C) and absent from `PoolFamily`.
+- **Identity:** `level_id = (family, side, period_id)`; price is an attribute — no price-quantum numbers invented.
+- **Lifecycle (R2):** `enter_at` = next UTC midnight (PDH/PDL), next Monday 00:00 (PWH/PWL), session close (Session, source_tf=M5 per R1), §19 confirmation bar close (Structural). Exit by supersession only (`exit_at = successor.enter_at`), so weekend carry-over matches production "Monday sees Friday's levels". Structural broken-exit deferred to P2b; simultaneous same-bar confirmations coexist.
+- **R3:** soft report order (PWH/PWL > PDH/PDL > Session > Structural) used only for inventory/sample CSV; `active_asof` stays chronological. **R4:** sweep `start_index = enter_at` deferred to P2b. **R5:** phase scope held.
+- **Inventory (2025-06-01→2025-11-30 UTC, 732 samples):** 1305 levels registered; distinct per family/side previous_day 157/157, previous_week 27/27, session 390/390, structural 40/47; max 14 active at one instant (2025-07-21T18:00Z, by family PD 2 / PW 2 / Session 6 / Structural 4); `eqh_included: false`; periodic equivalence 3/3 vs `detect_periodic_levels`; deterministic (counts SHA256 `f78d6207…`).
+- **Not wired:** no production import of `smc.liquidity`; `liquidity_scanner.scan` untouched.
+- **Verification:** `locked_constants.py` diff empty; detection/trigger/risk diff empty; suite **1452 passed, 7 skipped**.
+
 ## [Unreleased]
 
 ### 2026-11-10 — P1 VISUAL LEVEL FIDELITY PACK (liquidity LEVEL labeling only; `LOGIC_CHANGED: NO`)
