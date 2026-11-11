@@ -78,6 +78,7 @@ from smc.live.mode_t import (                                # noqa: E402
     ModeTLedger,
     is_skip_reason,
 )
+from smc.live.pool_board import build_live_pool_board           # noqa: E402
 from smc.live.structure_console import (                     # noqa: E402
     build_structure_snapshot,
     render_structure_console,
@@ -195,6 +196,9 @@ class OperatorSession:
         }
         # L1: rate-limit anchor for structure snapshot rebuilds.
         self._last_structure_mono = 0.0
+        # Wire-light: pool board cache keyed by the last execution bar stamp so
+        # an unchanged window does not re-run detection/attribution.
+        self._pool_cache: tuple | None = None
         # Mode T + judgement + markers (design lock §2/§3/§4; built in
         # _build_stack only when the config opts in — default posture A).
         self._mode_t_director: ModeTDirector | None = None
@@ -1056,10 +1060,49 @@ class OperatorSession:
                 exc,
                 exc_info=True,
             )
+        # Wire-light: attach the read-only pool board (active P2a levels +
+        # recent enter_at-safe P2b hits). Display only — never a trade gate.
+        snapshot = self.state.get("structure")
+        if isinstance(snapshot, dict):
+            snapshot.update(self._pool_board_for(adapter))
         # Structure-draw file (design lock §2): publish on EVERY refresh —
         # a batch change (arming) forces both the board AND the draw file.
         # Fail-safe: a broken draw publish is logged, never fatal.
         self._publish_structure_draw()
+
+    def _pool_board_for(self, adapter) -> dict:
+        """Build (or reuse) the console pool board from candles already held.
+
+        Full rebuild per changed bar is cheap on the ~300-bar execution window
+        and keeps V1 honest; the cache only skips work when the window's last
+        bar has not moved. Any failure degrades to an explicit note so the
+        board prints ``POOL SWEEPS: n/a (<reason>)`` instead of crashing.
+        """
+        candles = list(getattr(adapter, "_candles", None) or [])
+        if not candles:
+            return {"pool": {"levels": [], "hits": [], "n_active": 0,
+                             "note": "n/a (no execution candles yet)"}}
+        stamp = candles[-1].timestamp
+        if self._pool_cache is not None and self._pool_cache[0] == stamp:
+            return {"pool": self._pool_cache[1]}
+        from smc.config.timeframe import Timeframe
+
+        try:
+            board = build_live_pool_board(
+                candles,
+                timeframe=getattr(candles[-1], "timeframe", Timeframe.M5),
+                now=_utcnow(),
+            )
+        except Exception as exc:               # noqa: BLE001 — board must not die
+            self._logger.error(
+                "POOL BOARD FAILED operation=build_live_pool_board error=%r",
+                exc,
+                exc_info=True,
+            )
+            board = {"levels": [], "hits": [], "n_active": 0,
+                     "note": f"n/a ({type(exc).__name__})"}
+        self._pool_cache = (stamp, board)
+        return {"pool": board}
 
     def _publish_structure_draw(self) -> None:
         """Rewrite smc_structure_draw.txt from the current snapshot.

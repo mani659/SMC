@@ -360,6 +360,16 @@ def build_research_h4_zone_book_snapshot(*, feed=None, machine=None,
     }
 
 
+#: Pool families in soft display order (R3) — READABILITY ONLY, never a
+#: trading priority and never consulted by attribution/ranking.
+_POOL_GROUP_ORDER = (
+    ("previous_week", "PWH/PWL"),
+    ("previous_day", "PDH/PDL"),
+    ("session", "SESSION"),
+    ("structural_swing", "STRUCT"),
+)
+
+
 def _fmt_price(value) -> str:
     return "n/a" if value is None else f"{value:.2f}"
 
@@ -415,10 +425,14 @@ def render_structure_console(snapshot: dict) -> str:
     now_txt = now.isoformat(timespec="seconds") if isinstance(now, datetime) else "n/a"
     armed_total = sum(1 for r in (snapshot.get("pois") or [])
                       if r.get("armed"))
+    pool_snapshot = snapshot.get("pool")
+    pool_rows = (pool_snapshot or {}).get("levels") or []
     push(_RULE)
     push(f" STRUCTURE CONSOLE  |  {now_txt} UTC   (read-only snapshot;"
-         f" armed {armed_total})")
+         f" armed {armed_total})   pool active: "
+         f"{len(pool_rows) if pool_snapshot is not None else 'n/a'}")
     push(_RULE)
+    push(f" pool active: {len(pool_rows) if pool_snapshot is not None else 'n/a'}")
 
     note = snapshot.get("note")
     if note:                             # mode clarification (Console V2)
@@ -472,6 +486,29 @@ def render_structure_console(snapshot: dict) -> str:
     if not rows:
         push("   (no armed POIs)")
 
+    # --- ACTIVE POOL (P2a read-only) ----------------------------------- #
+    # Display order is the R3 soft order for readability ONLY. These rows are
+    # never a trade gate, never a ranking, and never an entry permission.
+    push(_SUBRULE)
+    push(" ACTIVE POOL  (read-only; display order only - NOT a trade priority)")
+    if pool_snapshot is None:
+        push("   (none) - pool snapshot unavailable")
+    elif not pool_rows:
+        push("   (none) - no active pool levels")
+    else:
+        for family_key, label in _POOL_GROUP_ORDER:
+            group = [r for r in pool_rows if r.get("family") == family_key]
+            if not group:
+                push(f"   {label:<7}: (none)")
+                continue
+            for row in group:
+                tf_txt = f" tf={row.get('source_tf') or 'n/a'}" if family_key == "session" else ""
+                push(
+                    f"   {label:<7} {str(row.get('side') or 'n/a'):<3}"
+                    f" {_fmt_price(row.get('price')):>9}"
+                    f"  {str(row.get('period_id') or 'n/a'):<20}{tf_txt}"
+                )
+
     # --- SWEEPS ------------------------------------------------------- #
     push(_SUBRULE)
     push(" SWEEPS")
@@ -486,6 +523,24 @@ def render_structure_console(snapshot: dict) -> str:
                 f"   {str(row.get('tf') or 'n/a'):<3} side={str(row.get('side') or 'n/a'):<5}"
                 f" {mag_txt:<12} -> poi {row.get('id_short') or 'n/a'}"
             )
+
+    # --- POOL SWEEPS (P2b, enter_at-safe) ------------------------------ #
+    push(_SUBRULE)
+    push(" POOL SWEEPS  (enter_at-safe; recent)")
+    pool_note = (pool_snapshot or {}).get("note")
+    pool_hits = (pool_snapshot or {}).get("hits") or []
+    if pool_note:
+        push(f"   POOL SWEEPS: {pool_note}")
+    elif not pool_hits:
+        push("   POOL SWEEPS: (none)")
+    else:
+        for group in pool_hits:
+            parts = "  ".join(
+                f"{item.get('family')}/{item.get('side')}"
+                f" {_fmt_price(item.get('price'))}"
+                for item in (group.get("items") or [])
+            )
+            push(f"   {group.get('ts_short') or 'n/a'}  n={group.get('n', 0)}  {parts}")
 
     # --- SEEKING ------------------------------------------------------ #
     push(_SUBRULE)

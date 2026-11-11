@@ -1,5 +1,15 @@
 # SESSION HANDOFF — SMC BOT
 
+## 2026-11-11 — WIRE-LIGHT: POOL + SWEEP HITS ON THE STRUCTURE CONSOLE (`LOGIC_CHANGED: DISPLAY ONLY`)
+
+- **Authority:** Lead Architect WIRE-LIGHT directive 2026-11-11. Observability only: no detection math, trigger, pillar, risk, fill or TP/SL change; the pool is not an entry/exit gate; ranking not frozen; `locked_constants.py` untouched.
+- **Implemented:** `04_SRC/smc/live/pool_board.py` (P2a builders → pool → `inventory(asof)` + P2b `attribute_sweeps` grouped per bar), `04_SRC/smc/live/structure_console.py` (new `ACTIVE POOL` + `POOL SWEEPS` sections and a `pool active: N` header line; the legacy POI-displacement `SWEEPS` section is kept verbatim), `04_SRC/smc/live/run_operator.py` (thin glue: board attached on each structure refresh, cached by last exec bar, failures degrade to `n/a (<reason>)`), `04_SRC/tests/test_pool_console.py` (8 tests, no MT5).
+- **Data path:** `PipelineAdapter._candles` (M5 exec, already held) → `from_session` (source_tf=M5), `from_pdh_pdl`/`from_pwh_pwl` when coverage allows → `LiquidityPool` → active levels; attribution's `start_index` comes from `enter_at` (never `formed_at`) → last 8 hit bars, all levels listed, no winner.
+- **Board:** ACTIVE POOL grouped PWH/PWL → PDH/PDL → SESSION → STRUCT (R3 soft order, readability only), `(none)` per empty family; POOL SWEEPS `(none)` or `n/a (<reason>)`; `pool active: N` sits beside the armed counter.
+- **Honest limits:** the live V1 window cannot support PWH/PWL or STRUCT families (they render `(none)`); broken structural exit still residual; no ranker; no seek handoff.
+- **Verification:** suite **1471 passed / 7 skipped**; `locked_constants.py` diff empty; detection/trigger/risk/liquidity diffs empty; EQH never constructed or rendered. Dry-run board capture SKIPPED (no terminal in session).
+- **NEXT ACTION (single):** **Architect review pool console — then structural broken-exit design | expert-chart join | pause.**
+
 ## 2026-11-10 — LAYERED FIDELITY PLAN ACTIVE (docs-only; `LOGIC_CHANGED: NO`)
 
 - **Authority:** Lead Architect directive 2026-11-10 (validation restart, method lock).

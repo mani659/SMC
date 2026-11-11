@@ -6,6 +6,13 @@
 
 ---
 
+### 2026-11-11 — WIRE-LIGHT: POOL LEVELS + RECENT SWEEP HITS ON THE STRUCTURE CONSOLE (`LOGIC_CHANGED: DISPLAY ONLY`)
+
+- **Authority:** Lead Architect WIRE-LIGHT directive. Observability only — not a trade gate, no ranking freeze, no detection/trigger/risk/fill/TP-SL change, `locked_constants.py` untouched.
+- **Added:** `04_SRC/smc/live/pool_board.py` (pure builder: candle slice → P2a `LiquidityPool` → active levels; P2b `attribute_sweeps` → recent hits grouped per bar). `04_SRC/tests/test_pool_console.py` (8 tests). Note `06_RESEARCH/POOL_CONSOLE_WIRE_NOTE.md`.
+- **Changed (display/glue):** `04_SRC/smc/live/structure_console.py` gains `ACTIVE POOL` (grouped PWH/PWL → PDH/PDL → SESSION → STRUCT, `(none)` per empty family, SESSION shows `tf=M5`) and `POOL SWEEPS` (`none` / `n/a (<reason>)` / multi-hit lines listing every level), plus a `pool active: N` header line; the existing POI-displacement `SWEEPS` section is unchanged. `04_SRC/smc/live/run_operator.py` attaches the board on each structure refresh (cached by last exec bar), fail-soft.
+- **Bans honored:** no pool-based entry/exit gate, no EQH/EQL in the pool, no ranking freeze, no `locked_constants.py` edit. Suite **1471 passed / 7 skipped**; detection/trigger/risk/liquidity diffs empty. Dry-run board capture SKIPPED (no terminal).
+
 ### 2026-11-11 — P1 CHART-CONTRACT + WRONG-EXTREME DATA AUDIT (level labeling only; `LOGIC_CHANGED: NO`)
 
 - **Authority:** Architect directive — add period boundaries, show EQH clusters/touches, enforce full-week PWH/PWL, machine audit vs period true extremes. **P2 still blocked.** Research/instrumentation only.
