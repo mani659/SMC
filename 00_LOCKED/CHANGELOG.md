@@ -6,6 +6,14 @@
 
 ---
 
+### 2026-11-11 — POI KPI + REVIEW PACK, FROZEN 6M STRUCTURE SPINE (`LOGIC_CHANGED: NO`)
+
+- **Authority:** Lead Architect POI KPI directive. Measurement + human-review pack for the product spine (detection → merged POI → pillars → arm → route → fill). No threshold, detector, trigger or pillar formula edits; no expectancy/PF language; no live terminal.
+- **Added:** `06_RESEARCH/scripts/poi_kpi_pack.py` (run + finalize: POI capture wrapper, funnel/POI/pillar/armed artifacts, descriptive P2a/P2b pool join, stratified charts, report), `04_SRC/tests/test_poi_kpi_pack.py` (6 pure-helper tests), `06_RESEARCH/POI_KPI_REPORT.md`. Artifacts `06_RESEARCH/results/poi_kpi_pack/` (gitignored): summary.json, funnel.csv, poi_emissions.csv, pillar_first_fail.csv, armed_routes_fills.csv, pool_link.csv, charts/ (48 + index.csv), run1/run2.
+- **Funnel (exec 2025-06-01→2025-11-30Z, load 2025-05-01):** raw 96,002 → merged 43,998 → pass 2,145 → armed 632 → routes 230 → placed 66 → fills 61. Top first-fail: P2 displacement 38,612 (87.76%).
+- **Pool link:** YES 4 / NO 628 / UNKNOWN 0 (descriptive join only; never a gate).
+- **Determinism:** dual run PASS — summary semantic-equal, funnel rows equal, POI rows equal (`runtime_seconds` and `tag` excluded). Suite **1477 passed / 7 skipped**; `locked_constants.py` diff empty; detection/trigger/risk diffs empty.
+
 ### 2026-11-11 — WIRE-LIGHT: POOL LEVELS + RECENT SWEEP HITS ON THE STRUCTURE CONSOLE (`LOGIC_CHANGED: DISPLAY ONLY`)
 
 - **Authority:** Lead Architect WIRE-LIGHT directive. Observability only — not a trade gate, no ranking freeze, no detection/trigger/risk/fill/TP-SL change, `locked_constants.py` untouched.

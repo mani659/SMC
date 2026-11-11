@@ -1,5 +1,17 @@
 # SESSION HANDOFF — SMC BOT
 
+## 2026-11-11 — POI KPI + REVIEW PACK, FROZEN 6M STRUCTURE SPINE (`LOGIC_CHANGED: NO`)
+
+- **Authority:** Lead Architect POI KPI directive 2026-11-11. Measurement + human-review pack for the product path (detection → merged POI → 5 pillars → arm → route → fill). Not a dry-run ops task, not expectancy, not pool ranking.
+- **Composition (imported, never forked):** `phase3_structure_funnel.run` — `MultiTFProductRuntime.run_batch` at new-H1-close cadence (detection set pinned to the Phase 3/4/C1 composition H4+H1, D1→M8 context), `MultiTFDetectionDriver.validate_multi`, `PipelineEngine`, `PipelineAdapter`, `BacktestRunner`. Extra wrapper records each merged POI's identity + pillar path; restored in `finally`.
+- **Window:** load 2025-05-01, exec **2025-06-01 → 2025-11-30 UTC** (same 6m band as P2a/P2b). Dual run.
+- **FUNNEL:** raw 96,002 (H4 44,914 / H1 51,088) → merged 43,998 (H4 20,508 / H1 23,490) → pillar PASS 2,145 → armed 632 (H4 180 / H1 316 / D1 136; M8 475) → routes 230 (F 209, B 10, A 9, E 2) → placed 66 (all with TP) → fills 61.
+- **PILLAR TOP FAIL:** P2 displacement 38,612 (87.76%), then P3 2,092, P1 1,149. Measurement only — no threshold response.
+- **POOL LINK (descriptive join, not a gate):** YES 4 / NO 628 / UNKNOWN 0 over 632 armed POIs (P2a active level + P2b hit within `poi_give_up_bars()` M5 bars).
+- **Review pack:** 48 stratified charts (`charts/index.csv`), flowchart vocabulary labels, HTF + M5 panels; rubric CORRECT/PARTIAL/WRONG/UNCLEAR in `06_RESEARCH/POI_KPI_REPORT.md`. Artifacts under `06_RESEARCH/results/poi_kpi_pack/` (gitignored per repo policy).
+- **Determinism:** summary semantic-equal, funnel rows equal, POI rows equal (only `runtime_seconds` and run `tag` excluded). Suite **1477 passed / 7 skipped**; `locked_constants.py` diff empty; detection/trigger/risk diffs empty.
+- **NEXT ACTION (single):** **Architect + human score of poi_kpi_pack charts/KPI — then handoff design or residuals.**
+
 ## 2026-11-11 — WIRE-LIGHT: POOL + SWEEP HITS ON THE STRUCTURE CONSOLE (`LOGIC_CHANGED: DISPLAY ONLY`)
 
 - **Authority:** Lead Architect WIRE-LIGHT directive 2026-11-11. Observability only: no detection math, trigger, pillar, risk, fill or TP/SL change; the pool is not an entry/exit gate; ranking not frozen; `locked_constants.py` untouched.
