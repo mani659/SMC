@@ -14,6 +14,15 @@
 - **Audit:** 1239 rows, deterministic dual-run PASS. Wrong-extreme by strict period-true-extreme equality: WRONG_EXTREME_COUNTS all 0, OUT_OF_PERIOD_COUNTS all 0. EQH clusters rendered with touches (research re-clustering, no `04_SRC` changes).
 - **Bans honored:** no `04_SRC/smc/**` edits, no `locked_constants.py` changes. No detector fixes.
 
+### 2026-11-11 — P1 INDEPENDENT VERIFICATION + STRATIFIED RE-SCORE PACK (`LOGIC_CHANGED: NO`)
+
+- **Authority:** Lead Architect second-model verification of the prior P1 wrong-extreme audit. Research/evidence only; **P2 still blocked**, no family accepted.
+- **Added (committed):** `06_RESEARCH/scripts/p1_independent_verify.py`, `06_RESEARCH/P1_INDEPENDENT_VERIFY_NOTE.md`. Artifacts gitignored: `06_RESEARCH/results/p1_independent_verify/` (recompute_sample.csv, recompute_summary.json, visual_to_audit_join.csv, run.log) and `06_RESEARCH/results/p1_rescore_pack/` (A_prior_wrongs 5, B_controls 12, C_eqh_clusters 5, MANIFEST.csv 22 rows).
+- **Independent recompute:** 25 rows (5 Architect-flagged + 20 deterministic random, 4/family), periods re-resolved from locked rules and extremes taken by direct bar iteration (NOT production `_aggregate`). Result: 25/25 EXACT_MATCH, WRONG_EXTREME=0, OUT_OF_PERIOD=0, dual-run deterministic.
+- **Prior-audit defects corrected (evidence only):** (1) prior audit was circular — it reused `_aggregate`/`_cluster` that produced the labels; (2) `FULL_WEEK_PWH_PWL: YES` was overstated — renderer windowed ±1500/600 M1 bars, not Mon→Mon; (3) structural rows were hardcoded EXACT_MATCH with no check; (4) `Swing.timestamp` is the base candle, not the price-extreme bar.
+- **Visual-cause findings:** flagged PWH "deeper low" prints are the *previous* week's lows (3245.198 for week 2025-06-02; 3267.955 for week 2025-08-04), outside the claimed period. Flagged session highs have no higher high inside the locked window.
+- **Bans honored:** no `04_SRC/smc/**` edits, no `locked_constants.py` changes, no retunes.
+
 ## [Unreleased]
 
 ### 2026-11-10 — P1 VISUAL LEVEL FIDELITY PACK (liquidity LEVEL labeling only; `LOGIC_CHANGED: NO`)
