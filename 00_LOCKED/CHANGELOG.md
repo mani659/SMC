@@ -23,6 +23,17 @@
 - **Visual-cause findings:** flagged PWH "deeper low" prints are the *previous* week's lows (3245.198 for week 2025-06-02; 3267.955 for week 2025-08-04), outside the claimed period. Flagged session highs have no higher high inside the locked window.
 - **Bans honored:** no `04_SRC/smc/**` edits, no `locked_constants.py` changes, no retunes.
 
+### 2026-11-11 — P2 LIQUIDITY POOL DESIGN LOCK (design only; `LOGIC_CHANGED: NO`)
+
+- **Authority:** Lead Architect P2 design directive. Design lock only — **no production ranking/pool code**, no `04_SRC/smc/**` edits, no `locked_constants.py` change.
+- **Added (committed):** `06_RESEARCH/P2_LIQUIDITY_POOL_DESIGN.md` — 12 sections (status/authority, P1 inputs + R-EQH-C, code survey, normative membership, identity/lifecycle, ranking, sweep seam, read API, non-goals, P2-impl phases, 8 open questions, self-check).
+- **Membership:** PDH, PDL, PWH, PWL, Session H/L (Asia/London/NY), Structural BSL/SSL (`is_valid` only). **Excluded:** EQH/EQL (R-EQH-C), POI_LEVEL, DEMAND_SUPPLY_BOUNDARY, ORDER_BLOCK_BOUNDARY, M8 zones.
+- **Identity/lifecycle:** `level_id = (family, side, period_id)` — no price quantum, no new magic numbers. `enter_at` = period completion (next UTC midnight / next Monday / session close / §19 confirmation), because `LiquidityLevel.formed_at` is the extreme bar and precedes knowability for PDH/PWH/structural.
+- **Ranking:** **RANKING_FROZEN: NO** — measurement-first (co-location census, publication-order spread, sweep attribution). Family priority / bias alignment are not frozen because no locked ordering and no bias module exist; fitted weights forbidden.
+- **Sweep seam:** reuse `detect_sweep` wick-pierce + body-close; must pass `start_index` from `enter_at` (using `formed_at` would leak pre-publication bars); same-bar multi-sweep emits all hits with no arbitration.
+- **Survey (ABSENT surfaces):** pool registry / `active_pool` query, level ranking scorer, directional bias module. PRESENT: `liquidity_scanner.scan`, periodic/session/structural constructors, `sweep_detector`, `displacement_checker`, `atr`, `detection_driver.stage0`, `multi_tf_runtime` (§4a H4+H1), `sweep_episode_coordinator`, `confluence_scorer` (POIs only), `sweep_guard`.
+- **P1 context recorded:** PDH/PDL, PWH/PWL, Session H/L, Structural = PASS (pool YES); EQH/EQL = HOLD (pool NO, R-EQH-C).
+
 ## [Unreleased]
 
 ### 2026-11-10 — P1 VISUAL LEVEL FIDELITY PACK (liquidity LEVEL labeling only; `LOGIC_CHANGED: NO`)
