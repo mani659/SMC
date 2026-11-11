@@ -6,6 +6,14 @@
 
 ---
 
+### 2026-11-11 — P1 CHART-CONTRACT + WRONG-EXTREME DATA AUDIT (level labeling only; `LOGIC_CHANGED: NO`)
+
+- **Authority:** Architect directive — add period boundaries, show EQH clusters/touches, enforce full-week PWH/PWL, machine audit vs period true extremes. **P2 still blocked.** Research/instrumentation only.
+- **Added (committed):** `06_RESEARCH/scripts/p1_chart_contract_wrong_extreme_audit.py`, `06_RESEARCH/P1_CHART_CONTRACT_AND_WRONG_EXTREME_AUDIT.md`. Artifacts gitignored: `06_RESEARCH/results/p1_wrong_extreme_audit/` ({wrong_extreme_audit.csv, summary.json, run.log, charts_contract/*.png}).
+- **Chart contract:** day/week Mon→Mon/session open-close/EQH span + all touches; captions include period_id/source/flag. **FULL_WEEK_PWH_PWL: YES**.
+- **Audit:** 1239 rows, deterministic dual-run PASS. Wrong-extreme by strict period-true-extreme equality: WRONG_EXTREME_COUNTS all 0, OUT_OF_PERIOD_COUNTS all 0. EQH clusters rendered with touches (research re-clustering, no `04_SRC` changes).
+- **Bans honored:** no `04_SRC/smc/**` edits, no `locked_constants.py` changes. No detector fixes.
+
 ## [Unreleased]
 
 ### 2026-11-10 — P1 VISUAL LEVEL FIDELITY PACK (liquidity LEVEL labeling only; `LOGIC_CHANGED: NO`)
