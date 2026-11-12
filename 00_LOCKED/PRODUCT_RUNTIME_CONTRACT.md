@@ -18,6 +18,19 @@ Research, paper, and live run **the same detection → execution runtime**:
 | Execution timeframe | **M5 primary** (M1 only where already coded as trigger/LTF context; no new M1-exec product) | LOCKED §21/§22, FR-1 |
 | Path | multi-TF detect → merge/validate/arm → LTF trigger scan → RiskEngine → place/intent → manage | as-coded pipeline |
 
+**Product POI detection set (D0 alignment, 2026-11-12 — docs only):** the shipped
+runtime default is `detection_timeframes=(D1, H4, H1, M15)` — **D1, H4, H1 and M15
+are structural POI/detection-capable in product mode** (`multi_tf_runtime.py` accepts
+exactly the menu tiers `{D1, H4, H1, M15}`). **M5 is the execution timeframe** and
+**M1 is trigger/confirmation (LTF) context** (including the ESSENCE path) — neither is a
+structural POI inventory timeframe. W1 stays optional context.
+
+**Expert story authority:** `00_LOCKED/EXPERT_MASTER_CARD.md` +
+`00_LOCKED/EXPERT_AMENDMENT_LIST_2026-11-12.md`.
+
+**Boundary-sweep product emitter:** NOT implemented — design/deferred only; any
+document that implies a shipped emitter is wrong.
+
 The **per-bar execution loop is unchanged** (M5 bars, `PaperRunner.run_one_cycle` /
 `BacktestRunner.on_bar`). Only the *detection cadence* is product-defined: **one multi-TF batch per new H1 close**
 (the cadence the accepted research chain already uses).

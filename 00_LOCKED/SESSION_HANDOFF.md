@@ -1,5 +1,16 @@
 # SESSION HANDOFF — SMC BOT
 
+## 2026-11-12 — D0 DOCS LAG + POST-C2 DIAGNOSTIC (`LOGIC_CHANGED: NO`)
+
+- **Part A (D0):** `PRODUCT_RUNTIME_CONTRACT` §1 now states the shipped product POI detection set `(D1,H4,H1,M15)` (M5 = execution, M1 = trigger/confirmation, neither is a structural POI TF), points at the master card + amendment list as expert-story authority, and records that **no boundary-sweep product emitter exists**. `ESSENCE_CONTRACT_V1` gained a header supersession notice (A3/A4/A7/A10; 1:5 TP and 2–5 pip SL remain review-only) with §5/§6 body untouched.
+- **Part B (diagnostic):** window exec **2025-10-01 → 2025-10-31** (load 2025-05-01). The 6-month window was attempted first and measured at ~15 bars/s mid-window (>1 h/run), so the directive's documented shorter window was fixed before reading results.
+- **Harness finding:** the frozen 6m harness supplies H1/H4/D1 only while the product default now also requires M15 — unchanged it produces `htf_batches=0, batch_errors=2979` (empty funnel). The diagnostic injects M15 resampled from the harness's own M5 candles; no `04_SRC` change. `06_RESEARCH/scripts/post_c2_diagnostic.py`.
+- **Funnel (run1 = run2):** bars 6,324 · batches 526 (1 loud cold-start error) · merged 18,677 · passed 1,027 · **armed 441** (D1 205/M15 93/H4 78/H1 65) · scanned 8,991 · **routes 149** (F122/A15/B11/C1) · C3 **not_in_between 137/149** · candidates 12 · **placed 11 · fills 11** (F10/B1).
+- **Diagnostics:** CHOCH Rule 3 classified 10 (research), **R3 live routes 0**; M8 armed mix ob 66 / DS 42 / fvg 29 (plus combos); TP source structural_swing 9 vs atr_fallback 3; exits TP 3 / SL 8; net **−2.8703 (n=11, NOT performance)**.
+- **Determinism:** trades.csv + report.json byte-identical, funnel semantic diffs none; `choch_classified` differs by one warm-up call (informational). No same-window pre-C2 artifact exists → comparison DATA_GAP, no fabricated delta.
+- **Report:** `06_RESEARCH/POST_C2_DIAGNOSTIC_REPORT.md`. Suite **1500 passed / 7 skipped**; `04_SRC` and `locked_constants.py` diffs empty.
+- **NEXT ACTION (single):** **Architect review of the diagnostic** (or boundary-sweep design / formal LOCKED § edits, Architect pick).
+
 ## 2026-11-12 — C2b: COLOR-FREE DEMAND/SUPPLY (`LOGIC_CHANGED: YES`, D/S identification only)
 
 - **Authority:** master card (OB/D-S color-free, width = single origin candle full range), amendment A2, gap plan G08/G09. C2a/C3 untouched.

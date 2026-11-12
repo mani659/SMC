@@ -6,6 +6,11 @@
 
 ---
 
+### 2026-11-12 — D0 DOCS LAG + POST-C2 DIAGNOSTIC (`LOGIC_CHANGED: NO`)
+
+- **D0 (docs):** `00_LOCKED/PRODUCT_RUNTIME_CONTRACT.md` §1 states the shipped product POI detection set `(D1,H4,H1,M15)`, distinguishes M5 (execution) and M1 (trigger/confirmation) from structural POI TFs, adds the master-card/amendment authority pointer and records that no boundary-sweep product emitter exists. `00_LOCKED/ESSENCE_CONTRACT_V1.md` gains a header supersession notice (A3/A4/A7/A10; 1:5 TP and 2–5 pip SL remain review-only) with its body unchanged.
+- **Diagnostic (counts only, NOT performance):** new `06_RESEARCH/scripts/post_c2_diagnostic.py` + `06_RESEARCH/POST_C2_DIAGNOSTIC_REPORT.md`. Window exec 2025-10-01→10-31 (load 2025-05-01), dual run byte-identical: armed 441, routes 149, C3 `not_in_between` 137/149, candidates 12, placed/filled 11, Rule-3 live routes 0, net −2.8703 (n=11). No same-window pre-C2 artifact → comparison DATA_GAP. The frozen 6m harness required M15 injection (it supplied H1/H4/D1 only) — recorded as a harness finding, `04_SRC` untouched.
+
 ### 2026-11-12 — C2b: COLOR-FREE DEMAND/SUPPLY (`LOGIC_CHANGED: YES`)
 
 - **Authority:** master card A2 + gap plan G08/G09. D/S identification only.

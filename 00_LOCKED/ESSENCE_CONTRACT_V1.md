@@ -25,6 +25,16 @@ FULL IMPLEMENTATION**.
 
 ---
 
+> **SUPERSESSION NOTICE (2026-11-12, D0 docs alignment — body unchanged).** Any
+> TP / SL / entry-catalog row in this contract that conflicts with
+> `00_LOCKED/EXPERT_MASTER_CARD.md` is **superseded for product intent**; see
+> `00_LOCKED/EXPERT_AMENDMENT_LIST_2026-11-12.md` rows **A3 / A4 / A7 / A10**.
+> The signed §5/§6 body below remains the historical record and is NOT rewritten.
+> The benchmark targets (1:5 TP, 2–5 pip SL) remain **review-only** — they are
+> not product gates.
+
+---
+
 ## 0. Product loop (non-negotiable intent)
 
 The bot opens and manages trades under exactly the rules below, producing a
