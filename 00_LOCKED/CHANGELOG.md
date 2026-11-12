@@ -6,6 +6,13 @@
 
 ---
 
+### 2026-11-12 — C2b: COLOR-FREE DEMAND/SUPPLY (`LOGIC_CHANGED: YES`)
+
+- **Authority:** master card A2 + gap plan G08/G09. D/S identification only.
+- **Changed:** `04_SRC/smc/poi/models/m8_htf_demand_supply.py` `_zones` no longer branches on `is_bearish`/`is_bullish`: direction comes from the measured impulse legs (larger leg wins, LONG on tie) and an origin whose own close-to-close move already runs with the impulse is skipped. Width unchanged (single origin candle, full high-low); `DISPLACEMENT_MIN_ATR`, `N_BAR_LTF`, FVG/OB path and episode collapse untouched.
+- **Tests:** new `04_SRC/tests/test_c2b_color_free_ds.py` (7) incl. color-inversion invariance and fail-closed cases; existing M8 acceptance/width tests unchanged and green. Suite **1500 passed / 7 skipped**.
+- **Note:** `06_RESEARCH/C2B_COLOR_FREE_DS_NOTE.md`. `locked_constants.py` diff empty; no M8 color references remain; C2a/C3 untouched.
+
 ### 2026-11-12 — C3: IN-BETWEEN CONTAINMENT GATE (`LOGIC_CHANGED: YES`)
 
 - **Authority:** master card §3.4, gap plan G05. Entry validity only.

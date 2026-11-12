@@ -1,5 +1,16 @@
 # SESSION HANDOFF — SMC BOT
 
+## 2026-11-12 — C2b: COLOR-FREE DEMAND/SUPPLY (`LOGIC_CHANGED: YES`, D/S identification only)
+
+- **Authority:** master card (OB/D-S color-free, width = single origin candle full range), amendment A2, gap plan G08/G09. C2a/C3 untouched.
+- **Pre-rule:** bearish candle -> LONG demand, bullish candle -> SHORT supply (color was the selector; doji emitted nothing).
+- **Post-rule:** origin = candle index `i` whose next `N_BAR_LTF` window clears `DISPLACEMENT_MIN_ATR x ATR`; direction = the leg that moved (larger wins, LONG on tie); an origin whose own close-to-close move already runs with that impulse is skipped. No color read; zone = that candle's full high-low.
+- **Changed:** `smc/poi/models/m8_htf_demand_supply.py` only. OB-from-FVG path untouched (already color-free). `detection/base_candle.py` §18 base-candle color rule audited and intentionally left (swing model, not D/S).
+- **Measurement (synthetic, read-only):** raw DS origins 5 -> 7 on the 24-bar acceptance fixture, 3 -> 27 on a 52-bar drift+dump fixture; emitted POIs stay capped at one per (direction, kind) per TF.
+- **Tests:** `04_SRC/tests/test_c2b_color_free_ds.py` (7). Suite **1500 passed / 7 skipped**; `locked_constants.py` diff empty; M8 has zero color references.
+- **Note:** `06_RESEARCH/C2B_COLOR_FREE_DS_NOTE.md`.
+- **NEXT ACTION (single):** **D0 docs lag | boundary-sweep design | measurement pack — Architect pick.**
+
 ## 2026-11-12 — C3: IN-BETWEEN CONTAINMENT GATE (`LOGIC_CHANGED: YES`, entry validity only)
 
 - **Authority:** master card §3.4, amendment list, gap plan G05. C2a remains PASS and untouched.

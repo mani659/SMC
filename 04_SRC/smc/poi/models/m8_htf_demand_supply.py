@@ -6,9 +6,15 @@ trigger logic yet):
 * Order Block: the candle immediately BEFORE the first candle of a FVG
   (R1 §3.1); zone = the OB candle's full range; demand if the FVG is bullish.
 * Fair Value Gap: gap zone from `smc.detection.detect_fvgs`.
-* Demand/Supply zones (§22): the SINGLE last opposing candle before a strong
-  impulse (move >= DISPLACEMENT_MIN_ATR over the next N_BAR_LTF candles);
-  zone = that opposing candle's full high-low range.
+* Demand/Supply zones (§22, master card A2 — COLOR-FREE): the SINGLE origin
+  candle at the impulse's start (a fixed INDEX in the spine — candle color is
+  never read). An origin must PRE-DATE the displacement: if the candle's own
+  close-to-close move already runs with the impulse by
+  DISPLACEMENT_MIN_ATR x ATR, it is part of the leg and cannot claim the zone
+  (so the first candle of a dump/run is skipped). Direction comes from which
+  leg of the following impulse (>= DISPLACEMENT_MIN_ATR over the next
+  N_BAR_LTF candles) actually moved, the larger leg winning when both clear
+  the threshold; zone = that origin candle's full high-low (wicks included).
 
 Zones are scanned per HTF timeframe (W1/D1/H4) and emitted with their own
 timeframe. W1 is the above-daily context tier added by the Lead Architect
@@ -145,7 +151,14 @@ class M8HtfDemandSupply(POIModel):
                 ob = series[ob_index]
                 raw.append(("ob", direction, ob_index,
                             zone_for_candle(ob, direction, tf)))
-        # Demand / Supply zones (§22): single last opposing candle.
+        # Demand / Supply zones (§22, master card A2 — COLOR-FREE).
+        # The origin is the candle at INDEX i (positional in this spine); the
+        # candle's color is never read. Direction is the impulse leg that
+        # actually moved (both legs measured with the SAME frozen threshold
+        # and anchors as before); when both clear it, the larger leg wins
+        # (deterministic, LONG on an exact tie), so one origin still yields
+        # at most one zone — exactly as when color made the two branches
+        # mutually exclusive.
         window = N_BAR_LTF
         for i in range(len(series) - window):
             candle = series[i]
@@ -153,16 +166,31 @@ class M8HtfDemandSupply(POIModel):
             atr = latest_atr(series[: i + 1], self.atr_period)
             if atr is None:
                 continue
-            if candle.is_bearish:
-                rise = max(c.high for c in horizon) - candle.low
-                if rise >= DISPLACEMENT_MIN_ATR * atr:
-                    raw.append(("demand_supply", Direction.LONG, i,
-                                zone_for_candle(candle, Direction.LONG, tf)))
-            elif candle.is_bullish:
-                fall = candle.high - min(c.low for c in horizon)
-                if fall >= DISPLACEMENT_MIN_ATR * atr:
-                    raw.append(("demand_supply", Direction.SHORT, i,
-                                zone_for_candle(candle, Direction.SHORT, tf)))
+            threshold = DISPLACEMENT_MIN_ATR * atr
+            rise = max(c.high for c in horizon) - candle.low
+            fall = candle.high - min(c.low for c in horizon)
+            rose = rise >= threshold
+            fell = fall >= threshold
+            if not (rose or fell):
+                continue  # fail closed: no impulse, no zone
+            direction = (
+                Direction.LONG if rose and rise >= fall else Direction.SHORT
+            )
+            # Origin must PRE-DATE the displacement: a candle whose own
+            # close-to-close move already runs WITH the impulse by a
+            # displacement-sized amount is part of the leg, not the inventory
+            # candle that started it. Reuses the frozen threshold — no new
+            # number, and no candle-color test (both bodies are allowed as
+            # long as the candle is not already the move).
+            if i > 0:
+                body_move = candle.close - series[i - 1].close
+                if (
+                    (direction is Direction.SHORT and body_move <= -threshold)
+                    or (direction is Direction.LONG and body_move >= threshold)
+                ):
+                    continue
+            raw.append(("demand_supply", direction, i,
+                        zone_for_candle(candle, direction, tf)))
         for kind, direction, start, zone in collapse_episodes(raw):
             yield kind, direction, start, zone
 
