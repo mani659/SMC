@@ -6,6 +6,14 @@
 
 ---
 
+### 2026-11-12 — GAP PLAN vs EXPERT MASTER CARD (docs + read-only code survey; `LOGIC_CHANGED: NO`)
+
+- **Authority:** Lead Architect IMPLEMENTATION GAP PLAN directive. No `04_SRC/smc/**` edit, no `locked_constants.py` change, no backtest.
+- **Added:** `06_RESEARCH/EXPERT_CARD_IMPLEMENTATION_GAP_PLAN.md` — 7 sections, G01–G18 matrix, path-split table (adapter vs menu vs live defaults), phased plan (D0, C1, C2a, C3, C2b, C4, C5, C6), non-goals.
+- **Counts:** 9 ALIGNED / 5 PARTIAL / 1 MISSING / 3 CONFLICT (HIGH: in-between gate absent, CHOCH R3 live in Trigger A, color-coded M8 D/S).
+- **Evidence highlights:** M15 wired in runtime and operator config (contract §1 text lags); TP = first §19-confirmed swing on both adapter and menu with 4×ATR fallback (`coupled_mtf.py` is a stub); boundary-sweep fallback has no product emitter; Pillar 3 role exists in `deal_range.py` but the pillar class/label still says Premium/Discount.
+- **Verification:** plan exists with all 7 sections and G01–G18; `locked_constants.py` diff empty; no production edits. Suite NOT_RUN (docs-only).
+
 ### 2026-11-12 — EXPERT MASTER CARD + DATED AMENDMENT LIST (docs-only; `LOGIC_CHANGED: NO`)
 
 - **Authority:** Lead Architect EXPERT_MASTER_CARD directive after the docs audit gate. Documentation only: no `04_SRC/smc/**` edit, no `locked_constants.py` change, no ESSENCE/LOCKED body rewrite.

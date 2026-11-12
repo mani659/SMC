@@ -1,5 +1,14 @@
 # SESSION HANDOFF — SMC BOT
 
+## 2026-11-12 — GAP PLAN vs EXPERT MASTER CARD (docs + code read; `LOGIC_CHANGED: NO`)
+
+- **Authority:** Lead Architect IMPLEMENTATION GAP PLAN directive; card accepted 2026-11-12. Read-only survey — no code, no threshold, no test edit.
+- **Result:** `06_RESEARCH/EXPERT_CARD_IMPLEMENTATION_GAP_PLAN.md` — 18 rows: **9 ALIGNED / 5 PARTIAL / 1 MISSING / 3 CONFLICT** (HIGH: G05, G07, G08).
+- **M15 is wired:** `Timeframe.M15` exists and the runtime, `OperatorConfig` and `live_demo.json` all default to `D1/H4/H1/M15`; only `PRODUCT_RUNTIME_CONTRACT` §1 text (H4+H1) lags. TP is shared across adapter and menu via `structural_tp_target` (first §19-confirmed swing) with a 4×ATR fallback; `coupled_mtf.py` is a stub.
+- **Conflicts:** Trigger A accepts any `ChochBreak`, including `RULE_3_INSIDE_WICK` (R3 live); M8 Demand/Supply is color-coded (`is_bearish`/`is_bullish`); LOCKED §16/§17/§20/§22 + ESSENCE §5/§6 + contract §1 still conflict with the card.
+- **Biggest gap:** no in-between containment gate on either path — the menu anchors its window on a zone sweep and records edge distance, the adapter has no containment check.
+- **NEXT ACTION (single):** **Architect prioritize EXPERT_CARD_IMPLEMENTATION_GAP_PLAN phases; first implementation prompt only after priority pick (no auto-code).**
+
 ## 2026-11-12 — EXPERT MASTER CARD ACTIVE (docs-only; `LOGIC_CHANGED: NO`)
 
 - **Authority:** Lead Architect EXPERT_MASTER_CARD directive. Gate was READY (questionnaire + OPEN rows settled).
