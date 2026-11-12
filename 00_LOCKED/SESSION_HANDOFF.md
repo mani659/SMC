@@ -1,5 +1,13 @@
 # SESSION HANDOFF — SMC BOT
 
+## 2026-11-12 — EXPERT MASTER CARD ACTIVE (docs-only; `LOGIC_CHANGED: NO`)
+
+- **Authority:** Lead Architect EXPERT_MASTER_CARD directive. Gate was READY (questionnaire + OPEN rows settled).
+- **Added:** `00_LOCKED/EXPERT_MASTER_CARD.md` (story, flow tree, POI TFs M15/H1/H4/D1 + optional W1, permanent A–F letter map with C live, five pillars with Pillar 3 = Dealing Range, in-between binary, TP = first valid swing, SL = ATR buffer, benchmarks) and `00_LOCKED/EXPERT_AMENDMENT_LIST_2026-11-12.md` (A1–A10: what the card supersedes, what stays UNCHANGED, and what remains BENCHMARK_ONLY).
+- **Not touched:** `ESSENCE_CONTRACT_V1.md` and `LOCKED_DECISIONS.md` bodies are unchanged; formal § edits are a separate engagement after Architect acceptance. No `04_SRC/smc/**` edit; `locked_constants.py` diff empty.
+- **Benchmarks fixed:** 30-pip SL (MAE review), ESSENCE Model-8 1:5 TP profile, ESSENCE 2–5 pip M1 SL — none is product behaviour.
+- **NEXT ACTION (single):** **Architect accept EXPERT_MASTER_CARD + amendment list; then gap implementation plan (no auto-code).**
+
 ## 2026-11-12 — EXPERT DOCS ALIGNMENT AUDIT (`LOGIC_CHANGED: NO`, read-only)
 
 - **Authority:** Lead Architect EXPERT-ALIGNMENT DOCS AUDIT directive (Project Manager sequence: Audit → Master Card). Compared existing docs against the 10 signed human answers; no master card written, no LOCKED body edited.

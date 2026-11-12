@@ -6,6 +6,13 @@
 
 ---
 
+### 2026-11-12 — EXPERT MASTER CARD + DATED AMENDMENT LIST (docs-only; `LOGIC_CHANGED: NO`)
+
+- **Authority:** Lead Architect EXPERT_MASTER_CARD directive after the docs audit gate. Documentation only: no `04_SRC/smc/**` edit, no `locked_constants.py` change, no ESSENCE/LOCKED body rewrite.
+- **Added:** `00_LOCKED/EXPERT_MASTER_CARD.md` — story (bias zones → confirm-at-zone → enter), information-flow tree, POI TFs (M15/H1/H4/D1, W1 optional), permanent A–F letter map with Trigger C live, five pillars (Pillar 3 = Dealing Range), in-between binary, TP = first valid swing, SL = ATR buffer, benchmarks, non-goals.
+- **Added:** `00_LOCKED/EXPERT_AMENDMENT_LIST_2026-11-12.md` — rows A1–A10 recording what the card supersedes (CHOCH R3 eligibility, color-defined D/S, ESSENCE TP/SL, Pillar 3 naming, M7 plane FLIP, entry map/C, M15 POI TFs, no dual confirmation chain, ESSENCE status notice), plus the explicit UNCHANGED list.
+- **Verification:** both files exist; letter map matches the signed dictionary; A1–A10 present; `locked_constants.py` diff empty; no production edits. Suite NOT_RUN (docs-only).
+
 ### 2026-11-12 — EXPERT DOCS ALIGNMENT AUDIT (read-only; `LOGIC_CHANGED: NO`)
 
 - **Authority:** Lead Architect EXPERT-ALIGNMENT DOCS AUDIT directive. Documentation comparison only: no master card, no `04_SRC/smc/**` edit, no `locked_constants.py` change, no LOCKED body rewrite.
