@@ -1,5 +1,14 @@
 # SESSION HANDOFF — SMC BOT
 
+## 2026-11-12 — EXPERT DOCS ALIGNMENT AUDIT (`LOGIC_CHANGED: NO`, read-only)
+
+- **Authority:** Lead Architect EXPERT-ALIGNMENT DOCS AUDIT directive (Project Manager sequence: Audit → Master Card). Compared existing docs against the 10 signed human answers; no master card written, no LOCKED body edited.
+- **Result:** 20 topics — **10 ALIGNED / 7 CONFLICT / 1 MISSING / 2 STALE** (6 HIGH). Report `06_RESEARCH/EXPERT_DOCS_ALIGNMENT_AUDIT.md`.
+- **Highest conflicts:** (1) `LOCKED_DECISIONS.md` §17/§20 keep CHOCH **Rule 3 wick-only** as a valid live signal; (2) SIGNED `ESSENCE_CONTRACT_V1` §6 sets TP = Model-8 profile with a hard 1:5 gate, while the target requires **first valid swing**; (3) ESSENCE §5 sets SL = **2–5 pips beyond M1 structure**, while the target keeps the **ATR buffer** and treats 30 pips as a benchmark; (4) D/S and OB zones are **color-defined**, while the target is **color-free**.
+- **Open design (HOLD):** entry-catalog letter mapping and whether Trigger C (Ending Diagonal) stays; M1-sniper vs M5-runtime entry timeframe. All other conflicts are SUPERSEDE_WITH_TARGET candidates for the master card.
+- **Clean topics:** liquidity MAP, sweep story, in-between binary entry, boundary-sweep fallback, single-origin-candle width, 5-pillar count (name drift on Pillar 3), M5/M7 separation, confluence-not-sizing, base-candle swing validity.
+- **NEXT ACTION (single):** **Human pass on EXPERT_DOCS_ALIGNMENT_AUDIT CONFLICT rows → then EXPERT_MASTER_CARD prompt (docs-only).**
+
 ## 2026-11-11 — POI KPI + REVIEW PACK, FROZEN 6M STRUCTURE SPINE (`LOGIC_CHANGED: NO`)
 
 - **Authority:** Lead Architect POI KPI directive 2026-11-11. Measurement + human-review pack for the product path (detection → merged POI → 5 pillars → arm → route → fill). Not a dry-run ops task, not expectancy, not pool ranking.

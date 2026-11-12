@@ -6,6 +6,14 @@
 
 ---
 
+### 2026-11-12 — EXPERT DOCS ALIGNMENT AUDIT (read-only; `LOGIC_CHANGED: NO`)
+
+- **Authority:** Lead Architect EXPERT-ALIGNMENT DOCS AUDIT directive. Documentation comparison only: no master card, no `04_SRC/smc/**` edit, no `locked_constants.py` change, no LOCKED body rewrite.
+- **Added:** `06_RESEARCH/EXPERT_DOCS_ALIGNMENT_AUDIT.md` — 7 sections, full T01–T20 matrix, ranked CONFLICT/MISSING list, non-goals, Architect recommendation.
+- **Counts:** 17 files read; **10 ALIGNED / 7 CONFLICT / 1 MISSING / 2 STALE** (6 HIGH). `MASTER_CARD_GATE: HOLD` pending three human decisions.
+- **HIGH conflicts:** CHOCH Rule 3 live eligibility (§17/§20); TP = first valid swing vs signed ESSENCE Model-8 1:5; SL = ATR buffer vs signed 2–5 pips; color-free OB/D-S vs color-defined zones; the SIGNED ESSENCE page presenting a frozen story that contradicts the target; entry-catalog mapping + Trigger C retention.
+- **Verification:** report exists with all 7 sections and all 20 rows; `locked_constants.py` diff empty; no production edits. Suite NOT_RUN (docs-only).
+
 ### 2026-11-11 — POI KPI + REVIEW PACK, FROZEN 6M STRUCTURE SPINE (`LOGIC_CHANGED: NO`)
 
 - **Authority:** Lead Architect POI KPI directive. Measurement + human-review pack for the product spine (detection → merged POI → pillars → arm → route → fill). No threshold, detector, trigger or pillar formula edits; no expectancy/PF language; no live terminal.
