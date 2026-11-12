@@ -6,6 +6,13 @@
 
 ---
 
+### 2026-11-12 — C3: IN-BETWEEN CONTAINMENT GATE (`LOGIC_CHANGED: YES`)
+
+- **Authority:** master card §3.4, gap plan G05. Entry validity only.
+- **Changed:** new `04_SRC/smc/triggers/in_between.py` (`price_inside_zone`, `trigger_in_between`, token `not_in_between`); `04_SRC/smc/backtest/pipeline_bridge.py::candidate_from_route` accepts `completion_price` (completion bar CLOSE) and returns `None` outside the POI body; `pipeline_adapter.py` resumes the chronological scan on reject; `product_menu_mtf.py` builds no candidate, leaves the episode ACTIVE and records `rejected_<TF>_not_in_between`.
+- **Tests:** new `04_SRC/tests/test_c3_in_between_gate.py` (8) + fixture updates in integration/paper/reports/scan-semantics/OPT1 suites (no weakened assertions). Suite **1493 passed / 7 skipped**.
+- **Note:** `06_RESEARCH/C3_IN_BETWEEN_GATE_NOTE.md`. `locked_constants.py` diff empty; FR-3, R7, §5 and C2a untouched; no boundary-sweep emitter.
+
 ### 2026-11-12 — C2a: CHOCH RULE 3 LIVE-OFF (`LOGIC_CHANGED: YES`)
 
 - **Authority:** master card A1, amendment list A1, gap plan G07. Scoped to live eligibility only.

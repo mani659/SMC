@@ -528,7 +528,8 @@ def test_real_pipeline_adapter_drives_paper_runner():
     calm = (100.4, 100.6, 100.3, 100.5)
     engulfed = (100.5, 100.55, 100.3, 100.4, 500.0)
     engulfer = (100.4, 100.6, 99.9, 100.5, 300.0)   # §5 touch + pattern
-    signal_bar = (100.4, 100.6, 100.3, 100.5)       # Trigger D entry bar
+    # Trigger D entry bar; close 100.2 sits INSIDE the zone (C3 in-between).
+    signal_bar = (100.4, 100.6, 100.15, 100.2)
 
     def bars(rows):
         return [_bar(START + timedelta(minutes=5 * i), row) for i, row in enumerate(rows)]

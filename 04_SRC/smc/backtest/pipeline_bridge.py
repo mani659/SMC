@@ -26,6 +26,7 @@ from smc.core.enums import Direction, TriggerType
 from smc.orchestration.engine import TriggerRoute
 from smc.risk.fvg_invalidation import FvgContext
 from smc.triggers.base_trigger import FR2_TP_ATR_MULTIPLE
+from smc.triggers.in_between import NOT_IN_BETWEEN, trigger_in_between
 
 __all__ = ["candidate_from_route", "fvg_context_for_route",
            "pillar_path_summary", "resolve_take_profit",
@@ -179,7 +180,9 @@ def structural_tp_target(swings, entry_price: float, direction: Direction,
 def candidate_from_route(route: TriggerRoute, *, displacement=None,
                          pillar_path: str | None = None,
                          atr: float | None = None,
-                         structural_target=None) -> CandidateEntry:
+                         structural_target=None,
+                         completion_price: float | None = None,
+                         ) -> CandidateEntry | None:
     """Map a winning trigger route to a runner candidate entry.
 
     The signal's ``entry_price`` is the resting limit and ``stop_reference``
@@ -195,6 +198,15 @@ def candidate_from_route(route: TriggerRoute, *, displacement=None,
     ``displacement`` (a DisplacementResult or None) contributes its
     ``magnitude_atr``; ``pillar_path`` is a preformatted summary string
     (see :func:`pillar_path_summary`). Absent inputs stay ``None``.
+
+    C3 in-between gate (master card §3.4): when ``completion_price`` — the
+    completion bar's CLOSE, the frozen definition — is supplied, the route
+    only maps to a candidate while that close sits inside the routed POI's
+    inclusive ``[zone.bottom, zone.top]`` body. Outside (or unlocatable
+    zone bounds) returns ``None``: the completion is not a valid entry and
+    the caller resumes its scan instead of placing. Placement callers MUST
+    pass it; the parameter stays optional only so pure mapping/audit tests
+    can build identity stamps without candles.
     """
     poi = route.poi
     signal = route.signal
@@ -230,6 +242,14 @@ def candidate_from_route(route: TriggerRoute, *, displacement=None,
         zone_high = None if zone_high is None else float(zone_high)
     except (TypeError, ValueError):
         zone_low, zone_high = None, None
+    # C3 (master card §3.4): entry validity = trigger fired AND the
+    # completion close sits inside the POI body. Reject before any
+    # CandidateEntry exists so no downstream path can place it.
+    if completion_price is not None and not trigger_in_between(
+        zone_low=zone_low, zone_high=zone_high,
+        completion_price=completion_price,
+    ):
+        return None
     signal_data = getattr(signal, "data", None)
     if signal_data:
         try:

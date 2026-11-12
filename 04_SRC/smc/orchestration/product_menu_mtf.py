@@ -45,6 +45,7 @@ from datetime import datetime, timedelta
 from enum import Enum
 
 from smc.backtest.pipeline_bridge import candidate_from_route
+from smc.triggers.in_between import NOT_IN_BETWEEN
 from smc.config.locked_constants import ZONE_REFINEMENT_ATR
 from smc.config.timeframe import Timeframe
 from smc.core.candle import Candle
@@ -598,7 +599,9 @@ class ProductMenuEngine:
                 if best is None or key < best[0]:
                     best = (key, route, ctf)
             if best is not None:
-                new_winners.append(self._win(episode, best[1], best[2]))
+                winner = self._win(episode, best[1], best[2])
+                if winner is not None:  # C3 reject -> not a winner
+                    new_winners.append(winner)
         return new_winners
 
     # ------------------------------------------------------------------ #
@@ -872,8 +875,12 @@ class ProductMenuEngine:
     # ------------------------------------------------------------------ #
     def _win(
         self, episode: MenuEpisode, route: TriggerRoute, tf: Timeframe
-    ) -> MenuWinner:
-        """Consume the episode one-shot and build its candidate (frozen bridge)."""
+    ) -> MenuWinner | None:
+        """Consume the episode one-shot and build its candidate (frozen bridge).
+
+        ``None`` when the C3 in-between gate rejects the completion — the
+        episode stays ACTIVE and unconsumed (later completions may still win).
+        """
         window_end = self._window_end_ts(episode)
         if window_end is None:
             # The window's last detection bar has not closed yet: stamp the
@@ -883,6 +890,13 @@ class ProductMenuEngine:
                 minutes=episode.tier.detection_tf.minutes * episode.tier.expiry_bars
             )
         candidate = self._candidate(episode, route, tf, window_end_ts=window_end)
+        if candidate is None:
+            # C3: not a valid in-between completion. Leave the episode ACTIVE
+            # and unconsumed; the confirmation scan resumes on later bars.
+            episode.decisions.append(
+                f"rejected_{tf.name}_{NOT_IN_BETWEEN}"
+            )
+            return None
         episode.status = MenuEpisodeStatus.WON
         episode.winner_tf = tf
         episode.winner_route_id = candidate.route_id
@@ -963,14 +977,32 @@ class ProductMenuEngine:
         tf: Timeframe,
         *,
         window_end_ts: datetime | None = None,
-    ) -> object:
-        """Frozen bridge output + menu identity stamp (never re-derived edges)."""
+    ) -> object | None:
+        """Frozen bridge output + menu identity stamp (never re-derived edges).
+
+        Returns ``None`` when the C3 in-between gate rejects the completion
+        (the frozen bridge owns that decision — this layer never re-derives
+        entry/SL/TP geometry and never bypasses the gate).
+        """
         series = self._confirm[tf]
         atr_value = latest_atr(series, self.atr_period)
         atr = float(atr_value) if atr_value is not None else None
-        base = candidate_from_route(
-            route, pillar_path=PRODUCT_MENU_PILLAR_PATH, atr=atr
+        # C3 (master card §3.4): the candidate builder is the menu's choke
+        # point — pass the completion bar's CLOSE so an out-of-zone
+        # completion cannot become a menu candidate.
+        index = getattr(getattr(route, "signal", None), "completion_index", None)
+        completion_close = (
+            float(series[index].close)
+            if isinstance(index, int) and 0 <= index < len(series)
+            else None
         )
+        base = candidate_from_route(
+            route, pillar_path=PRODUCT_MENU_PILLAR_PATH, atr=atr,
+            completion_price=completion_close,
+        )
+        if base is None:
+            # C3: completion outside the POI body — not a valid confirmation.
+            return None
         zone = episode.poi.zone
         # OPT-1 enrich stamp (measure/export only): join the completion-bar
         # geometry onto the same stamp that already carries sweep_ts and the

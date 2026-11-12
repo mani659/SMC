@@ -16,7 +16,9 @@ Geometry conventions (all UTC, M5 bars, zone [100.0, 100.2], LONG POI):
   confirmation) whose wick ENTERS the zone: the §5 first touch and the
   trigger pattern share this bar (scan-before-feed keeps both alive);
 * CALM_SIGNAL is the bar immediately after the engulfing — Trigger D's
-  frozen entry bar (§24 TRIGGER_D_EXPIRY = 1): the adapter routes there;
+  frozen entry bar (§24 TRIGGER_D_EXPIRY = 1): the adapter routes there.
+  Its close sits INSIDE the zone (100.2 = top, inclusive) because C3
+  (master card §3.4) only validates a completion that is in-between;
 * FILL rows dip to low ≤ 100.45 (the 50%-body limit) without reaching the
   99.9 stop, so the pending limit fills and the position stays open;
 * displacement is pre-computed exactly like test_pipeline_engine.py does
@@ -57,7 +59,7 @@ SESSIONS = (Session.LONDON, Session.NEW_YORK)
 CALM = (100.4, 100.6, 100.3, 100.5)          # above the zone — no touch
 ENGULFED = (100.5, 100.55, 100.3, 100.4, 500.0)  # prior candle, vol 500
 ENGULFER = (100.4, 100.6, 99.9, 100.5, 300.0)    # bullish engulf, vol 300, in zone
-CALM_SIGNAL = (100.4, 100.6, 100.3, 100.5)   # Trigger D entry bar
+CALM_SIGNAL = (100.4, 100.6, 100.15, 100.2)  # Trigger D entry bar, close in zone
 NOFILL = (100.55, 100.7, 100.5, 100.6)       # low above the 100.45 limit — no fill
 FILL = (100.3, 100.5, 100.35, 100.45)        # dips to the 100.45 limit only
 FILL_LOW = (100.3, 100.5, 99.5, 100.2)       # dips through the 100.0 limit

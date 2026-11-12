@@ -1,5 +1,15 @@
 # SESSION HANDOFF — SMC BOT
 
+## 2026-11-12 — C3: IN-BETWEEN CONTAINMENT GATE (`LOGIC_CHANGED: YES`, entry validity only)
+
+- **Authority:** master card §3.4, amendment list, gap plan G05. C2a remains PASS and untouched.
+- **Rule:** a trigger completion is a valid entry only if the completion bar's **CLOSE** is inside the routed POI body (`bottom..top`, inclusive). Reject token `not_in_between`.
+- **Changed:** new `smc/triggers/in_between.py` (`price_inside_zone`, `trigger_in_between`); `candidate_from_route` takes `completion_price` and returns `None` when outside (single choke point); `pipeline_adapter` resumes its scan on reject; menu `_candidate`/`_win` leave the episode ACTIVE and append `rejected_<TF>_not_in_between`.
+- **Audited:** adapter route→workflow, menu `_candidate`/`_win`/batch loop, `queue_menu_candidate`, live loop (inherits), engine `scan_route` (route only, ungated by design), DUMB research adapter (direct `CandidateEntry`, out of product contract).
+- **Tests:** `04_SRC/tests/test_c3_in_between_gate.py` (8) plus fixture updates in 5 suites (integration, paper, reports, scan semantics, OPT1). Suite **1493 passed / 7 skipped**.
+- **Note:** `06_RESEARCH/C3_IN_BETWEEN_GATE_NOTE.md`. `locked_constants.py` diff empty; FR-3 / R7 / §5 untouched; no boundary-sweep emitter.
+- **NEXT ACTION (single):** **C2b — color-free Demand/Supply** (or Architect pick).
+
 ## 2026-11-12 — C2a: CHOCH RULE 3 LIVE-OFF (`LOGIC_CHANGED: YES`, Trigger A eligibility only)
 
 - **Authority:** master card A1 + amendment list + gap plan G07. Scoped to C2a; no C3/C2b work.

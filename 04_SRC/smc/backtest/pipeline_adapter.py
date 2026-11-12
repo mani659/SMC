@@ -425,8 +425,15 @@ class PipelineAdapter:
                 if route is not None:
                     ctx_disp, ctx_path = self._route_context.pop(
                         poi.id, (None, None))
-                    workflow = _Workflow(
-                        candidate=candidate_from_route(
+                    # C3 slow-path in-between gate: validity reads the
+                    # completion bar's CLOSE (never the limit price).
+                    completion_bar = route.signal.completion_index
+                    completion_close = (
+                        float(state.candles[completion_bar].close)
+                        if 0 <= completion_bar < len(state.candles)
+                        else None
+                    )
+                    candidate = candidate_from_route(
                             route, displacement=ctx_disp,
                             pillar_path=ctx_path,
                             # FR-2 R4: honest-prefix ATR feeds the TP
@@ -444,14 +451,23 @@ class PipelineAdapter:
                                 route.signal.entry_price, route.signal.direction,
                                 self.current_atr(bar_index),
                                 placement_bar=bar_index,
-                                max_age_bars=poi_give_up_bars())),
-                        created_bar=bar_index,
-                        completion_index=route.signal.completion_index,
-                        expiry_bars=route.signal.expiry_bars,
-                    )
-                    self._workflows[poi.id] = workflow
-                    self._routed.add(poi.id)
-                    self._scan_cursor.pop(poi.id, None)
+                                max_age_bars=poi_give_up_bars()),
+                            completion_price=completion_close)
+                    if candidate is None:
+                        # C3: completion outside the POI body. No route from
+                        # this completion — resume the chronological scan on
+                        # the next bar (a later in-between completion may win).
+                        self._scan_cursor[poi.id] = bar_index + 1
+                    else:
+                        workflow = _Workflow(
+                            candidate=candidate,
+                            created_bar=bar_index,
+                            completion_index=route.signal.completion_index,
+                            expiry_bars=route.signal.expiry_bars,
+                        )
+                        self._workflows[poi.id] = workflow
+                        self._routed.add(poi.id)
+                        self._scan_cursor.pop(poi.id, None)
                 else:
                     # Nothing fired up to and including this bar — resume the
                     # ONE chronological scan at the next bar (never re-derive).

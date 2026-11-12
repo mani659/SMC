@@ -43,6 +43,9 @@ GIVE_UP = poi_give_up_bars()  # §24 POI-wide window (20 bars, Trigger A's)
 
 CALM = (100.4, 100.6, 100.3, 100.5)            # above the zone — no §5 event
 TOUCH = (100.15, 100.25, 100.05, 100.2)        # low inside [100.0, 100.2]
+# Fire bar: close on the zone top (inclusive) so the C3 in-between gate
+# accepts the completion; low 100.15 is a §5 touch (TESTED may still route).
+FIRE = (100.4, 100.6, 100.15, 100.2)
 
 
 class RecordingTrigger(Trigger):
@@ -131,6 +134,7 @@ def test_route_seek_evaluates_each_window_bar_exactly_once_then_stops():
     with its honest prefix; after the fire, no further evaluations happen."""
     fire_at = 3
     rows = [CALM] * 7  # well inside the give-up window
+    rows[fire_at] = FIRE  # in-between completion (C3) so the route is valid
     engine, adapter, poi, stub, candles = _fitted_adapter(rows, fire_at=fire_at)
 
     _drive(adapter, candles, len(rows) - 1)
@@ -150,6 +154,7 @@ def test_incremental_cursor_returns_the_same_first_route_as_full_rescan():
     from the arm bar returns (no-lookahead contract → order independence)."""
     fire_at = 3
     rows = [CALM] * 7
+    rows[fire_at] = FIRE  # in-between completion (C3)
     engine, adapter, poi, _stub, candles = _fitted_adapter(rows, fire_at=fire_at)
 
     _drive(adapter, candles, fire_at)  # cursor path: one bar per call

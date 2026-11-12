@@ -239,7 +239,8 @@ def test_report_over_real_pipeline_run(candle_factory, swing_factory, tmp_path):
     calm = (100.4, 100.6, 100.3, 100.5)
     engulfed = (100.5, 100.55, 100.3, 100.4, 500.0)
     engulfer = (100.4, 100.6, 99.9, 100.5, 300.0)
-    signal_bar = (100.4, 100.6, 100.3, 100.5)
+    # Trigger D entry bar; close 100.2 sits INSIDE the zone (C3 in-between).
+    signal_bar = (100.4, 100.6, 100.15, 100.2)
     fill = (100.3, 100.5, 100.35, 100.45)
     stop_bar = (100.2, 100.4, 99.8, 99.85)  # hits the 99.9 stop → loss
 
