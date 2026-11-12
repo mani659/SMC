@@ -12,7 +12,9 @@ TRIGGER (R1 §7):
   Expiry: TRIGGER_A_EXPIRY (20 M5 bars, §24).
 
 The detector reuses the Phase 2 ``classify_choch_at`` (Rules 1/2/3, §17) so
-no CHOCH logic is re-implemented. V1 location simplification: direction
+no CHOCH logic is re-implemented, but only **Rule 1 / Rule 2** (body close)
+are live-eligible: Rule 3 (wick-only) is research-only per the master card
+and amendment A1, so ``is_live_choch`` rejects it here. V1 location simplification: direction
 match + CHOCH break AFTER the POI arm bar is required (the local-swing /
 zone containment refinement is documented — see CHANGELOG notes).
 """
@@ -20,7 +22,7 @@ zone containment refinement is documented — see CHANGELOG notes).
 from __future__ import annotations
 
 from smc.core.enums import Direction, TriggerType
-from smc.poi.choch_classifier import classify_choch_at
+from smc.poi.choch_classifier import classify_choch_at, is_live_choch
 from smc.triggers.base_trigger import (
     Trigger, TriggerContext, TriggerSignal, context_atr, structural_sl,
 )
@@ -52,6 +54,10 @@ class ChochReversalTrigger(Trigger):
             swing_index=getattr(hints, "swing_index", None),
         )
         if choch is None:
+            return None
+        # C2a (master card A1): Rule 3 (wick-only) is research-only — it must
+        # never become a routable Trigger A signal.
+        if not is_live_choch(choch):
             return None
         if choch.direction is not context.poi.zone.direction:
             return None

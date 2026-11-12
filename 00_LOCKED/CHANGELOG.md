@@ -6,6 +6,13 @@
 
 ---
 
+### 2026-11-12 — C2a: CHOCH RULE 3 LIVE-OFF (`LOGIC_CHANGED: YES`)
+
+- **Authority:** master card A1, amendment list A1, gap plan G07. Scoped to live eligibility only.
+- **Changed:** `04_SRC/smc/poi/choch_classifier.py` adds `LIVE_CHOCH_RULES` (Rule 1/2) and `is_live_choch`; `04_SRC/smc/triggers/trigger_a_choch.py` returns `None` for Rule 3 (wick-only); `04_SRC/smc/poi/models/m3_choch_retest.py` emits no POI from Rule 3. Rule 3 remains classified for research. No geometry, SL, expiry or numeric constant changed.
+- **Tests:** `04_SRC/tests/test_c2a_choch_r3_live_off.py` (8): R1/R2 still signal, R3 never signals, classifier still reports R3, M3 R3 → no POI. Suite **1485 passed / 7 skipped**.
+- **Note:** `06_RESEARCH/C2A_CHOCH_R3_LIVE_OFF_NOTE.md`. `locked_constants.py` diff empty; adapter/menu inherit the filter through Trigger A; no other live CHOCH entry path exists.
+
 ### 2026-11-12 — GAP PLAN vs EXPERT MASTER CARD (docs + read-only code survey; `LOGIC_CHANGED: NO`)
 
 - **Authority:** Lead Architect IMPLEMENTATION GAP PLAN directive. No `04_SRC/smc/**` edit, no `locked_constants.py` change, no backtest.

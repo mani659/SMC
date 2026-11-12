@@ -5,7 +5,13 @@ All eight models are EQUAL tags; no model suppresses or overrides another.
 """
 
 from smc.poi.base_model import POIModel
-from smc.poi.choch_classifier import ChochBreak, ChochRule, classify_choch_at
+from smc.poi.choch_classifier import (
+    LIVE_CHOCH_RULES,
+    ChochBreak,
+    ChochRule,
+    classify_choch_at,
+    is_live_choch,
+)
 from smc.poi.confluence_scorer import (
     ConfluenceScore,
     ConfluenceTier,
@@ -23,6 +29,7 @@ from smc.poi.deal_range import (
 from smc.poi.model_registry import ModelRegistry, build_registry
 
 __all__ = [
+    "LIVE_CHOCH_RULES",
     "ChochBreak",
     "ChochRule",
     "ConfluenceScore",
@@ -33,6 +40,7 @@ __all__ = [
     "POIModel",
     "build_registry",
     "classify_choch_at",
+    "is_live_choch",
     "classify_region",
     "compute_dealing_range",
     "merge_overlapping",

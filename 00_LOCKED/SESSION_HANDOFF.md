@@ -1,5 +1,14 @@
 # SESSION HANDOFF — SMC BOT
 
+## 2026-11-12 — C2a: CHOCH RULE 3 LIVE-OFF (`LOGIC_CHANGED: YES`, Trigger A eligibility only)
+
+- **Authority:** master card A1 + amendment list + gap plan G07. Scoped to C2a; no C3/C2b work.
+- **Changed:** `choch_classifier.py` gains `LIVE_CHOCH_RULES` (R1/R2) and `is_live_choch`; Trigger A returns `None` for a wick-only break; M3 emits no POI from Rule 3 (a POI is a tradeable surface). Classification still returns Rule 3 for research.
+- **Audited call sites:** Trigger A, M3, router (inherits), adapter/menu/runtime (no direct `ChochBreak` use), coupled/essence (no `ChochRule` reference). No other live CHOCH entry path exists.
+- **Tests:** `04_SRC/tests/test_c2a_choch_r3_live_off.py` (8) — R1/R2 still fire, R3 never fires, classifier still reports R3, M3 R3 → no POI. Suite **1485 passed / 7 skipped**.
+- **Note:** `06_RESEARCH/C2A_CHOCH_R3_LIVE_OFF_NOTE.md`. `locked_constants.py` diff empty; no geometry/SL/expiry change.
+- **NEXT ACTION (single):** **C3 — shared in-between containment gate (inside zone ∧ trigger completes inside) on adapter + menu.**
+
 ## 2026-11-12 — GAP PLAN vs EXPERT MASTER CARD (docs + code read; `LOGIC_CHANGED: NO`)
 
 - **Authority:** Lead Architect IMPLEMENTATION GAP PLAN directive; card accepted 2026-11-12. Read-only survey — no code, no threshold, no test edit.

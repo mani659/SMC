@@ -28,7 +28,13 @@ from smc.core.liquidity_level import LiquidityLevel
 from smc.core.swing import Swing
 from smc.detection.sweep_detector import detect_sweep
 
-__all__ = ["ChochRule", "ChochBreak", "classify_choch_at"]
+__all__ = [
+    "ChochRule",
+    "ChochBreak",
+    "LIVE_CHOCH_RULES",
+    "classify_choch_at",
+    "is_live_choch",
+]
 
 
 class ChochRule(Enum):
@@ -48,6 +54,22 @@ class ChochBreak:
     broken_level: float          # level used for entry placement (§9/§20)
     break_index: int             # candle that completed the break/pierce
     sweep_index: int | None      # liquidity sweep candle of the final extreme
+
+
+#: CHOCH rules eligible for LIVE entry (master card 2026-11-12 / amendment A1).
+#: Rule 3 (wick-only) stays classified for research visibility but is never
+#: live-eligible.
+LIVE_CHOCH_RULES = (ChochRule.RULE_1_STANDARD, ChochRule.RULE_2_INSIDE_BODY)
+
+
+def is_live_choch(break_: ChochBreak | None) -> bool:
+    """True when a classified CHOCH may feed a live entry path.
+
+    The classifier still returns Rule 3 (``RULE_3_INSIDE_WICK``) so research
+    and audit code can see it; every live consumer must gate on this helper
+    instead of accepting any ``ChochBreak``.
+    """
+    return break_ is not None and break_.rule in LIVE_CHOCH_RULES
 
 
 # --------------------------------------------------------------------------- #

@@ -5,10 +5,12 @@ POI at the broken level per §9/§20:
 
   Rule 1 (standard)   -> broken last swing of the main trend
   Rule 2 (inside body)-> broken intermediate level (last swing intact)
-  Rule 3 (inside wick)-> wick-pierced level (weakest, KEPT)
+  Rule 3 (inside wick)-> RESEARCH ONLY (master card 2026-11-12 / A1)
 
 Sub-variants 3a/3b/3c share the single ModelType.M3 equal tag (§1); the
 specific rule is available through the classifier for research logging.
+Rule 3 (wick-only) is classified for research but emits no POI here: a POI
+is a tradeable surface, and Rule 3 is not live-eligible.
 """
 
 from __future__ import annotations
@@ -20,7 +22,11 @@ from smc.core.liquidity_level import LiquidityLevel
 from smc.core.poi import POI
 from smc.core.swing import Swing
 from smc.poi.base_model import POIModel, zone_for_level, zone_for_swing
-from smc.poi.choch_classifier import ChochRule, classify_choch_at
+from smc.poi.choch_classifier import (
+    ChochRule,
+    classify_choch_at,
+    is_live_choch,
+)
 
 __all__ = ["M3ChochRetest"]
 
@@ -40,6 +46,10 @@ class M3ChochRetest(POIModel):
             return []
         ch = classify_choch_at(candles, swings)
         if ch is None:
+            return []
+        # C2a (master card A1): a wick-only CHOCH must not create a tradeable
+        # M3 POI; the classifier keeps emitting it for research.
+        if not is_live_choch(ch):
             return []
 
         if ch.direction is Direction.SHORT:
