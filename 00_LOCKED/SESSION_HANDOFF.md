@@ -1,5 +1,21 @@
 # SESSION HANDOFF — SMC BOT
 
+## 2026-11-14 — OPEN-DECISIONS CLOSEOUT: O1–O5 ALL CLOSED (`LOGIC_CHANGED: NO`)
+
+- **Current phase:** Open-decisions research program **COMPLETE**. All five questions were measured on the frozen October-2025 product window and locked to the status quo by the Architect on 2026-11-14. Nothing in `04_SRC/**` or `locked_constants.py` changed in the whole program.
+- **Program one-liner:** "On the frozen Oct-2025 product window, O1–O5 measurement supports keeping C3, upstream-only sweep, first-armed dedup, ATR SL, and dual TP — not widening gates or adopting 30-pip / 1:5 product rules."
+
+| ID | Lock | Evidence |
+|---|---|---|
+| O1 | **KEEP_STATUS_QUO** — C3 required; rejects are 97% >1 ATR outside (median 36 ATR), boundary population 2.2% | `06_RESEARCH/OPEN_DECISION_O1_C3_BOUNDARY_ANATOMY.md` |
+| O2 | **KEEP_UPSTREAM_ONLY** — sweep-carrying and sweep-free POIs route alike (29.3% vs 31.9%) | `06_RESEARCH/OPEN_DECISION_O2_HTF_SWEEP_STAGE.md` |
+| O3 | **KEEP_FIRST_ARMED_STATUS_QUO** — any one-survivor rule drops all 11 fills; same-batch conflicts 3 M15 pairs | `06_RESEARCH/OPEN_DECISION_O3_MULTI_ZONE_PRIORITY.md` |
+| O4 | **KEEP_ATR_PRODUCT** — median stop 71.4 pips vs MAE 78.1; 30-pip pin would hit all losers + 2/3 winners | `06_RESEARCH/OPEN_DECISION_O4_SL_MAE_BENCHMARK.md` |
+| O5 | **KEEP_DUAL_TP_POLICY** — structural 8/11 (0.91 R, 37.5% hit) vs fallback 3/11 (3.52 R, 0/3) | `06_RESEARCH/OPEN_DECISION_O5_TP_STRUCTURAL_VS_FALLBACK.md` |
+
+- **Agenda:** `06_RESEARCH/OPEN_DECISIONS_RESEARCH_AGENDA.md` (status COMPLETE; each O-section carries its lock + evidence).
+- **NEXT ACTION (single):** **Paper/demo ops on the frozen Mode A law** — new research only if the Architect names a new question. **O1–O5 are not reopened without new data.**
+
 ## 2026-11-14 — O5 MEASUREMENT: TP STRUCTURAL VS 4×ATR FALLBACK (`LOGIC_CHANGED: NO`)
 
 - **Script:** `06_RESEARCH/scripts/o5_tp_structural_vs_fallback.py` — reads the **exported** `tp_source` (no inference), computes M5 path MFE/MAE, `tp_dist`, TP÷R and `mfe_vs_tp` per fill. Pre-registered labels, tolerance 0.05 and the O4 path convention.

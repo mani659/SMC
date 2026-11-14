@@ -6,6 +6,11 @@
 
 ---
 
+### 2026-11-14 — OPEN-DECISIONS CLOSEOUT: O1–O5 ALL CLOSED (`LOGIC_CHANGED: NO`)
+
+- **Docs only.** Architect locked all five open decisions to the status quo on the frozen October-2025 product window: **O1 KEEP_STATUS_QUO** (C3 in-between required; 97% of rejects are >1 ATR outside, boundary population 2.2%), **O2 KEEP_UPSTREAM_ONLY** (sweep-carrying and sweep-free POIs route alike), **O3 KEEP_FIRST_ARMED_STATUS_QUO** (any one-survivor rule deletes all fills; 3 same-batch M15 conflicts), **O4 KEEP_ATR_PRODUCT** (median stop 71.4 pips vs MAE 78.1; a 30-pip pin would hit all losers and 2 of 3 winners), **O5 KEEP_DUAL_TP_POLICY** (structural 8/11 at 0.91 R converting 37.5% vs fallback 3/11 at 3.52 R, 0 hits).
+- **No product change:** no C3/sweep/dedup/SL/TP code, no `locked_constants` edit, no new threshold, no performance claim. `OPEN_DECISIONS_RESEARCH_AGENDA.md` is COMPLETE with evidence paths per decision.
+
 ### 2026-11-14 — O5 TP STRUCTURAL VS 4×ATR FALLBACK (research measurement, `LOGIC_CHANGED: NO`)
 
 - **Measurement only:** `06_RESEARCH/scripts/o5_tp_structural_vs_fallback.py` reads exported `tp_source`, path MFE/MAE and TP geometry for the 11 October fills; pre-registered labels and tolerance, no inference.

@@ -1,6 +1,6 @@
 # OPEN-DECISIONS RESEARCH AGENDA (O1–O5)
 
-**Date:** 2026-11-14 · **Status:** ACTIVE · **LOGIC_CHANGED: NO** (docs only)
+**Date:** 2026-11-14 · **Status:** **COMPLETE — all five decisions CLOSED** (O1–O5 locked status-quo by the Architect) · **LOGIC_CHANGED: NO** (docs only)
 **Authority:** `EXPERT_MASTER_CARD.md`, `EXPERT_AMENDMENT_LIST_2026-11-12.md`,
 `LOCKED_DECISIONS.md` §0 / §4b / §21b / §25, `POST_C2_DIAGNOSTIC_REPORT.md`,
 `C3_IN_BETWEEN_GATE_NOTE.md`.
@@ -61,7 +61,7 @@ a change will be made.
 | **Metrics** | Reject count and share by distance bucket; edge (proximal vs distal vs far side); trigger mix; share whose bar **range** overlaps the zone while the close does not; share where the *entry limit* was inside the zone; armed→reject latency. |
 | **Lock criteria** | **Keep status quo (no new path)** if far/never-touched rejects dominate and edge-adjacent rejects are a negligible share. **Open a boundary-sweep design** only if a material share are repeatable boundary interactions with a definable, measurable trigger condition — and then only as a **dated design** with its own gate, never as a widened C3. **Reject** any proposal that relaxes the in-between definition itself. |
 | **Non-goals** | No boundary-sweep code, no C3 edit, no ATR tolerance added to the gate, no threshold chosen from the histogram, no PnL ranking. |
-| **Status** | **CLOSED — KEEP_STATUS_QUO** (Architect reading, 2026-11-14); evidence `06_RESEARCH/OPEN_DECISION_O1_C3_BOUNDARY_ANATOMY.md` |
+| **Status** | **CLOSED — KEEP_STATUS_QUO** (Architect, 2026-11-14); evidence `06_RESEARCH/OPEN_DECISION_O1_C3_BOUNDARY_ANATOMY.md` |
 | **Suggested order** | 1st |
 
 ### O2 — HTF sweep as a hard stage vs upstream-only context
@@ -129,7 +129,7 @@ a change will be made.
 | **Metrics** | Structural availability rate; TP distance in ATR; time-to-TP; MFE/MAE per source; share of fallback trades where a structural swing existed *after* the decision bar (lookahead audit, not a proposal). |
 | **Lock criteria** | **Keep the current rule** (structural first, fallback otherwise) unless a reproducible measurement shows the structural branch is systematically wrong-sided or the fallback is demonstrably better on path quality. A 1:5 ratio is **not** a lock candidate from this pack. |
 | **Non-goals** | No new TP model, no ratio hunting, no ESSENCE 1:5 enforcement, no use of future bars as targets. |
-| **Status** | **MEASURED — pending Architect** (2026-11-14); pack `06_RESEARCH/OPEN_DECISION_O5_TP_STRUCTURAL_VS_FALLBACK.md`, measurement reading KEEP_DUAL_TP_POLICY |
+| **Status** | **CLOSED — KEEP_DUAL_TP_POLICY** (Architect, 2026-11-14); evidence `06_RESEARCH/OPEN_DECISION_O5_TP_STRUCTURAL_VS_FALLBACK.md` |
 | **Suggested order** | 4th (parallel with O4) |
 
 ---
