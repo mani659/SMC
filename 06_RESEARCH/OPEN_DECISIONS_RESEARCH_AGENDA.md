@@ -95,7 +95,7 @@ a change will be made.
 | **Metrics** | Overlap-cluster count by TF set; share where the armed member differs from a candidate rule; outcome difference by rule; suppressed-member counterfactuals (would it have routed / been rejected). |
 | **Lock criteria** | **Keep first-armed** if cluster outcomes are indistinguishable across rules or n is too small to separate them. **Adopt a rule** only if one rule is consistently better on route validity *and* reject anatomy, is expressible in one sentence, and does not change the five-pillar or chronological-trigger rules. |
 | **Non-goals** | No dedup redesign inside a pack, no TF scoring model, no removal of equal-tag confluence, no PnL-based ranking. |
-| **Status** | **MEASURED — pending Architect** (2026-11-14); pack `06_RESEARCH/OPEN_DECISION_O3_MULTI_ZONE_PRIORITY.md`, measurement reading KEEP_FIRST_ARMED_STATUS_QUO |
+| **Status** | **CLOSED — KEEP_FIRST_ARMED_STATUS_QUO** (Architect, 2026-11-14); evidence `06_RESEARCH/OPEN_DECISION_O3_MULTI_ZONE_PRIORITY.md` |
 | **Suggested order** | 3rd |
 
 ### O4 — SL policy vs the expert ~30-pip benchmark
@@ -112,7 +112,7 @@ a change will be made.
 | **Metrics** | Stop distance distribution (pips, ATR multiples); share of trades with stop > benchmark; share of stop-outs whose MAE exceeded the benchmark; MFE before stop; n printed with every share. |
 | **Lock criteria** | **Keep ATR buffer** unless a benchmark-distance analysis shows a consistent, reproducible pattern with enough n to state a rule — and any change would still require a dated design naming when the pinned distance applies (never a blanket replacement). **Reject** any change whose only support is small-n PnL. |
 | **Non-goals** | No threshold tuning, no per-trade optimiser, no expectancy claims, no touching `FR2_*` constants inside the pack. |
-| **Status** | OPEN |
+| **Status** | **MEASURED — pending Architect** (2026-11-14); pack `06_RESEARCH/OPEN_DECISION_O4_SL_MAE_BENCHMARK.md`, measurement reading KEEP_ATR_PRODUCT |
 | **Suggested order** | 4th |
 
 ### O5 — TP: structural first-valid-swing vs 4×ATR fallback

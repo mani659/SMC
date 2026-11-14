@@ -1,5 +1,14 @@
 # SESSION HANDOFF — SMC BOT
 
+## 2026-11-14 — O4 MEASUREMENT: SL / MAE VS 30-PIP BENCHMARK (`LOGIC_CHANGED: NO`)
+
+- **Script:** `06_RESEARCH/scripts/o4_sl_mae_benchmark.py` — 11 October product fills joined to M5 path MAE/MFE (entry bar → exit bar inclusive), SL taken from **`original_sl`** (0 rows needed the working-SL fallback). Pre-registered: 1 pip = 0.10 price, 30 pips = 3.00 price, clean-stop tolerance 0.05.
+- **Result:** product SL median **71.4 pips** (p25 61.1 / p75 79.1; min 32.7, max 120.5); MAE median **78.1 pips** (p25 46.0 / p75 100.2); MFE median 28.3. **MAE ≤ 30 pips on 1/11 (9.1%)**; **product SL ≤ 30 pips on 0/11**; 8/8 stop-outs exited cleanly at the placement SL; MAE/SL median 1.18.
+- **Interpretation:** **KEEP_ATR_PRODUCT** — stops are not beyond the observed MAE, and a 30-pip pin would be tighter than path noise on 10/11 trades, hitting every loser and also removing 2 of the 3 winners. 30 pips stays a review benchmark only; no 30-pip rule, no `FR2_*` change.
+- **Caveat recorded:** n = 11, one window; MAE counts the whole entry bar (pre-fill movement), so ratios are upper bounds (one 2.83× outlier is a bar-span artefact, exit still at the placement SL).
+- **Agenda:** O3 CLOSED (KEEP_FIRST_ARMED_STATUS_QUO); O4 MEASURED pending Architect. Report `06_RESEARCH/OPEN_DECISION_O4_SL_MAE_BENCHMARK.md`.
+- **NEXT ACTION (single):** **Architect O4 reading**, then O5 structural-TP pack.
+
 ## 2026-11-14 — O3 MEASUREMENT: MULTI-ZONE PRIORITY (`LOGIC_CHANGED: NO`)
 
 - **Script:** `06_RESEARCH/scripts/o3_multi_zone_priority.py` — offline analysis of the **verified O2 armed table** (SHA-256 checked against the O2 summary; no composition re-run). Pre-registered overlap: opposite direction + intersect, or same direction + intersection/min(height) ≥ 0.50; TF order D1>H4>H1>M15; CF1 highest-TF / CF2 tightest / CF3 first-armed.

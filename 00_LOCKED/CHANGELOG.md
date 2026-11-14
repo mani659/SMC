@@ -6,6 +6,13 @@
 
 ---
 
+### 2026-11-14 — O4 SL / MAE VS 30-PIP BENCHMARK (research measurement, `LOGIC_CHANGED: NO`)
+
+- **Measurement only:** `06_RESEARCH/scripts/o4_sl_mae_benchmark.py` joins the 11 October product fills to M5 path MAE/MFE (entry→exit bar), using `original_sl` as the stop. Pre-registered pip (0.10) and benchmark (30 pips = 3.00) before the run.
+- **Findings:** median product SL **71.4 pips**, median MAE **78.1 pips**, median MFE 28.3; **1/11** trades had MAE ≤ 30 pips; **0/11** product stops were ≤ 30 pips; all 8 stop-outs exited at the placement SL.
+- **Interpretation:** **KEEP_ATR_PRODUCT** — a 30-pip pin is tighter than the path on 10/11 trades (all losers, plus 2 of 3 winners), so the benchmark stays review-only per LOCKED §21b; no SL formula or constant change.
+- **Report:** `06_RESEARCH/OPEN_DECISION_O4_SL_MAE_BENCHMARK.md`. Agenda: O3 CLOSED (KEEP_FIRST_ARMED_STATUS_QUO), O4 MEASURED pending Architect. Small-n (11) and entry-bar MAE caveats recorded.
+
 ### 2026-11-14 — O3 MULTI-ZONE PRIORITY (research measurement, `LOGIC_CHANGED: NO`)
 
 - **Measurement only:** `06_RESEARCH/scripts/o3_multi_zone_priority.py` analyses the O2 armed table (SHA-256 verified) with the pre-registered overlap rule (0.50 ratio), TF order D1>H4>H1>M15 and CF1 highest-TF / CF2 tightest / CF3 first-armed counterfactuals.
