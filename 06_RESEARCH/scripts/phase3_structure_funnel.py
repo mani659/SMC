@@ -39,6 +39,9 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "04_SRC"))
+sys.path.insert(0, str(REPO_ROOT / "06_RESEARCH" / "scripts"))
+
+from lib.product_htf_series import ensure_product_detection_frames  # noqa: E402
 
 from smc.backtest.bar_loop import BarLoop  # noqa: E402
 from smc.backtest.data_feed import CandleSeries  # noqa: E402
@@ -129,9 +132,21 @@ def run(args) -> dict:
     m5 = [c for c in multi[TF] if exec_from <= c.timestamp <= exec_to]
     if len(m5) < 50:
         raise SystemExit("execution window too small for the stack warm-up")
-    h1, h4, d1 = (multi[Timeframe.H1], multi[Timeframe.H4], multi[Timeframe.D1])
-    print(f"[p3] exec M5 {len(m5)} bars; H1 {len(h1)} H4 {len(h4)} D1 {len(d1)}",
-          flush=True)
+    # Product HTF hygiene: the product runtime requires (D1, H4, H1, M15)
+    # (LOCKED §4b / contract §1). M15 is derived by closed-bar resample from
+    # the M5 execution series instead of silently feeding an incomplete map
+    # (which made every batch fail and reported an empty funnel).
+    htf = ensure_product_detection_frames(
+        {Timeframe.H1: multi[Timeframe.H1],
+         Timeframe.H4: multi[Timeframe.H4],
+         Timeframe.D1: multi[Timeframe.D1]},
+        source=m5,
+    )
+    h1, h4, d1, m15 = (htf[Timeframe.H1], htf[Timeframe.H4],
+                       htf[Timeframe.D1], htf[Timeframe.M15])
+    m15_ts = [c.timestamp for c in m15]
+    print(f"[p3] exec M5 {len(m5)} bars; H1 {len(h1)} H4 {len(h4)} D1 {len(d1)} "
+          f"M15 {len(m15)}", flush=True)
 
     # ---- Stack: engine + PRODUCT seam + FR-4 arm/scan/risk wiring ------ #
     episode_store = getattr(args, "episode_store", None)
@@ -254,6 +269,7 @@ def run(args) -> dict:
                     Timeframe.H1: h1[: cut + 1],
                     Timeframe.H4: h4[: bisect.bisect_right(h4_ts, bar.timestamp)],
                     Timeframe.D1: d1[: bisect.bisect_right(d1_ts, bar.timestamp)],
+                    Timeframe.M15: m15[: bisect.bisect_right(m15_ts, bar.timestamp)],
                 }
                 try:
                     report = runtime.run_batch(

@@ -1,5 +1,15 @@
 # SESSION HANDOFF — SMC BOT
 
+## 2026-11-14 — HARNESS M15 PRODUCT-DIAGNOSTIC HYGIENE (`LOGIC_CHANGED: NO`)
+
+- **Finding fixed:** product-mode harnesses fed H1/H4/D1 only while the runtime requires `(D1,H4,H1,M15)`, so every batch failed loudly and the funnel looked empty (`htf_batches=0, batch_errors=2979` on 6m).
+- **Helper:** new `06_RESEARCH/scripts/lib/product_htf_series.py` — `ensure_product_detection_frames` keeps supplied series, derives missing TFs from M1/M5 by **closed-bar** resample (trailing unclosed bucket dropped), validates tz-aware ascending bars, and raises `MissingProductHtfSeries` naming what is missing. `assert_product_detection_complete` for explicit checks.
+- **Harnesses updated:** `phase3_structure_funnel.py` (shared composition → `frozen_funnel_*` inherit), `phase4_unified_backtest.py`, `c1_multi_tf_parity_smoke.py`, `post_c2_diagnostic.py` (one-off M15 probe removed). `menu_*` / `opt_b` already supplied M15; `fr1`/`fr4` use the legacy `validate_multi` driver and are documented as non-product.
+- **Verification:** 3-day dry run of the fixed composition: batches **0 → 66**, batch_errors 1 (cold start), detected H4 1007 / H1 992 / D1 924 / **M15 997**, armed **12**. Incomplete map with no source now raises loudly.
+- **Tests:** `04_SRC/tests/test_harness_m15_hygiene.py` (4). Suite **1504 passed / 7 skipped**. `04_SRC/smc/**` and `locked_constants.py` diffs empty.
+- **Note:** `06_RESEARCH/HARNESS_M15_PRODUCT_HYGIENE_NOTE.md`.
+- **NEXT ACTION (single):** **open-decisions research agenda O1–O5** (or Architect pick).
+
 ## 2026-11-14 — FORMAL LOCKED_DECISIONS § EDITS, A1–A10 (`LOGIC_CHANGED: NO`)
 
 - **Docs only:** `00_LOCKED/LOCKED_DECISIONS.md` gained a §0 master-card amendment register plus dated blocks §4b (A8, POI TFs M15/H1/H4/D1), §8a (A6, M7 plane FLIP), §16a (A5, Pillar 3 = Dealing Range), §17a + §20a (A1, Rule 3 research-only), §21a/§22a (A2, color-free D/S, width unchanged), §21b (A3/A4, TP first-valid-swing / SL ATR buffer; 1:5, 30-pip and 2–5 pip = benchmarks), §21c (A9, no dual confirmation chain), §24a (A7, permanent letter map with C live), and a §25 clarification (C3 in-between gate is REQUIRED; boundary-sweep stays design-only).

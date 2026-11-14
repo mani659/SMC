@@ -15,12 +15,13 @@ D1→M8) → ``PipelineEngine.arm_at`` → ``PipelineAdapter.generate_candidates
 C2a/C2b logic are whatever the working tree ships; nothing is patched except
 read-only probes.
 
-Composition note (measured, not tuned): the frozen harness supplies H1/H4/D1
-only, while the shipped product default requires the menu tiers
-{H4, H1, D1, M15}. The probe below therefore derives the **M15 detection
-series by resampling the harness's own M5 execution candles** (closed bars up
-to ``as_of``, the harness's own prefix convention) instead of silently
-running the runtime with a reduced detection set. No 04_SRC code is touched.
+Composition note (measured, not tuned): the product POI inventory set is
+(D1, H4, H1, M15) (`LOCKED_DECISIONS` §4b). M15 is now supplied by the shared
+harness helper inside the imported Phase 3 composition
+(`lib/product_htf_series.ensure_product_detection_frames`, closed-bar
+resample from M5) — this script no longer carries a one-off M15 patch, so the
+product funnel cannot silently run with an incomplete detection map. No
+04_SRC code is touched.
 
 Probes (harness-local, restored in ``finally``):
   * ``candidate_from_route`` — C3 gate checks / ``not_in_between`` rejects,
@@ -28,8 +29,6 @@ Probes (harness-local, restored in ``finally``):
   * ``PipelineEngine.arm_at`` — armed POIs by M8 kind.
   * ``classify_choch_at`` (classifier + Trigger A's imported symbol) — CHOCH
     classifications by rule (research visibility; Rule 3 must never route).
-  * ``MultiTFProductRuntime.run_batch`` — injects the M15 detection series
-    (resampled from the harness's M5 candles, closed bars only).
 
 Window (FROZEN for this run — do not widen after seeing results): M1 load
 2025-05-01 (same deep HTF warm-up prefix as the 6-month family), exec
@@ -69,7 +68,6 @@ def _new_probes() -> dict:
         "tp_source_mix": Counter(),
         "armed_by_m8_kind": Counter(),
         "choch_classified": Counter(),
-        "m15_series_injected": 0,
     }
 
 
@@ -130,42 +128,6 @@ def install_probes(probes: dict) -> list:
     engine_module.PipelineEngine.arm_at = probed_arm
     restores.append(
         lambda: setattr(engine_module.PipelineEngine, "arm_at", orig_arm)
-    )
-
-    import bisect as _bisect
-
-    from smc.config.timeframe import Timeframe
-    from smc.data.resample import resample_ohlcv
-    from smc.orchestration import multi_tf_runtime as rt
-
-    orig_run_batch = rt.MultiTFProductRuntime.run_batch
-    m15_cache: dict = {}
-
-    def probed_run_batch(self, *, engine, series_by_tf, as_of, arm_bar,
-                         adapter=None, execution_candles=None, dedup=None):
-        if Timeframe.M15 not in series_by_tf:
-            source = execution_candles or getattr(adapter, "_candles", None)
-            if source:
-                key = id(source)
-                entry = m15_cache.get(key)
-                if entry is None:
-                    bars = resample_ohlcv(source, Timeframe.M15)
-                    entry = (bars, [b.timestamp for b in bars])
-                    m15_cache[key] = entry
-                bars, stamps = entry
-                cut = _bisect.bisect_right(stamps, as_of)
-                series_by_tf = dict(series_by_tf)
-                series_by_tf[Timeframe.M15] = bars[:cut]
-                probes["m15_series_injected"] += 1
-        return orig_run_batch(
-            self, engine=engine, series_by_tf=series_by_tf, as_of=as_of,
-            arm_bar=arm_bar, adapter=adapter,
-            execution_candles=execution_candles, dedup=dedup,
-        )
-
-    rt.MultiTFProductRuntime.run_batch = probed_run_batch
-    restores.append(
-        lambda: setattr(rt.MultiTFProductRuntime, "run_batch", orig_run_batch)
     )
 
     orig_classify = cc.classify_choch_at

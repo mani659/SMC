@@ -38,6 +38,7 @@ sys.path.insert(0, str(REPO_ROOT / "04_SRC"))
 sys.path.insert(0, str(REPO_ROOT / "06_RESEARCH" / "scripts"))
 
 import phase3_structure_funnel as p3  # noqa: E402  (the frozen composition)
+from lib.product_htf_series import ensure_product_detection_frames  # noqa: E402
 
 LOCKED_LOAD = "2025-08-01"
 LOCKED_FROM = "2025-09-01"
@@ -99,6 +100,15 @@ def paper_dry_smoke(note_path: Path) -> dict:
         h4 = multi[Timeframe.H4]
         d1 = multi[Timeframe.D1]
         m5 = [c for c in multi[TF] if lo <= c.timestamp <= hi]
+        # Product HTF hygiene: M15 is part of the product POI inventory set
+        # (LOCKED §4b) — derive it closed-bar from M5 instead of starving
+        # arm_multi_tf into a MissingHtfSeriesError skip.
+        htf = ensure_product_detection_frames(
+            {Timeframe.H1: h1, Timeframe.H4: h4, Timeframe.D1: d1},
+            source=m5,
+        )
+        m15 = htf[Timeframe.M15]
+        m15_ts = [c.timestamp for c in m15]
         if not m5 or not h1 or not h4:
             note["skip"] = "empty slice"
             note_path.write_text(json.dumps(note, indent=2))
@@ -125,6 +135,7 @@ def paper_dry_smoke(note_path: Path) -> dict:
             Timeframe.H1: h1[: cut + 1],
             Timeframe.H4: h4[: bisect_right([c.timestamp for c in h4], bar.timestamp)],
             Timeframe.D1: d1[: bisect_right([c.timestamp for c in d1], bar.timestamp)],
+            Timeframe.M15: m15[: bisect_right(m15_ts, bar.timestamp)],
         }
         report = runner.arm_multi_tf(series, as_of=bar.timestamp, arm_bar=len(m5) - 1)
         note["paper_dry"] = {

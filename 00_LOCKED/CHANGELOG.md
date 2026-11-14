@@ -6,6 +6,12 @@
 
 ---
 
+### 2026-11-14 — HARNESS M15 PRODUCT-DIAGNOSTIC HYGIENE (`LOGIC_CHANGED: NO`)
+
+- **Scripts/docs only:** new `06_RESEARCH/scripts/lib/product_htf_series.py` (`ensure_product_detection_frames`, `assert_product_detection_complete`, `MissingProductHtfSeries`) derives missing product detection TFs (D1/H4/H1/M15) from M1/M5 with closed-bar semantics and fails loudly naming gaps.
+- **Wired:** `phase3_structure_funnel.py` (shared composition used by the frozen-funnel wrappers), `phase4_unified_backtest.py`, `c1_multi_tf_parity_smoke.py`, `post_c2_diagnostic.py` (ad-hoc M15 probe removed). Menu/opt_b harnesses already supplied M15; fr1/fr4 are legacy `validate_multi` probes, documented as non-product.
+- **Evidence:** 3-day dry run — `htf_batches` 0→66, batch_errors 1 (cold start), detected M15 997, armed 12 (previously an empty funnel). Tests `04_SRC/tests/test_harness_m15_hygiene.py` (4); suite **1504 passed / 7 skipped**; no `04_SRC/smc/**` or constant change.
+
 ### 2026-11-14 — FORMAL LOCKED_DECISIONS § EDITS A1–A10 (`LOGIC_CHANGED: NO`)
 
 - **Docs only:** `00_LOCKED/LOCKED_DECISIONS.md` adds a §0 master-card amendment register and dated supersession blocks: §4b (POI TFs M15/H1/H4/D1), §8a (M7 = FLIP plane), §16a (Pillar 3 = Dealing Range), §17a/§20a (CHOCH Rule 3 research-only), §21a/§22a (color-free Demand/Supply, single-origin width unchanged), §21b (TP first valid swing; SL ATR buffer; 1:5 / 30-pip / 2–5 pip benchmarks only), §21c (no dual confirmation chain), §24a (permanent A–F map, C live), §25 clarification (in-between REQUIRED per C3; boundary-sweep design-only).

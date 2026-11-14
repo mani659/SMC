@@ -34,6 +34,9 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "04_SRC"))
+sys.path.insert(0, str(REPO_ROOT / "06_RESEARCH" / "scripts"))
+
+from lib.product_htf_series import ensure_product_detection_frames  # noqa: E402
 
 from smc.backtest.pipeline_adapter import PipelineAdapter  # noqa: E402
 from smc.config.timeframe import Timeframe  # noqa: E402
@@ -105,13 +108,23 @@ def main() -> int:
     m1 = [c for c in m1 if LOAD_FROM <= c.timestamp <= exec_end + timedelta(days=1)]
     multi = resample_multi(m1, [TF, Timeframe.H1, Timeframe.H4, Timeframe.D1])
     m5 = [c for c in multi[TF] if EXEC_START <= c.timestamp <= exec_end]
-    h1, h4, d1 = (multi[Timeframe.H1], multi[Timeframe.H4], multi[Timeframe.D1])
-    print(f"[c1] M1 {len(m1)} → M5 {len(m5)} | H1 {len(h1)} H4 {len(h4)} D1 {len(d1)}",
-          flush=True)
+    # Product HTF hygiene: the shipped runtime requires (D1, H4, H1, M15).
+    # M15 is derived closed-bar from the full M5 series (load-prefix depth).
+    htf = ensure_product_detection_frames(
+        {Timeframe.H1: multi[Timeframe.H1],
+         Timeframe.H4: multi[Timeframe.H4],
+         Timeframe.D1: multi[Timeframe.D1]},
+        source=multi[TF],
+    )
+    h1, h4, d1, m15 = (htf[Timeframe.H1], htf[Timeframe.H4],
+                       htf[Timeframe.D1], htf[Timeframe.M15])
+    print(f"[c1] M1 {len(m1)} → M5 {len(m5)} | H1 {len(h1)} H4 {len(h4)} "
+          f"D1 {len(d1)} M15 {len(m15)}", flush=True)
 
     h1_ts = [c.timestamp for c in h1]
     h4_ts = [c.timestamp for c in h4]
     d1_ts = [c.timestamp for c in d1]
+    m15_ts = [c.timestamp for c in m15]
 
     engine = PipelineEngine()
     adapter = PipelineAdapter(engine, timeframe=TF)
@@ -137,6 +150,7 @@ def main() -> int:
             Timeframe.H1: h1[: cut + 1],
             Timeframe.H4: h4[: bisect_right(h4_ts, bar.timestamp)],
             Timeframe.D1: d1[: bisect_right(d1_ts, bar.timestamp)],
+            Timeframe.M15: m15[: bisect_right(m15_ts, bar.timestamp)],
         }
         try:
             report = runtime.run_batch(
