@@ -6,6 +6,13 @@
 
 ---
 
+### 2026-11-14 — PFE-2 SIX-MONTH PRODUCT BACKTEST (MENU PRIMARY + SEEK SECONDARY, `LOGIC_CHANGED: NO`)
+
+- **Seek (secondary, full 6 months, dual-run; exec 2025-05-01 → 2025-10-31):** armed **1,865**, routes **670**, placed **81**, fills **80**, duplicates 3,438, HTF batches 3,001, batch_errors 23 (cold start), `tp_source` **55 structural / 25 fallback**, exits **36 TP / 44 SL**, triggers F65·B10·A2·E2·C1; determinism **PASS** (trades.csv + report.json byte-identical). Diagnostic net −2.4038 (n=80, NOT performance).
+- **October continuity fingerprint:** seek Oct-only = **441 armed / 149 routes / 11 placed / 11 fills**, duplicates 586, batches 526, tp 8/3, exits 3 TP / 8 SL, `menu_episodes 0` — the frozen O1–O5 record reproduced exactly.
+- **Menu (primary law) bounded by a documented performance limit:** the continuous 6-month menu run collapses from 30.8 to <2 bars/s (full-series swing re-detection on M1/M5 confirmation streams each bar, armed×episode scans) and was stopped before any menu funnel was read; menu evidence is three continuous 10-day dual-run windows — **Oct 1–10** armed 97 / episodes 30 / winners 23 / placed 14 / fills 14 (tp 7 structural · 7 fallback, all SL, Trigger F only), Jun 1–10 60/18/11, Sep 1–10 170/3/2; `menu_errors 0`, `routes 0`, determinism **PASS** on all pairs. Diagnostic nets: Oct −20.0151 (n=14), Jun −1.4220 (n=11), Sep +0.3040 (n=2).
+- **Report:** `06_RESEARCH/PFE2_SIX_MONTH_PRODUCT_BACKTEST.md` (artifacts `06_RESEARCH/results/pfe2_6m/`). No gate, threshold, C3, SL or TP-policy change; no cross-composition ranking; no edge claim; O1–O5 stay CLOSED. NEXT = PFE-3 expert structure/trade review pack.
+
 ### 2026-11-14 — PFE-1.5 PRODUCT PARITY: MENU LAW IN RESEARCH + STRUCTURAL TP ON MENU (`LOGIC_CHANGED: NO`)
 
 - **P0-2 closed (TP parity):** `smc/orchestration/product_menu_mtf.py` `_candidate` now supplies `structural_target=structural_tp_target(...)` to the frozen `candidate_from_route` — the same selector the seek adapter imports, with the completion bar as placement bar and the existing `poi_give_up_bars()` age bound. No qualifying swing → unchanged 4×ATR fallback; `resolve_take_profit` untouched; `tp_source` provenance now covers the menu path. New tests `04_SRC/tests/test_pfe15_menu_structural_tp.py` (3).

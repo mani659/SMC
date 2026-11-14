@@ -1,5 +1,15 @@
 # SESSION HANDOFF — SMC BOT
 
+## 2026-11-14 — PFE-2: FROZEN 6-MONTH PRODUCT BACKTEST (MENU PRIMARY + SEEK SECONDARY) (`LOGIC_CHANGED: NO`)
+
+- **Report:** `06_RESEARCH/PFE2_SIX_MONTH_PRODUCT_BACKTEST.md`; artifacts `06_RESEARCH/results/pfe2_6m/` (`summary.json` + 9 runs). **DIAGNOSTIC ONLY — NOT PERFORMANCE.**
+- **Seek (secondary, full 6 months, dual-run):** exec 2025-05-01 → 2025-10-31 (36,269 M5 bars) → **armed 1,865 · routes 670 · placed 81 · fills 80**, duplicates 3,438, HTF batches 3,001, batch_errors 23 (cold start), `tp_source` **55 structural / 25 fallback**, exits **36 TP / 44 SL**, triggers F65·B10·A2·E2·C1. Determinism **PASS** (trades.csv + report.json byte-identical). Diagnostic net −2.4038 (n=80).
+- **October continuity fingerprint:** seek Oct-only reproduces the frozen record exactly — **441 armed / 149 routes / 11 placed / 11 fills**, duplicates 586, batches 526, tp 8/3, exits 3 TP / 8 SL, `menu_episodes 0`. PFE-1.5 changes are additive only.
+- **Menu (primary law, BOUNDED windows):** a continuous 6-month menu run is **not research-feasible** — menu bookkeeping is quadratic (full-series swing re-detection on M1/M5 verify streams each bar + armed×episode scans); observed 30.8 → <2 bars/s before any menu funnel was read, so it was stopped and documented. Menu evidence = three continuous 10-day windows, each dual-run: **Oct 1–10** armed 97 / episodes 30 / winners 23 / placed 14 / fills 14 (tp 7 structural, 7 fallback; all SL; F only); Jun 1–10 armed 60 / winners 18 / fills 11; Sep 1–10 armed 170 / winners 3 / fills 2. `menu_errors 0` in all, `routes 0` (scan dormant). Determinism **PASS** on all three pairs. Diagnostic net Oct −20.0151 (n=14), Jun −1.4220 (n=11), Sep +0.3040 (n=2).
+- **No ranking, no edge claim, no gate touched.** O1–O5 remain CLOSED status-quo; C3/SL/TP policy/thresholds unchanged.
+- **Residuals:** menu 6m continuous run outstanding (performance-only engagement needed before trusting it); warm-up asymmetry (D1/H4/H1 carry load_from, M15/M5/M1 start at exec); window-end queued entries; fresh menu state per window.
+- **NEXT ACTION (single):** **PFE-3 expert structure/trade review pack** (zones, confirmations, entries in flowchart language) — after Architect accepts PFE-2.
+
 ## 2026-11-14 — PFE-1.5: PRODUCT PARITY (MENU LAW + STRUCTURAL TP ON MENU) (`LOGIC_CHANGED: NO`)
 
 - **Closes PFE-1 P0-1 / P0-2** (see `06_RESEARCH/PFE1_PRODUCT_VS_INTENDED_AUDIT.md`). Minimal wiring only — no gate, threshold, C3, §5a, ZoneDedup, SL or risk change.
