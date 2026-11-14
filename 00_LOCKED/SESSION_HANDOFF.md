@@ -1,5 +1,15 @@
 # SESSION HANDOFF — SMC BOT
 
+## 2026-11-14 — O1 MEASUREMENT: C3 REJECT / BOUNDARY ANATOMY (`LOGIC_CHANGED: NO`)
+
+- **Script:** `06_RESEARCH/scripts/o1_c3_boundary_anatomy.py` (read-only probe around `candidate_from_route`, the single C3 gate). Pre-registered buckets 0.25 / 1.0 ATR before the run; full `(D1,H4,H1,M15)` detection set via the M15 helper. Window: load 2025-05-01, exec 2025-10-01 → 10-31.
+- **Result:** 149 C3 evals, **137 rejects (91.9%)**, 12 passes. **B3 FAR 97.1%**, B2 1.5%, **B1 EDGE_NEAR 1.5%**, **B4 touch-but-close-out 0.7%** (1 case). Median outside distance **35.9 ATR** (p25 11.8 / p75 98.4). 112/137 rejects had the resting limit still inside the zone — the completion bar had simply closed far away. Edge-adjacent rejects are all M15; D1/H4/H1 rejects are all far. Sanity 0 rejects with close inside, 0 passes with close outside; counts reconcile (149 = 137 + 12).
+- **Interpretation (agenda O1 criteria):** **KEEP_STATUS_QUO** — far dominates and the boundary population is 2.2% of rejects, so no boundary-sweep design is warranted from this window. Explicitly not a licence to widen the close-inside rule.
+- **Observation only (not this pack):** the distance distribution points at POI staleness (zones staying in scan after price left), which would be its own question with its own lock.
+- **Determinism:** single run + CSV checksum; funnel counts reproduce the post-C2 diagnostic exactly (armed 441, routes 149 F122/A15/B11/C1, 12 candidates, 11 filled).
+- **Non-edits:** no `04_SRC` change, no constant, no gate, no boundary-sweep code. Report: `06_RESEARCH/OPEN_DECISION_O1_C3_BOUNDARY_ANATOMY.md`.
+- **NEXT ACTION (single):** **Architect O1 lock reading**, then O2 HTF-sweep stage pack.
+
 ## 2026-11-14 — OPEN-DECISIONS RESEARCH AGENDA O1–O5 (`LOGIC_CHANGED: NO`)
 
 - **Filed:** `06_RESEARCH/OPEN_DECISIONS_RESEARCH_AGENDA.md` — five open questions with question / current behaviour / evidence / method / metrics / **lock criteria** / non-goals / status: **O1** C3 `not_in_between` reject anatomy (boundary vs far noise), **O2** HTF sweep hard stage vs upstream-only (no sweep pillar exists today), **O3** multi-zone priority across D1/H4/H1/M15 (today: `ZoneDedup` = same-direction overlap is one episode, first-armed wins — no TF priority rule), **O4** SL ATR buffer vs 30-pip MAE benchmark, **O5** structural TP vs 4×ATR fallback (October: 9 structural / 3 fallback, diagnostic only).

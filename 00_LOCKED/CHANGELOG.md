@@ -6,6 +6,13 @@
 
 ---
 
+### 2026-11-14 — O1 C3 REJECT / BOUNDARY ANATOMY (research measurement, `LOGIC_CHANGED: NO`)
+
+- **Measurement only:** `06_RESEARCH/scripts/o1_c3_boundary_anatomy.py` runs the frozen product composition (October 2025, full `(D1,H4,H1,M15)` detection set) and records every `candidate_from_route` evaluation read-only. Bucket edges (0.25 / 1.0 ATR) pre-registered before the run.
+- **Findings:** 149 evals → 137 `not_in_between` (91.9%): **B3 FAR 97.1%**, B1 1.5%, B2 1.5%, **touch-but-close-out 0.7%**; median distance **35.9 ATR**; 112/137 had the resting limit inside the zone while the close sat far outside. Edge-adjacent rejects are M15-only.
+- **Interpretation:** **KEEP_STATUS_QUO** per agenda O1 criteria — C3 is acting as a proximity/validity filter, not trimming genuine boundary interactions. No boundary-sweep design warranted; no widening proposal. Stale-POI lifetime noted as a separate future question only.
+- **Report:** `06_RESEARCH/OPEN_DECISION_O1_C3_BOUNDARY_ANATOMY.md`. Funnel counts reproduce the post-C2 diagnostic exactly (441 armed / 149 routes / 12 candidates / 11 filled). No `04_SRC` or constant change.
+
 ### 2026-11-14 — OPEN-DECISIONS RESEARCH AGENDA O1–O5 (`LOGIC_CHANGED: NO`)
 
 - **Docs only:** `06_RESEARCH/OPEN_DECISIONS_RESEARCH_AGENDA.md` registers five open questions — O1 C3 `not_in_between` reject anatomy (boundary vs far-from-zone noise), O2 HTF sweep as a hard stage (today: contextual only, no sweep pillar), O3 multi-zone priority (today: `ZoneDedup` overlap = one episode, first-armed, no TF rule), O4 SL ATR buffer vs 30-pip MAE benchmark, O5 structural TP vs 4×ATR fallback — each with current behaviour, evidence sources, method outline, metrics, **lock criteria**, non-goals and status OPEN.
