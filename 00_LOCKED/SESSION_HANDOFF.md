@@ -1,5 +1,13 @@
 # SESSION HANDOFF — SMC BOT
 
+## 2026-11-14 — FORMAL LOCKED_DECISIONS § EDITS, A1–A10 (`LOGIC_CHANGED: NO`)
+
+- **Docs only:** `00_LOCKED/LOCKED_DECISIONS.md` gained a §0 master-card amendment register plus dated blocks §4b (A8, POI TFs M15/H1/H4/D1), §8a (A6, M7 plane FLIP), §16a (A5, Pillar 3 = Dealing Range), §17a + §20a (A1, Rule 3 research-only), §21a/§22a (A2, color-free D/S, width unchanged), §21b (A3/A4, TP first-valid-swing / SL ATR buffer; 1:5, 30-pip and 2–5 pip = benchmarks), §21c (A9, no dual confirmation chain), §24a (A7, permanent letter map with C live), and a §25 clarification (C3 in-between gate is REQUIRED; boundary-sweep stays design-only).
+- **History preserved:** no paragraph deleted; each block names what it supersedes. A10 is already covered by the ESSENCE header notice from D0 and is recorded in the §0 register.
+- **Verification:** `git diff -- 04_SRC` empty; `locked_constants.py` diff empty; no new number introduced; no C3 softening, no R3 re-enable, no boundary-sweep code.
+- **Note:** `06_RESEARCH/LOCKED_A1_A10_FORMAL_EDIT_NOTE.md` (A1–A10 table, 9 AMENDED / 1 ALREADY_ALIGNED / 0 DEFERRED, residual-text sweep).
+- **NEXT ACTION (single):** **harness M15 product-diagnostic hygiene** (the frozen funnel harness still supplies H1/H4/D1 only), boundary-sweep design, or Architect pick.
+
 ## 2026-11-12 — D0 DOCS LAG + POST-C2 DIAGNOSTIC (`LOGIC_CHANGED: NO`)
 
 - **Part A (D0):** `PRODUCT_RUNTIME_CONTRACT` §1 now states the shipped product POI detection set `(D1,H4,H1,M15)` (M5 = execution, M1 = trigger/confirmation, neither is a structural POI TF), points at the master card + amendment list as expert-story authority, and records that **no boundary-sweep product emitter exists**. `ESSENCE_CONTRACT_V1` gained a header supersession notice (A3/A4/A7/A10; 1:5 TP and 2–5 pip SL remain review-only) with §5/§6 body untouched.

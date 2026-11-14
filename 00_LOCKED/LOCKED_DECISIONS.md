@@ -6,6 +6,30 @@
 
 ---
 
+## 0. Expert master card amendment register (2026-11-12 — docs alignment)
+
+**Authority:** `00_LOCKED/EXPERT_MASTER_CARD.md` + `00_LOCKED/EXPERT_AMENDMENT_LIST_2026-11-12.md` (rows A1–A10).
+**Rule of record:** the original § bodies below are kept as history; where a dated
+amendment block here conflicts with older text, **the dated block is normative**.
+
+| ID | Requirement (one line) | Record |
+|---|---|---|
+| **A1** | CHOCH Rule 3 is research-only; live CHOCH = Rule 1 / Rule 2 (body close) | §17a, §20a |
+| **A2** | OB / Demand-Supply identification is color-free; width = single origin candle, full OHLC + wicks | §21a, §22a |
+| **A3** | Product TP = first valid swing only; ESSENCE 1:5 profile = benchmark | §21b |
+| **A4** | Product SL = existing ATR-buffer path; 30-pip and 2–5 pip M1 SL = benchmarks | §21b |
+| **A5** | Pillar 3 product name = Dealing Range (Premium/Discount is a note alias) | §16a |
+| **A6** | M7 plane = FLIP; repeated tests exhaust supply before decisive mitigation / flip | §8a |
+| **A7** | Permanent letter map A–F with Trigger C live in V1 | §24a |
+| **A8** | POI inventory timeframes = M15, H1, H4, D1 (W1 optional; M1/M5 confirm only) | §4b |
+| **A9** | No dual HTF→LTF confirmation chain; structure TFs give zones/bias, LTF gives the entry | §21c |
+| **A10** | ESSENCE signed page stays a record, its TP/SL rows superseded for product intent | ESSENCE header notice (D0) — no LOCKED body conflict |
+
+*No numeric constant is changed by any block in this register; `locked_constants.py`
+stays untouched. No runtime behaviour is introduced by this document.*
+
+---
+
 ## 1. Modular Multi-Model Confluence System (REPLACES old priority hierarchy)
 
 **All 8 POI models are equal tags.** There is NO hard ranking or priority hierarchy. Multiple models can label the same price level simultaneously. The more independent models that align on one level, the higher the quality score.
@@ -143,6 +167,22 @@ All charts are in `Knowledge Base/` and cataloged in `Knowledge Base/README.md` 
 
 ---
 
+### 4b. Amended 2026-11-12 — POI inventory timeframes include M15 (amendment A8)
+
+> **Supersedes §4 and §21 wherever they omit M15 from the POI inventory.**
+
+- **Structural POI inventory (bias + zones) = M15, H1, H4, D1.** W1 is optional
+  context when provisioned and is never required.
+- **M1 / M5 never create POIs** — confirmation / entry only, and only inside the
+  routed zone (§25, card §3.4).
+- §4a's construction floor (H4 + H1 required; degraded single-TF opt-in only) is
+  unchanged; the shipped product default detection set is `(D1, H4, H1, M15)`
+  (`PRODUCT_RUNTIME_CONTRACT.md` §1, D0).
+- §4's per-model table remains the **model reference**; its M30 row is not part
+  of the product POI inventory.
+
+---
+
 ## 5. Freshness Rules
 
 - **Strict 1-touch only:** STATE_FRESH → STATE_TESTED (deactivated forever)
@@ -243,6 +283,15 @@ All charts are in `Knowledge Base/` and cataloged in `Knowledge Base/README.md` 
 
 ---
 
+### 8a. Amended 2026-11-12 — Model 7 plane = FLIP (amendment A6)
+
+**M7 (Equal Resistance Shelf)** is a **FLIP** plane: repeated tests exhaust supply
+before the decisive mitigation / flip. This adds the plane definition only — the
+M5 vs M7 distinction in §8 (proactive continuation vs reactive shelf) stands, and
+the two models are not collapsed.
+
+---
+
 ## 9. CHOCH Entry Rules
 
 - **Entry placement:** At the broken structural level (NOT the origin OB)
@@ -329,6 +378,14 @@ STAGE 4: Execution Engine (news check → lot sizing → limit order → PureRun
 
 ---
 
+### 16a. Amended 2026-11-12 — Pillar 3 product name = Dealing Range (amendment A5)
+
+Pillar 3's product name is **Dealing Range**; "Premium/Discount" remains an
+accepted alias in notes. **Naming only** — the five-pillar count, the pillar order
+and every pillar rule are unchanged (no sixth pillar).
+
+---
+
 ## 17. Three Types of CHOCH (Expert — NEW)
 
 The expert teaches three distinct CHOCH types. Two are "Inside CHOCH" variants where price does NOT break the last structural swing.
@@ -366,6 +423,21 @@ The expert teaches three distinct CHOCH types. Two are "Inside CHOCH" variants w
 | 3a (Rule 1 — Standard) | Highest | None — standard entry |
 | 3b (Rule 2 — Inside Body) | Medium | None — standard entry |
 | 3c (Rule 3 — Inside Wick) | Lowest — KEPT | Valid signal at lowest strength. No extra confluence gate. Tick-data validation pending. |
+
+---
+
+### 17a. Amended 2026-11-12 — CHOCH Rule 3 is research-only (amendment A1)
+
+> **Supersedes** the Rule 3 bullets "**Strength: Lowest — KEPT in the system. Valid
+> signal at lowest strength.**" (this §) and sub-variant 3c "**Valid signal at
+> lowest strength**".
+
+- **Live CHOCH = Rule 1 (standard body close) + Rule 2 (inside body close).**
+- **Rule 3 (wick-only) is research/audit only**: it may still be classified and
+  logged, and it must never become a routable entry or a tradeable POI.
+- Implemented as C2a (`is_live_choch` in `smc/poi/choch_classifier.py`, gating
+  Trigger A and the M3 POI); the classifier geometry is kept intact.
+- No strength ranking, threshold or constant is changed — only live eligibility.
 
 ---
 
@@ -444,6 +516,15 @@ For Inside CHOCH variants (Rule 2 and Rule 3), the entry placement adjusts:
 
 ---
 
+### 20a. Amended 2026-11-12 — Rule 3 entry placement is not a product entry (amendment A1)
+
+Rule 1 and Rule 2 entry placement (broken last swing / broken intermediate level)
+are unchanged. **Rule 3's "entry at the wick-pierced level" is superseded**: a
+wick-only CHOCH produces no live entry (§17a). The level may still be recorded for
+research.
+
+---
+
 ## 21. Model 8: HTF Demand/Supply Zones (D1/H4) — NEW
 
 ### Core Concept
@@ -507,6 +588,34 @@ Model 8 is a **full peer** in the modular system. It can combine with any of Mod
 
 ---
 
+### 21a. Amended 2026-11-12 — Model 8 zones are color-free (amendment A2)
+
+The OB / Demand / Supply rows of §21 ("last opposing candle", "single last
+bearish/bullish candle") are superseded **as selection predicates** by §22a:
+identification is color-free. Zone width is unchanged (single origin candle, full
+OHLC + wicks), and the OB-from-FVG path was already color-free.
+
+### 21b. Amended 2026-11-12 — TP and SL product rules (amendments A3, A4)
+
+- **TP (product) = first valid swing only** (the shipped structural feed on the
+  §19-confirmed place-time prefix), with the existing ATR fallback when no
+  structural target qualifies. The ESSENCE Model-8 **1:5** profile is a
+  **benchmark**, not a product gate or a new ratio.
+- **SL (product) = the existing ATR-buffer path** (structural extreme ± buffer).
+  The **2–5 pip M1 SL** and the **30-pip** operator note are **benchmarks only**
+  (MAE / review), not product stops.
+- "RR Target: Minimum 1:5" and "SL: … (2–5 pips typical)" above are therefore
+  **superseded for product intent**.
+
+### 21c. Amended 2026-11-12 — no dual confirmation chain (amendment A9)
+
+Structure timeframes (M15 / H1 / H4 / D1) supply **bias and zones**; M1 / M5
+confirm and enter **inside the zone only**. The 3-step wording above (§21) is a
+zone → approach → entry sequence, **not** an HTF confirmation followed by a second
+LTF confirmation. The runtime timeframe choice is unchanged.
+
+---
+
 ## 22. Formal Demand & Supply Zone Definition (Expert — Frozen)
 
 > **This definition supersedes any previous Demand/Supply zone descriptions. Use this for all Model 8 zone identification.**
@@ -553,6 +662,24 @@ SUPPLY ZONE (Bearish):
 
 ---
 
+### 22a. Amended 2026-11-12 — Demand/Supply identification is color-free (amendment A2)
+
+> **Supersedes the color predicates in §22 and §21.** The frozen §22 definitions
+> stay the historical record; this block is normative where they conflict.
+
+- **No candle color is a selection predicate.** The origin is chosen by **position
+  in the displacement spine** (candle index), and direction comes from which impulse
+  leg moved — a bullish-bodied candle can anchor demand and a bearish-bodied one can
+  anchor supply.
+- **Width unchanged:** the **single origin candle**, full high-to-low range,
+  wicks included. No multi-candle envelope, no width cap, no ATR width filter.
+- §22 algorithmic steps 1, 2, 4, 5 stand; **step 3 ("identify the single last
+  bearish/bullish candle") is superseded** by the positional origin rule.
+- Implemented as C2b (`smc/poi/models/m8_htf_demand_supply.py::_zones`), with the
+  frozen `DISPLACEMENT_MIN_ATR` / `N_BAR_LTF` thresholds unchanged.
+
+---
+
 ## 23. Unfilled Order Expiry (V1)
 
 When a limit order expires unfilled, the POI is marked STATE_TESTED and deactivated.
@@ -583,6 +710,24 @@ Each trigger has a maximum validity window. If the trigger does not fire within 
 
 ---
 
+### 24a. Amended 2026-11-12 — permanent entry letter map (amendment A7)
+
+| Letter | Pattern | Live |
+|---|---|---|
+| **A** | CHOCH Rule 1 / Rule 2 (body close) | YES |
+| **B** | Leading diagonal (W2 / golden-zone family) | YES |
+| **C** | Ending diagonal (W5 throw-under sniper) | **YES — measurement in V1** |
+| **D** | Two-bar reversal | YES |
+| **E** | Double top/bottom + RSI divergence | YES |
+| **F** | BOS + OB / continuation (color-free OB path) | YES |
+| — | CHOCH Rule 3 (wick-only) | **NO — research only** (§17a) |
+
+Trigger C is a **live** trigger in V1 (it was missing from some earlier v1 views);
+the §24 expiry table above already carries its window. Routing remains
+**chronological first-valid** (§12) — no priority hierarchy is introduced.
+
+---
+
 ## 25. In-Between Entry Definition (Default — pending possible expert revision)
 
 An **in-between entry** exists only when BOTH conditions are met:
@@ -593,6 +738,14 @@ An **in-between entry** exists only when BOTH conditions are met:
 If price only wicks the boundary or closes beyond the zone without a trigger firing inside → treat as **no in-between entry** → activate Fallback Boundary Sweep logic (Section 2, Rule 5).
 
 **Status:** Default — pending possible expert revision.
+
+> **Clarified 2026-11-12 (C3 implementation; master card §3.4):** the in-between
+> condition is **REQUIRED product entry validity**, not an option — a trigger
+> completion outside the zone body is not a valid entry. The shipped gate uses
+> the **completion bar's CLOSE** inside the zone's inclusive high/low
+> (`smc/triggers/in_between.py`, reject token `not_in_between`). The
+> median-of-zone remains a placement preference only. The Fallback Boundary Sweep
+> above stays **design-only** — no product emitter exists in the codebase.
 
 ---
 

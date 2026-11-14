@@ -6,6 +6,12 @@
 
 ---
 
+### 2026-11-14 — FORMAL LOCKED_DECISIONS § EDITS A1–A10 (`LOGIC_CHANGED: NO`)
+
+- **Docs only:** `00_LOCKED/LOCKED_DECISIONS.md` adds a §0 master-card amendment register and dated supersession blocks: §4b (POI TFs M15/H1/H4/D1), §8a (M7 = FLIP plane), §16a (Pillar 3 = Dealing Range), §17a/§20a (CHOCH Rule 3 research-only), §21a/§22a (color-free Demand/Supply, single-origin width unchanged), §21b (TP first valid swing; SL ATR buffer; 1:5 / 30-pip / 2–5 pip benchmarks only), §21c (no dual confirmation chain), §24a (permanent A–F map, C live), §25 clarification (in-between REQUIRED per C3; boundary-sweep design-only).
+- **Preservation:** no body paragraph deleted; each dated block names what it supersedes. A10 was already covered by the ESSENCE header notice (D0). No numeric constant, no `04_SRC` change, no runtime effect.
+- **Note:** `06_RESEARCH/LOCKED_A1_A10_FORMAL_EDIT_NOTE.md` (9 AMENDED / 1 ALREADY_ALIGNED / 0 DEFERRED).
+
 ### 2026-11-12 — D0 DOCS LAG + POST-C2 DIAGNOSTIC (`LOGIC_CHANGED: NO`)
 
 - **D0 (docs):** `00_LOCKED/PRODUCT_RUNTIME_CONTRACT.md` §1 states the shipped product POI detection set `(D1,H4,H1,M15)`, distinguishes M5 (execution) and M1 (trigger/confirmation) from structural POI TFs, adds the master-card/amendment authority pointer and records that no boundary-sweep product emitter exists. `00_LOCKED/ESSENCE_CONTRACT_V1.md` gains a header supersession notice (A3/A4/A7/A10; 1:5 TP and 2–5 pip SL remain review-only) with its body unchanged.
