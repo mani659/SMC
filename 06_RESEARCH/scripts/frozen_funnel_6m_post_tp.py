@@ -416,7 +416,7 @@ def _analyse(out_root: Path, args: argparse.Namespace) -> dict:
 
 def run_one(out_root: Path, tag: str,
             load_from: str, exec_from: str, exec_to: str,
-            mode: str) -> int:
+            mode: str, composition: str = "seek") -> int:
     import argparse as _ap
     from smc.orchestration import engine as engine_mod
     import phase3_structure_funnel as p3
@@ -454,6 +454,7 @@ def run_one(out_root: Path, tag: str,
         p3.run(_ap.Namespace(
             tag=tag, out_root=out,
             load_from=load_from, exec_from=exec_from, exec_to=exec_to,
+            composition=composition, menu_same_bar_asof=False,
         ))
     finally:
         engine_mod.PipelineEngine.arm_at = _orig_arm_at
@@ -478,6 +479,8 @@ def main(argv=None) -> int:
     ap.add_argument("--exec-to", default=LOCKED_TO)
     ap.add_argument("--mode", default="assemble",
                     choices=["run1", "run2", "assemble"])
+    ap.add_argument("--composition", default="seek", choices=("seek", "menu"),
+                    help="entry law to measure (menu = shipped PRODUCT_V1 law)")
     args = ap.parse_args(argv)
     OUT_ROOT.mkdir(parents=True, exist_ok=True)
 
@@ -495,7 +498,7 @@ def main(argv=None) -> int:
 
     return run_one(OUT_ROOT, args.tag,
                    args.load_from, args.exec_from, args.exec_to,
-                   args.mode)
+                   args.mode, args.composition)
 
 
 if __name__ == "__main__":

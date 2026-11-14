@@ -168,3 +168,33 @@ leg). Implementation record: `06_RESEARCH/ESSENCE_V1_SLICE_NOTE.md`.
 In scope and closed by Track A: E1 entry_anchor export (done). Explicitly out of scope:
 C3 feed implementation (unfed — no real source), news calendar ingestion, sweep-level trigger
 attribution, any new constants, any threshold/band/geometry change.
+
+## 11. Amendment 2026-11-14 — entry-law composition (PFE-1.5)
+
+**Authority:** Lead Architect ruling on `06_RESEARCH/PFE1_PRODUCT_VS_INTENDED_AUDIT.md`
+(P0-1, P0-2). **No threshold, gate, pillar, trigger or constant changes**; this
+amendment records WHICH entry law an evidence run measures and closes the TP
+parity gap between the two bridges.
+
+1. **Two shipped entry laws exist.** Live `PRODUCT_V1` runs the sweep → LTF
+   confirmation **menu** (`PRODUCT_POLICY_MULTI_TF_CONFIRMATION.md`, LOCKED
+   2026-10-26 → `ProductMenuEngine`) **and** the §5a seek scan through
+   `PipelineAdapter`; the adapter defers to the menu for menu-covered POIs.
+2. **Evidence default = menu.** `06_RESEARCH/scripts/phase3_structure_funnel.py
+   --composition menu` drives the SAME `ProductMenuEngine` with the SAME
+   `register_armed` / closed-prefix `as_of` / `queue_menu_candidate` sequence as
+   `LiveLoop._drive_menu_confirmation` — this is the composition expert review
+   and PFE-2 primary must use. `--composition seek` remains the O1–O5
+   continuity path and is **diagnostic only, never "the product"**.
+3. **TP parity (§21b) applies to BOTH bridges.** `product_menu_mtf._candidate`
+   now feeds the same `pipeline_bridge.structural_tp_target` selector the seek
+   adapter uses (completion bar as placement bar, §19-confirmed prefix only);
+   no qualifying swing → the unchanged 4×ATR fallback. `resolve_take_profit`
+   is untouched.
+4. **No ranking across compositions.** Their counts differ by definition (the
+   menu requires and consumes a sweep); neither composition's volume implies
+   better edge.
+
+Notes: `06_RESEARCH/PFE15_COMPOSITION_PARITY_NOTE.md`,
+`06_RESEARCH/PFE15_MENU_STRUCTURAL_TP_NOTE.md`. Evidence path for the audit:
+`06_RESEARCH/PFE1_PRODUCT_VS_INTENDED_AUDIT.md`.

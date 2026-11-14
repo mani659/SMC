@@ -6,6 +6,13 @@
 
 ---
 
+### 2026-11-14 — PFE-1.5 PRODUCT PARITY: MENU LAW IN RESEARCH + STRUCTURAL TP ON MENU (`LOGIC_CHANGED: NO`)
+
+- **P0-2 closed (TP parity):** `smc/orchestration/product_menu_mtf.py` `_candidate` now supplies `structural_target=structural_tp_target(...)` to the frozen `candidate_from_route` — the same selector the seek adapter imports, with the completion bar as placement bar and the existing `poi_give_up_bars()` age bound. No qualifying swing → unchanged 4×ATR fallback; `resolve_take_profit` untouched; `tp_source` provenance now covers the menu path. New tests `04_SRC/tests/test_pfe15_menu_structural_tp.py` (3).
+- **P0-1 closed (composition parity):** `06_RESEARCH/scripts/phase3_structure_funnel.py` gains `--composition {seek,menu}` (+`--menu-same-bar-asof`), where `menu` drives `ProductMenuEngine` exactly as `LiveLoop._drive_menu_confirmation` (register_armed per armed POI, closed-prefix streams, `as_of` = bar close, winners queued through `PipelineAdapter.queue_menu_candidate`); `frozen_funnel_6m_post_tp.py` forwards the flag. Summary adds `composition`, menu episode/winner/error counters and the adapter's `menu_counters()`.
+- **Smoke:** new `06_RESEARCH/scripts/pfe15_composition_smoke.py` → PASS (seek 804 bars / 11 armed / 2 routes / menu_episodes 0; menu 804 bars / 11 armed / 4 episodes / 4 winners / 0 errors); artifacts `06_RESEARCH/results/pfe15_smoke/`. A 10-day menu probe placed 14 fills with `tp_source` 7 structural / 7 fallback (wiring observation, not performance).
+- **Contract:** `PRODUCT_RUNTIME_CONTRACT.md` §11 — evidence default = menu, seek = continuity diagnostic, TP parity on both bridges, no cross-composition ranking. Notes `06_RESEARCH/PFE15_COMPOSITION_PARITY_NOTE.md`, `06_RESEARCH/PFE15_MENU_STRUCTURAL_TP_NOTE.md`. No constant, gate, pillar, trigger or SL change; NEXT = PFE-2 (2b menu primary, 2a seek secondary).
+
 ### 2026-11-14 — PFE-1 PRODUCT VS INTENDED DRIFT AUDIT (read-only, `LOGIC_CHANGED: NO`)
 
 - **Added** `06_RESEARCH/PFE1_PRODUCT_VS_INTENDED_AUDIT.md`: 14-row as-coded vs intended matrix (A–N) against LOCKED_DECISIONS, the product runtime contract, the 2026-10-26 multi-TF confirmation POLICY and the as-coded architecture note. Counts **ALIGNED 7 / PARTIAL 5 / DRIFT 1 / ABSENT 1** (+3 documented DEFERRED).

@@ -154,6 +154,43 @@ def run(args) -> dict:
     adapter = PipelineAdapter(engine, timeframe=TF)
     adapter.set_candles(m5)
     runtime = MultiTFProductRuntime(episode_store=episode_store)  # product seam (C1): H4+H1 detect, D1→M8
+
+    # ---- Named composition (PFE-1.5): the entry LAW this run measures ----- #
+    # ``seek``  — PipelineAdapter scan only (O1–O5 continuity; diagnostic).
+    # ``menu``  — the shipped live PRODUCT_V1 law: sweep → one-shot LTF
+    #             confirmation window, driven exactly like
+    #             ``LiveLoop._drive_menu_confirmation`` (same ProductMenuEngine,
+    #             same register_armed/as_of/closed-prefix sequence, winners
+    #             queued into the SAME adapter + risk seam).
+    composition = str(getattr(args, "composition", "seek") or "seek").strip().lower()
+    if composition not in ("seek", "menu"):
+        raise SystemExit(f"unknown composition {composition!r} (seek|menu)")
+    MENU_WARMUP_BARS = 300
+    menu = None
+    menu_series: dict = {}
+    menu_closes: dict = {}
+    menu_tfs: tuple = ()
+    if composition == "menu":
+        from smc.orchestration.product_menu_mtf import ProductMenuEngine
+
+        menu = ProductMenuEngine(
+            symbol="XAUUSD",
+            same_bar_asof=bool(getattr(args, "menu_same_bar_asof", False)),
+        )
+        adapter.set_menu_confirmation(menu)
+        menu_series = {
+            Timeframe.H1: h1, Timeframe.H4: h4, Timeframe.D1: d1,
+            Timeframe.M15: m15, Timeframe.M5: m5,
+            Timeframe.M1: [c for c in m1 if c.timestamp <= exec_to],
+        }
+        menu_tfs = tuple(dict.fromkeys(
+            (*menu.detection_timeframes, *menu.confirmation_timeframes)
+        ))
+        for tf in menu_tfs:
+            menu_closes[tf] = [
+                c.timestamp + timedelta(minutes=tf.minutes)
+                for c in menu_series[tf]
+            ]
     order_book = CountingOrderBook()
     position_store = PositionStore()
     runner = BacktestRunner(
@@ -191,6 +228,9 @@ def run(args) -> dict:
         "scan_routes": 0,
         "routes_by_trigger": {},
         "routes_m8": 0,
+        "menu_winners": 0,
+        "menu_episodes": 0,
+        "menu_errors": 0,
     }
     pillar_path_by_poi: dict[str, str] = {}
     disp_by_poi: dict[str, float] = {}
@@ -256,6 +296,7 @@ def run(args) -> dict:
         def __init__(self, inner):
             self.inner = inner
             self.bars = 0
+            self._menu_cursor: dict = {}
 
         def on_bar(self, bar, bar_index, clock) -> None:
             nonlocal last_h1
@@ -297,6 +338,10 @@ def run(args) -> dict:
                     funnel["armed"][tf_name] = funnel["armed"].get(tf_name, 0) + 1
                     if "M8" in tags:
                         funnel["armed_m8"] += 1
+                    if menu is not None:
+                        det_tf = getattr(getattr(poi, "zone", None), "timeframe", None)
+                        if det_tf is not None:
+                            menu.register_armed(poi, det_tf, armed_ts=bar.timestamp)
                     armed_order.append(poi.id)
                     ctx = adapter._route_context.get(poi.id, (None, None))
                     if ctx[1] is not None:
@@ -319,6 +364,31 @@ def run(args) -> dict:
                         "tp": "",
                         "entry_anchor": "",
                     }
+            if menu is not None:
+                # Same call the live loop makes every closed execution bar:
+                # as_of = this bar's close, closed-prefix streams only.
+                as_of_menu = bar.timestamp + timedelta(minutes=TF.minutes)
+                closed_bars: dict = {}
+                for tf in menu_tfs:
+                    stamps = menu_closes[tf]
+                    end = bisect.bisect_right(stamps, as_of_menu)
+                    start = self._menu_cursor.get(tf)
+                    if start is None:
+                        start = max(0, end - MENU_WARMUP_BARS)
+                    self._menu_cursor[tf] = max(start, end)
+                    closed_bars[tf] = menu_series[tf][start:end]
+                try:
+                    menu_winners = menu.on_execution_bar(
+                        closed_bars, as_of=as_of_menu
+                    )
+                except Exception as exc:  # noqa: BLE001 — loud, never fatal
+                    funnel["menu_errors"] += 1
+                    funnel["last_menu_error"] = f"{type(exc).__name__}: {exc}"
+                else:
+                    funnel["menu_episodes"] = len(menu.episodes())
+                    for winner in menu_winners:
+                        adapter.queue_menu_candidate(winner.candidate)
+                        funnel["menu_winners"] += 1
             self.inner.on_bar(bar, bar_index, clock)
             self.bars += 1
             if self.bars % 2000 == 0:
@@ -482,6 +552,23 @@ def run(args) -> dict:
         "spread 0.0 / news dormant / all sessions — machine-completeness "
         "config identical to FR-4, NOT cost realism",
     ]
+    if composition == "menu":
+        notes.append(
+            "composition MENU (shipped live PRODUCT_V1 law): ProductMenuEngine "
+            "sweep -> one-shot LTF confirmation driven exactly as "
+            "LiveLoop._drive_menu_confirmation (register_armed + closed-prefix "
+            "streams + as_of = bar close), winners queued via "
+            "PipelineAdapter.queue_menu_candidate into the SAME risk/order seam; "
+            "seek scan skipped for menu-covered POIs")
+    else:
+        notes.append(
+            "composition SEEK (continuity diagnostic only — NOT the shipped "
+            "PRODUCT_V1 law): PipelineAdapter scan only, no menu layer")
+    if composition == "menu":
+        notes.append(
+            "menu structural TP parity (PFE-1.5): menu winners feed the same "
+            "structural_tp_target selector as the seek adapter; no valid swing "
+            "-> frozen 4xATR fallback")
     notes.append(
         f"{track_b_annotations.TRACK_B_BANNER} "
         f"({len(annotations)} closes annotated; "
@@ -503,6 +590,7 @@ def run(args) -> dict:
 
     summary = {
         "tag": args.tag,
+        "composition": composition,
         "window": {
             "start": m5[0].timestamp.isoformat(),
             "end": m5[-1].timestamp.isoformat(),
@@ -527,6 +615,12 @@ def run(args) -> dict:
         "routes": funnel["scan_routes"],
         "routes_by_trigger": funnel["routes_by_trigger"],
         "routes_m8": funnel["routes_m8"],
+        "menu_winners": funnel["menu_winners"],
+        "menu_episodes": funnel["menu_episodes"],
+        "menu_errors": funnel["menu_errors"],
+        # F7 adapter surface: submitted/accepted/retried/expired confirmations.
+        # Measurement only — never read by a decision.
+        "menu_counters": adapter.menu_counters(),
         "placed": order_book.placed,
         "placed_with_tp": order_book.placed_with_tp,
         "intents_armed": intents["intents_armed"],
@@ -593,6 +687,11 @@ def main() -> int:
     ap.add_argument("--load-from", default=None)
     ap.add_argument("--exec-from", default=None)
     ap.add_argument("--exec-to", default=None)
+    ap.add_argument("--composition", default="seek", choices=("seek", "menu"),
+                    help="entry law this run measures: seek (O1-O5 continuity) "
+                         "or menu (live PRODUCT_V1 law)")
+    ap.add_argument("--menu-same-bar-asof", action="store_true",
+                    help="menu OPT-B posture (default OFF, as shipped)")
     args = ap.parse_args()
     run(args)
     return 0

@@ -1,5 +1,14 @@
 # SESSION HANDOFF — SMC BOT
 
+## 2026-11-14 — PFE-1.5: PRODUCT PARITY (MENU LAW + STRUCTURAL TP ON MENU) (`LOGIC_CHANGED: NO`)
+
+- **Closes PFE-1 P0-1 / P0-2** (see `06_RESEARCH/PFE1_PRODUCT_VS_INTENDED_AUDIT.md`). Minimal wiring only — no gate, threshold, C3, §5a, ZoneDedup, SL or risk change.
+- **P0-2 — structural TP on the menu path:** `product_menu_mtf._candidate` now passes `structural_target=structural_tp_target(...)` (the SAME selector the seek adapter imports; `placement_bar` = the completion bar; existing `poi_give_up_bars()` age bound). No qualifying swing → unchanged 4×ATR fallback; `resolve_take_profit` untouched. Tests `04_SRC/tests/test_pfe15_menu_structural_tp.py` (3) + existing menu suite green. Real-data probe (10 days, `results/pfe15_smoke/menu10`): 14 fills, **tp_source 7 structural / 7 fallback** — wiring observation, not performance.
+- **P0-1 — composition parity:** `phase3_structure_funnel.py --composition {seek,menu}` (default `seek` for O1–O5 continuity; `menu` = shipped live `PRODUCT_V1` law, driving the same `ProductMenuEngine` with the same `register_armed` → closed-prefix `as_of` → `queue_menu_candidate` chain as `LiveLoop._drive_menu_confirmation`). `frozen_funnel_6m_post_tp.py` forwards `--composition`. Summary adds `composition`, `menu_episodes`, `menu_winners`, `menu_errors`, `menu_counters`.
+- **Smoke:** `06_RESEARCH/scripts/pfe15_composition_smoke.py` → PASS (seek: menu_episodes 0; menu: 4 episodes / 4 winners / 0 errors), artifacts `06_RESEARCH/results/pfe15_smoke/`.
+- **Contract:** `PRODUCT_RUNTIME_CONTRACT.md` §11 (entry-law composition: evidence default = menu, seek = continuity diagnostic; TP parity on both bridges; no cross-composition ranking). Notes: `PFE15_COMPOSITION_PARITY_NOTE.md`, `PFE15_MENU_STRUCTURAL_TP_NOTE.md`.
+- **NEXT ACTION (single):** **PFE-2 frozen 6-month product backtest** — primary **2b menu**, secondary **2a seek** (October must still reproduce armed 441 / routes 149 / fills 11 for the unchanged seek composition); separate funnels, no ranking, no PnL claim.
+
 ## 2026-11-14 — PFE-1: PRODUCT VS INTENDED DRIFT AUDIT (`LOGIC_CHANGED: NO`)
 
 - **Program:** Product Fidelity & Evidence (PFE) — 1 audit → 2 frozen 6m backtest → 3 structure/trade review ledger → 4 paper. Order is fixed; no optimization between steps.

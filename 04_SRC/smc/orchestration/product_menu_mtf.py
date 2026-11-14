@@ -44,8 +44,9 @@ from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from enum import Enum
 
-from smc.backtest.pipeline_bridge import candidate_from_route
+from smc.backtest.pipeline_bridge import candidate_from_route, structural_tp_target
 from smc.triggers.in_between import NOT_IN_BETWEEN
+from smc.triggers.trigger_expiry import poi_give_up_bars
 from smc.config.locked_constants import ZONE_REFINEMENT_ATR
 from smc.config.timeframe import Timeframe
 from smc.core.candle import Candle
@@ -996,8 +997,24 @@ class ProductMenuEngine:
             if isinstance(index, int) and 0 <= index < len(series)
             else None
         )
+        # §21b TP parity (PFE-1.5): the SAME first-swing selector the seek
+        # adapter feeds (``pipeline_bridge.structural_tp_target``) — never a
+        # second swing rule. Placement bar = this completion bar, so only
+        # swings §19-confirmed strictly before it qualify (lookahead ban);
+        # no qualifying swing → the frozen 4×ATR fallback, unchanged.
+        structural_target = structural_tp_target(
+            self._swings_for(tf),
+            route.signal.entry_price,
+            route.signal.direction,
+            atr,
+            placement_bar=(
+                index if isinstance(index, int) and index >= 0 else None
+            ),
+            max_age_bars=poi_give_up_bars(),
+        )
         base = candidate_from_route(
             route, pillar_path=PRODUCT_MENU_PILLAR_PATH, atr=atr,
+            structural_target=structural_target,
             completion_price=completion_close,
         )
         if base is None:
