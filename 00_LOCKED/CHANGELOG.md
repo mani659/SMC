@@ -6,6 +6,12 @@
 
 ---
 
+### 2026-11-14 — OPEN-DECISIONS RESEARCH AGENDA O1–O5 (`LOGIC_CHANGED: NO`)
+
+- **Docs only:** `06_RESEARCH/OPEN_DECISIONS_RESEARCH_AGENDA.md` registers five open questions — O1 C3 `not_in_between` reject anatomy (boundary vs far-from-zone noise), O2 HTF sweep as a hard stage (today: contextual only, no sweep pillar), O3 multi-zone priority (today: `ZoneDedup` overlap = one episode, first-armed, no TF rule), O4 SL ATR buffer vs 30-pip MAE benchmark, O5 structural TP vs 4×ATR fallback — each with current behaviour, evidence sources, method outline, metrics, **lock criteria**, non-goals and status OPEN.
+- **Constraints recorded:** C3 in-between stays REQUIRED (change only via dated design + measurement), R3 research-only, C2b color-free, full `(D1,H4,H1,M15)` diagnostics, small-n PnL never a lock criterion. Order O1 → O2 → O3 → O4/O5; artifacts under `06_RESEARCH/results/open_decisions/oN_*/`.
+- **No code, no constant, no gate change, no performance claim.**
+
 ### 2026-11-14 — HARNESS M15 PRODUCT-DIAGNOSTIC HYGIENE (`LOGIC_CHANGED: NO`)
 
 - **Scripts/docs only:** new `06_RESEARCH/scripts/lib/product_htf_series.py` (`ensure_product_detection_frames`, `assert_product_detection_complete`, `MissingProductHtfSeries`) derives missing product detection TFs (D1/H4/H1/M15) from M1/M5 with closed-bar semantics and fails loudly naming gaps.

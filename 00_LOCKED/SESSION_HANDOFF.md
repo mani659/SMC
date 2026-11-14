@@ -1,5 +1,13 @@
 # SESSION HANDOFF — SMC BOT
 
+## 2026-11-14 — OPEN-DECISIONS RESEARCH AGENDA O1–O5 (`LOGIC_CHANGED: NO`)
+
+- **Filed:** `06_RESEARCH/OPEN_DECISIONS_RESEARCH_AGENDA.md` — five open questions with question / current behaviour / evidence / method / metrics / **lock criteria** / non-goals / status: **O1** C3 `not_in_between` reject anatomy (boundary vs far noise), **O2** HTF sweep hard stage vs upstream-only (no sweep pillar exists today), **O3** multi-zone priority across D1/H4/H1/M15 (today: `ZoneDedup` = same-direction overlap is one episode, first-armed wins — no TF priority rule), **O4** SL ATR buffer vs 30-pip MAE benchmark, **O5** structural TP vs 4×ATR fallback (October: 9 structural / 3 fallback, diagnostic only).
+- **Standing constraints recorded:** C3 in-between stays REQUIRED (only a dated design + measurement can add an explicit alternate path), R3 research-only, C2b color-free, diagnostics use the full `(D1,H4,H1,M15)` helper set, and small-n PnL is never a lock criterion.
+- **Order:** O1 → O2 → O3 → O4/O5; artifact conventions `results/open_decisions/oN_*/` + `OPEN_DECISION_ON_*.md`, dual run, `LOGIC_CHANGED: NO` per pack.
+- **Non-edits:** no `04_SRC` change, no constant, no gate, no boundary-sweep implementation, no performance claim.
+- **NEXT ACTION (single):** **O1 C3 reject / boundary anatomy measurement pack.**
+
 ## 2026-11-14 — HARNESS M15 PRODUCT-DIAGNOSTIC HYGIENE (`LOGIC_CHANGED: NO`)
 
 - **Finding fixed:** product-mode harnesses fed H1/H4/D1 only while the runtime requires `(D1,H4,H1,M15)`, so every batch failed loudly and the funnel looked empty (`htf_batches=0, batch_errors=2979` on 6m).
