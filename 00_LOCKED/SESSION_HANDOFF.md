@@ -1,5 +1,16 @@
 # SESSION HANDOFF — SMC BOT
 
+## 2026-11-14 — PFE-1: PRODUCT VS INTENDED DRIFT AUDIT (`LOGIC_CHANGED: NO`)
+
+- **Program:** Product Fidelity & Evidence (PFE) — 1 audit → 2 frozen 6m backtest → 3 structure/trade review ledger → 4 paper. Order is fixed; no optimization between steps.
+- **Report:** `06_RESEARCH/PFE1_PRODUCT_VS_INTENDED_AUDIT.md` — read-only, 14-row matrix against LOCKED/contract/POLICY docs, classes **ALIGNED 7 · PARTIAL 5 · DRIFT 1 · ABSENT 1** (+3 documented DEFERRED).
+- **Verdict:** mostly aligned spine (multi-TF runtime, closed-bar prefixes, five pillars, C3 hard gate, §5a seek, R7/R8/R9, §28 gates, ATR SL). Two findings, both in the entry-law seam:
+  - **P0-1 DRIFT** — live `PRODUCT_V1` runs `ProductMenuEngine` (sweep → LTF confirmation, POLICY 2026-10-26) **plus** the seek adapter; the research/backtest composition (Phase 3, `frozen_funnel_6m_*`, O1–O5) constructs `PipelineAdapter` only, so every measurement since 2026-10-26 samples the non-menu half of the live book.
+  - **P0-2 ABSENT (silent)** — `product_menu_mtf.py` bridges winners via `candidate_from_route(..., atr=atr)` **without** `structural_target=`, so menu entries always take the 4×ATR TP; §21b "first valid swing" holds only on the seek path and no doc says so.
+- **P1 observations:** §28.6 sweep guard unreachable (`sweep_level` never set on a candidate); Trigger D volume-gated with no diagnostic; contract §1 vs POLICY rule 6 unreconciled. **P2:** A5 Pillar-3 naming, watchdog chart-attach unproven.
+- **O1–O5 stay CLOSED status-quo** — no evidence here to reopen any of them; no product code, constant or threshold touched.
+- **NEXT ACTION (single):** **PFE-2 frozen 6-month product backtest** — 2025-05-01 → 2025-10-31 UTC, two named runs: **2a seek composition** (comparable to O1–O5) and **2b menu composition** (POLICY default), funnels reported separately, no cross-law ranking, no PnL claim.
+
 ## 2026-11-14 — OPEN-DECISIONS CLOSEOUT: O1–O5 ALL CLOSED (`LOGIC_CHANGED: NO`)
 
 - **Current phase:** Open-decisions research program **COMPLETE**. All five questions were measured on the frozen October-2025 product window and locked to the status quo by the Architect on 2026-11-14. Nothing in `04_SRC/**` or `locked_constants.py` changed in the whole program.

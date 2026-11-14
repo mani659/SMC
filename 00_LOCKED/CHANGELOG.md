@@ -6,6 +6,14 @@
 
 ---
 
+### 2026-11-14 — PFE-1 PRODUCT VS INTENDED DRIFT AUDIT (read-only, `LOGIC_CHANGED: NO`)
+
+- **Added** `06_RESEARCH/PFE1_PRODUCT_VS_INTENDED_AUDIT.md`: 14-row as-coded vs intended matrix (A–N) against LOCKED_DECISIONS, the product runtime contract, the 2026-10-26 multi-TF confirmation POLICY and the as-coded architecture note. Counts **ALIGNED 7 / PARTIAL 5 / DRIFT 1 / ABSENT 1** (+3 documented DEFERRED).
+- **DRIFT (P0-1):** live `PRODUCT_V1` runs `ProductMenuEngine` **and** the seek adapter, while the research/backtest composition used by Phase 3, `frozen_funnel_6m_*` and O1–O5 runs the seek path only — the 6m run would not represent the full shipped product.
+- **Silent ABSENT (P0-2):** menu winners are bridged without `structural_target`, so menu entries always use the 4×ATR TP; the §21b first-swing rule is seek-path-only and undocumented as such.
+- **P1/P2 observations:** §28.6 sweep guard unreachable from pipeline candidates; Trigger D volume gate has no diagnostic; contract §1 vs POLICY rule 6 unreconciled; A5 Pillar-3 naming and watchdog chart-attach outstanding.
+- **No product change:** no `04_SRC/**` edit, no `locked_constants` edit, no threshold, no re-run, no PnL claim; O1–O5 remain CLOSED status-quo. NEXT = PFE-2 frozen 6m product backtest (2a seek + 2b menu, separate funnels).
+
 ### 2026-11-14 — OPEN-DECISIONS CLOSEOUT: O1–O5 ALL CLOSED (`LOGIC_CHANGED: NO`)
 
 - **Docs only.** Architect locked all five open decisions to the status quo on the frozen October-2025 product window: **O1 KEEP_STATUS_QUO** (C3 in-between required; 97% of rejects are >1 ATR outside, boundary population 2.2%), **O2 KEEP_UPSTREAM_ONLY** (sweep-carrying and sweep-free POIs route alike), **O3 KEEP_FIRST_ARMED_STATUS_QUO** (any one-survivor rule deletes all fills; 3 same-batch M15 conflicts), **O4 KEEP_ATR_PRODUCT** (median stop 71.4 pips vs MAE 78.1; a 30-pip pin would hit all losers and 2 of 3 winners), **O5 KEEP_DUAL_TP_POLICY** (structural 8/11 at 0.91 R converting 37.5% vs fallback 3/11 at 3.52 R, 0 hits).
