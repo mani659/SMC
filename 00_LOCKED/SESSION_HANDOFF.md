@@ -1,5 +1,13 @@
 # SESSION HANDOFF — SMC BOT
 
+## 2026-11-14 — O2 MEASUREMENT: HTF SWEEP STAGE (`LOGIC_CHANGED: NO`)
+
+- **Script:** `06_RESEARCH/scripts/o2_htf_sweep_stage.py` — per-armed-POI join to the frozen Stage-0 sweep pair (`liquidity_scanner.scan` + `sweep_detector.detect_sweeps`). **J1 pre-registered:** same-direction sweep (BSL→short, SSL→long) whose level sits inside `[zone_low, zone_high]` on the POI's detection TF with candle time ≤ arm time; J2 LOOSE (±0.25 ATR of an edge) reported separately, never a lock input. Window identical to O1.
+- **Result:** 441 armed, **369 S+ (83.7%)**, 72 S−. Route rate **S+ 29.3% vs S− 31.9%** (no route separation). Pass C3 | routed **S+ 11.1% (12/108) vs S− 0.0% (0/23)**; fills 11 vs 0. 119 C3 rejects are 80.7% S+. DATA_GAP 0 (0 armed without series, 0 probe errors); CSV 441 rows matches the funnel's `armed`.
+- **Interpretation:** **KEEP_UPSTREAM_ONLY** — the seek is sweep-blind, and the only asymmetry is a small-denominator absence downstream of it. Sweep stays context for zone birth/pillars; no sweep pillar, trigger field or gate proposed. Confound recorded: J1 is easier on wide zone bodies (D1/H4), and J2 shows the same picture, so the reading does not depend on that.
+- **Non-edits:** no `04_SRC` change, no constant, no C3/C2a/C2b change, no PnL input. Report `06_RESEARCH/OPEN_DECISION_O2_HTF_SWEEP_STAGE.md`. Agenda statuses updated: **O1 CLOSED (KEEP_STATUS_QUO)**, **O2 MEASURED (pending Architect)**.
+- **NEXT ACTION (single):** **Architect O2 reading**, then O3 multi-zone priority pack.
+
 ## 2026-11-14 — O1 MEASUREMENT: C3 REJECT / BOUNDARY ANATOMY (`LOGIC_CHANGED: NO`)
 
 - **Script:** `06_RESEARCH/scripts/o1_c3_boundary_anatomy.py` (read-only probe around `candidate_from_route`, the single C3 gate). Pre-registered buckets 0.25 / 1.0 ATR before the run; full `(D1,H4,H1,M15)` detection set via the M15 helper. Window: load 2025-05-01, exec 2025-10-01 → 10-31.

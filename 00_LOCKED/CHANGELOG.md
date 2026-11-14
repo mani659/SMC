@@ -6,6 +6,13 @@
 
 ---
 
+### 2026-11-14 — O2 HTF SWEEP HARD STAGE (research measurement, `LOGIC_CHANGED: NO`)
+
+- **Measurement only:** `06_RESEARCH/scripts/o2_htf_sweep_stage.py` joins every armed POI to the frozen Stage-0 sweep pair on its own detection TF. J1 (sweep level inside the zone band, same direction, candle ≤ arm time) pre-registered in the script header; J2 (±0.25 ATR of an edge) secondary and excluded from lock reasoning.
+- **Findings:** 441 armed → 369 S+ (83.7%). Route rate 29.3% (S+) vs 31.9% (S−): the LTF seek is sweep-blind. Pass C3 | routed 11.1% (12/108) vs 0.0% (0/23); fills 11 vs 0. 80.7% of C3 rejects carry a sweep. DATA_GAP 0.
+- **Interpretation:** **KEEP_UPSTREAM_ONLY** per agenda O2 (no route degradation, small-n downstream absence). No sweep pillar / trigger field / gate proposed; no C3 change. Confound recorded (J1 easier on wide zones; J2 matches).
+- **Report:** `06_RESEARCH/OPEN_DECISION_O2_HTF_SWEEP_STAGE.md`. Agenda statuses: O1 CLOSED (KEEP_STATUS_QUO), O2 MEASURED pending Architect. No `04_SRC` or constant change.
+
 ### 2026-11-14 — O1 C3 REJECT / BOUNDARY ANATOMY (research measurement, `LOGIC_CHANGED: NO`)
 
 - **Measurement only:** `06_RESEARCH/scripts/o1_c3_boundary_anatomy.py` runs the frozen product composition (October 2025, full `(D1,H4,H1,M15)` detection set) and records every `candidate_from_route` evaluation read-only. Bucket edges (0.25 / 1.0 ATR) pre-registered before the run.

@@ -61,7 +61,7 @@ a change will be made.
 | **Metrics** | Reject count and share by distance bucket; edge (proximal vs distal vs far side); trigger mix; share whose bar **range** overlaps the zone while the close does not; share where the *entry limit* was inside the zone; armed→reject latency. |
 | **Lock criteria** | **Keep status quo (no new path)** if far/never-touched rejects dominate and edge-adjacent rejects are a negligible share. **Open a boundary-sweep design** only if a material share are repeatable boundary interactions with a definable, measurable trigger condition — and then only as a **dated design** with its own gate, never as a widened C3. **Reject** any proposal that relaxes the in-between definition itself. |
 | **Non-goals** | No boundary-sweep code, no C3 edit, no ATR tolerance added to the gate, no threshold chosen from the histogram, no PnL ranking. |
-| **Status** | OPEN |
+| **Status** | **CLOSED — KEEP_STATUS_QUO** (Architect reading, 2026-11-14); evidence `06_RESEARCH/OPEN_DECISION_O1_C3_BOUNDARY_ANATOMY.md` |
 | **Suggested order** | 1st |
 
 ### O2 — HTF sweep as a hard stage vs upstream-only context
@@ -78,7 +78,7 @@ a change will be made.
 | **Metrics** | Share of armed POIs by sweep class; route rate; C3 reject rate; fill rate; path MFE/MAE distribution per class; sample sizes printed alongside every rate. |
 | **Lock criteria** | **Keep upstream-only** unless sweep-poor POIs are consistently and materially worse across both a route-rate and a path metric, with sufficient n. **Adopt a hard stage** only via a dated design that names the sweep definition, the TF it is measured on, and the failure behaviour — and only if the same measurement reproduces on a second window. |
 | **Non-goals** | No sweep-emitter implementation, no new pillar, no chart-taste sweep definition, no expectancy claim from MFE/MAE. |
-| **Status** | OPEN |
+| **Status** | **MEASURED — pending Architect** (2026-11-14); pack `06_RESEARCH/OPEN_DECISION_O2_HTF_SWEEP_STAGE.md`, measurement reading KEEP_UPSTREAM_ONLY |
 | **Suggested order** | 2nd |
 
 ### O3 — Multi-zone priority when D1/H4/H1/M15 overlap or conflict
