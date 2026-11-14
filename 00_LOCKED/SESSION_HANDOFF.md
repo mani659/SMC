@@ -1,5 +1,14 @@
 # SESSION HANDOFF — SMC BOT
 
+## 2026-11-14 — O5 MEASUREMENT: TP STRUCTURAL VS 4×ATR FALLBACK (`LOGIC_CHANGED: NO`)
+
+- **Script:** `06_RESEARCH/scripts/o5_tp_structural_vs_fallback.py` — reads the **exported** `tp_source` (no inference), computes M5 path MFE/MAE, `tp_dist`, TP÷R and `mfe_vs_tp` per fill. Pre-registered labels, tolerance 0.05 and the O4 path convention.
+- **Result:** 11 fills → **structural_swing 8 (72.7%) / atr_fallback 3 (27.3%)**, none/unknown 0. Hit TP: **structural 3/8 (37.5%)**, fallback **0/3**. Median `tp_dist` 6.11 (0.91 R) vs 25.13 (3.52 R); median `mfe_vs_tp` **0.62 vs 0.22**; hold 0.5 vs 5 bars; overall TP÷R 1.47.
+- **Interpretation:** **KEEP_DUAL_TP_POLICY** — both branches live, neither wrong-sided; the structural target is a near-target that converts, the fallback is a wide 3.5 R target that is mechanically rarely reached. n = 11, so no branch separation is claimed; **no 1:5 ESSENCE lock** and no `resolve_take_profit`/feed change.
+- **Reconciliation:** earlier "9 structural / 3 fallback" described 12 *candidates*; the 11 *fills* split 8/3. The unfilled candidate has no `tp_source` in any export → recorded as DATA_GAP, not assigned.
+- **Agenda:** O4 CLOSED (KEEP_ATR_PRODUCT); O5 MEASURED pending Architect. All five open decisions now measured; O1–O4 locked status-quo. Report `06_RESEARCH/OPEN_DECISION_O5_TP_STRUCTURAL_VS_FALLBACK.md`.
+- **NEXT ACTION (single):** **Architect O5 reading**, then open-decisions closeout / next program.
+
 ## 2026-11-14 — O4 MEASUREMENT: SL / MAE VS 30-PIP BENCHMARK (`LOGIC_CHANGED: NO`)
 
 - **Script:** `06_RESEARCH/scripts/o4_sl_mae_benchmark.py` — 11 October product fills joined to M5 path MAE/MFE (entry bar → exit bar inclusive), SL taken from **`original_sl`** (0 rows needed the working-SL fallback). Pre-registered: 1 pip = 0.10 price, 30 pips = 3.00 price, clean-stop tolerance 0.05.

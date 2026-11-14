@@ -112,7 +112,7 @@ a change will be made.
 | **Metrics** | Stop distance distribution (pips, ATR multiples); share of trades with stop > benchmark; share of stop-outs whose MAE exceeded the benchmark; MFE before stop; n printed with every share. |
 | **Lock criteria** | **Keep ATR buffer** unless a benchmark-distance analysis shows a consistent, reproducible pattern with enough n to state a rule — and any change would still require a dated design naming when the pinned distance applies (never a blanket replacement). **Reject** any change whose only support is small-n PnL. |
 | **Non-goals** | No threshold tuning, no per-trade optimiser, no expectancy claims, no touching `FR2_*` constants inside the pack. |
-| **Status** | **MEASURED — pending Architect** (2026-11-14); pack `06_RESEARCH/OPEN_DECISION_O4_SL_MAE_BENCHMARK.md`, measurement reading KEEP_ATR_PRODUCT |
+| **Status** | **CLOSED — KEEP_ATR_PRODUCT** (Architect, 2026-11-14); evidence `06_RESEARCH/OPEN_DECISION_O4_SL_MAE_BENCHMARK.md` |
 | **Suggested order** | 4th |
 
 ### O5 — TP: structural first-valid-swing vs 4×ATR fallback
@@ -129,7 +129,7 @@ a change will be made.
 | **Metrics** | Structural availability rate; TP distance in ATR; time-to-TP; MFE/MAE per source; share of fallback trades where a structural swing existed *after* the decision bar (lookahead audit, not a proposal). |
 | **Lock criteria** | **Keep the current rule** (structural first, fallback otherwise) unless a reproducible measurement shows the structural branch is systematically wrong-sided or the fallback is demonstrably better on path quality. A 1:5 ratio is **not** a lock candidate from this pack. |
 | **Non-goals** | No new TP model, no ratio hunting, no ESSENCE 1:5 enforcement, no use of future bars as targets. |
-| **Status** | OPEN |
+| **Status** | **MEASURED — pending Architect** (2026-11-14); pack `06_RESEARCH/OPEN_DECISION_O5_TP_STRUCTURAL_VS_FALLBACK.md`, measurement reading KEEP_DUAL_TP_POLICY |
 | **Suggested order** | 4th (parallel with O4) |
 
 ---

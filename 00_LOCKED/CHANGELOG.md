@@ -6,6 +6,13 @@
 
 ---
 
+### 2026-11-14 — O5 TP STRUCTURAL VS 4×ATR FALLBACK (research measurement, `LOGIC_CHANGED: NO`)
+
+- **Measurement only:** `06_RESEARCH/scripts/o5_tp_structural_vs_fallback.py` reads exported `tp_source`, path MFE/MAE and TP geometry for the 11 October fills; pre-registered labels and tolerance, no inference.
+- **Findings:** structural_swing 8 (72.7%) / atr_fallback 3 (27.3%), none 0; hit TP 3/8 (37.5%) vs 0/3; median tp_dist 6.11 (0.91 R) vs 25.13 (3.52 R); median mfe_vs_tp 0.62 vs 0.22; overall TP÷R 1.47.
+- **Interpretation:** **KEEP_DUAL_TP_POLICY** — both branches live, neither wrong-sided; the fallback's low reach rate is mechanical at 3.5 R with ATR-buffer stops. No `resolve_take_profit`/feed change and **no 1:5 ESSENCE product lock**. n = 11 caveat recorded.
+- **Report:** `06_RESEARCH/OPEN_DECISION_O5_TP_STRUCTURAL_VS_FALLBACK.md`. Agenda: O4 CLOSED (KEEP_ATR_PRODUCT), O5 MEASURED pending Architect; all five decisions now have measurement packs.
+
 ### 2026-11-14 — O4 SL / MAE VS 30-PIP BENCHMARK (research measurement, `LOGIC_CHANGED: NO`)
 
 - **Measurement only:** `06_RESEARCH/scripts/o4_sl_mae_benchmark.py` joins the 11 October product fills to M5 path MAE/MFE (entry→exit bar), using `original_sl` as the stop. Pre-registered pip (0.10) and benchmark (30 pips = 3.00) before the run.
