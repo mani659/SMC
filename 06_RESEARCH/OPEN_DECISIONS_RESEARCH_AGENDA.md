@@ -78,7 +78,7 @@ a change will be made.
 | **Metrics** | Share of armed POIs by sweep class; route rate; C3 reject rate; fill rate; path MFE/MAE distribution per class; sample sizes printed alongside every rate. |
 | **Lock criteria** | **Keep upstream-only** unless sweep-poor POIs are consistently and materially worse across both a route-rate and a path metric, with sufficient n. **Adopt a hard stage** only via a dated design that names the sweep definition, the TF it is measured on, and the failure behaviour — and only if the same measurement reproduces on a second window. |
 | **Non-goals** | No sweep-emitter implementation, no new pillar, no chart-taste sweep definition, no expectancy claim from MFE/MAE. |
-| **Status** | **MEASURED — pending Architect** (2026-11-14); pack `06_RESEARCH/OPEN_DECISION_O2_HTF_SWEEP_STAGE.md`, measurement reading KEEP_UPSTREAM_ONLY |
+| **Status** | **CLOSED — KEEP_UPSTREAM_ONLY** (Architect, 2026-11-14); evidence `06_RESEARCH/OPEN_DECISION_O2_HTF_SWEEP_STAGE.md` |
 | **Suggested order** | 2nd |
 
 ### O3 — Multi-zone priority when D1/H4/H1/M15 overlap or conflict
@@ -95,7 +95,7 @@ a change will be made.
 | **Metrics** | Overlap-cluster count by TF set; share where the armed member differs from a candidate rule; outcome difference by rule; suppressed-member counterfactuals (would it have routed / been rejected). |
 | **Lock criteria** | **Keep first-armed** if cluster outcomes are indistinguishable across rules or n is too small to separate them. **Adopt a rule** only if one rule is consistently better on route validity *and* reject anatomy, is expressible in one sentence, and does not change the five-pillar or chronological-trigger rules. |
 | **Non-goals** | No dedup redesign inside a pack, no TF scoring model, no removal of equal-tag confluence, no PnL-based ranking. |
-| **Status** | OPEN |
+| **Status** | **MEASURED — pending Architect** (2026-11-14); pack `06_RESEARCH/OPEN_DECISION_O3_MULTI_ZONE_PRIORITY.md`, measurement reading KEEP_FIRST_ARMED_STATUS_QUO |
 | **Suggested order** | 3rd |
 
 ### O4 — SL policy vs the expert ~30-pip benchmark

@@ -1,5 +1,14 @@
 # SESSION HANDOFF — SMC BOT
 
+## 2026-11-14 — O3 MEASUREMENT: MULTI-ZONE PRIORITY (`LOGIC_CHANGED: NO`)
+
+- **Script:** `06_RESEARCH/scripts/o3_multi_zone_priority.py` — offline analysis of the **verified O2 armed table** (SHA-256 checked against the O2 summary; no composition re-run). Pre-registered overlap: opposite direction + intersect, or same direction + intersection/min(height) ≥ 0.50; TF order D1>H4>H1>M15; CF1 highest-TF / CF2 tightest / CF3 first-armed.
+- **Result — price overlap (primary):** 5 clusters covering **441/441 arms** (largest 271), 9,827 same-direction pairs, **3,212 direction-conflict pairs**; CF1/CF2/CF3 keep 5 arms and drop **all 11 fills and all 12 C3 passes** — a global one-survivor rule is destructive, not selective (D1 bodies chain the book together).
+- **Result — same-batch view (secondary, exploratory):** 3 clusters, 6 arms (1.4%), **0 same-direction pairs** (ZoneDedup already removed them), 3 opposite-direction M15 pairs; dropping them retains **131/131 routed, 12/12 passes, 11/11 fills**.
+- **Interpretation:** **KEEP_FIRST_ARMED_STATUS_QUO** — no simultaneous cross-TF conflict to arbitrate and no measured benefit from any priority rule. No TF priority code, no ZoneDedup change. DATA_GAP stated: the table carries no episode death time, so cross-batch overlap is price coexistence, not proven simultaneity.
+- **Agenda:** O2 CLOSED (KEEP_UPSTREAM_ONLY, Architect); O3 MEASURED pending Architect. Report `06_RESEARCH/OPEN_DECISION_O3_MULTI_ZONE_PRIORITY.md`.
+- **NEXT ACTION (single):** **Architect O3 reading**, then O4 SL MAE pack.
+
 ## 2026-11-14 — O2 MEASUREMENT: HTF SWEEP STAGE (`LOGIC_CHANGED: NO`)
 
 - **Script:** `06_RESEARCH/scripts/o2_htf_sweep_stage.py` — per-armed-POI join to the frozen Stage-0 sweep pair (`liquidity_scanner.scan` + `sweep_detector.detect_sweeps`). **J1 pre-registered:** same-direction sweep (BSL→short, SSL→long) whose level sits inside `[zone_low, zone_high]` on the POI's detection TF with candle time ≤ arm time; J2 LOOSE (±0.25 ATR of an edge) reported separately, never a lock input. Window identical to O1.

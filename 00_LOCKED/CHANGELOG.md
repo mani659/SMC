@@ -6,6 +6,13 @@
 
 ---
 
+### 2026-11-14 — O3 MULTI-ZONE PRIORITY (research measurement, `LOGIC_CHANGED: NO`)
+
+- **Measurement only:** `06_RESEARCH/scripts/o3_multi_zone_priority.py` analyses the O2 armed table (SHA-256 verified) with the pre-registered overlap rule (0.50 ratio), TF order D1>H4>H1>M15 and CF1 highest-TF / CF2 tightest / CF3 first-armed counterfactuals.
+- **Findings:** price-space overlap is universal (5 clusters, 441/441 arms, largest 271; 3,212 long×short pairs), and any one-survivor rule removes **all 11 fills and 12 C3 passes** — destructive rather than selective. Restricting to same-batch arms (the only simultaneous decision surface): 3 clusters / 6 arms, **0 same-direction pairs** (ZoneDedup already handles those), 3 opposite-direction M15 pairs whose removal changes nothing (131/131 routes, 11/11 fills retained).
+- **Interpretation:** **KEEP_FIRST_ARMED_STATUS_QUO** — no priority rule is warranted on this window; `ZoneDedup` first-owner semantics stand. No runtime, ZoneDedup, C3 or sweep change.
+- **Report:** `06_RESEARCH/OPEN_DECISION_O3_MULTI_ZONE_PRIORITY.md`. Agenda: O2 CLOSED (KEEP_UPSTREAM_ONLY), O3 MEASURED pending Architect.
+
 ### 2026-11-14 — O2 HTF SWEEP HARD STAGE (research measurement, `LOGIC_CHANGED: NO`)
 
 - **Measurement only:** `06_RESEARCH/scripts/o2_htf_sweep_stage.py` joins every armed POI to the frozen Stage-0 sweep pair on its own detection TF. J1 (sweep level inside the zone band, same direction, candle ≤ arm time) pre-registered in the script header; J2 (±0.25 ATR of an edge) secondary and excluded from lock reasoning.
