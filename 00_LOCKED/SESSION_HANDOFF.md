@@ -1,5 +1,9 @@
 # SESSION HANDOFF - SMC BOT
 
+## 2026-11-15 - PRODUCT 9 FILLS DECODE (READ-ONLY, `LOGIC_CHANGED: NO`)
+
+- The 9 unique product-menu fills (PRODUCT_6M one-story diagnostic) decoded read-only: report `06_RESEARCH/PRODUCT_9_FILLS_DECODE_REPORT.md`, CSV + 9 house-style charts in `06_RESEARCH/results/product_9_fills_decode/`. All 9 confirmed inside their marked zones (completion + entry); F = BOS+OB fields, the one A = CHOCH rule_1 fields; plain labels SUPPLY 1 / DEMAND 1 / MERGED 3 / UNKNOWN 4 (m8_kind not exported); 0 duplicate pairs inside the 9; liquidity labels NOT_LABELED. No strategy change, no retune; `locked_constants.py` untouched. **NEXT = Architect review of the 9 fills → 1y product menu+one-story diagnostic.**
+
 ## 2026-11-15 - PRODUCT 6M MENU + ONE-STORY DIAGNOSTIC (`LOGIC_CHANGED: NO` - measurement only)
 
 - **6m product one-story diagnostic PASS** (measurement only; no edge claim, no ship recommendation). Book shape of the CURRENT product stack (multi-TF menu + one-story guard ON + structural TP / §5a / risk) over the frozen PFE-2 windows.

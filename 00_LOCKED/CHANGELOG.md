@@ -6,6 +6,10 @@
 
 ---
 
+### 2026-11-15 - PRODUCT 9 FILLS DECODE (`LOGIC_CHANGED: NO` - read-only)
+
+- **Read-only decode of the 9 unique product-menu fills** from the 6m one-story diagnostic: report `06_RESEARCH/PRODUCT_9_FILLS_DECODE_REPORT.md`; CSV + 9 house-style charts `06_RESEARCH/results/product_9_fills_decode/` (script `product_9_fills_decode.py` reusing the PFE-3 renderer by import). All 9: confirmation close + fill inside the marked zone; F rows carry ob_index/bos_index (BOS+OB), the single A row carries broken_level/rule_1/sweep_index (CHOCH R1); plain labels SUPPLY 1 / DEMAND 1 / MERGED 3 / UNKNOWN 4 (M8 = HTF D/S per the architecture legend; M4 QML / M5 EQH have no vocab word - not renamed; m8_kind not exported); 0 duplicate pairs inside the 9 (locked story_guard rules 2-6); internal/external liquidity NOT_LABELED (no field). Diagnostic pnl column labeled NOT performance. No 04_SRC change, no retune; `locked_constants.py` untouched. **NEXT = Architect review of the 9 fills → 1y product menu+one-story diagnostic.**
+
 ### 2026-11-15 - PRODUCT 6M MENU + ONE-STORY DIAGNOSTIC (`LOGIC_CHANGED: NO` - measurement only)
 
 - **Goal:** book-shape diagnostic of the CURRENT product stack (multi-TF menu + one-story guard ON) - unique stories vs raw fills, diversity of the book (trigger/direction/model/TF/month mixes), and zero multi-fill on identical plans. No optimization, no threshold/C3/SL/TP/pillar/trigger change, no tester-pack work.
