@@ -621,6 +621,9 @@ def run(args) -> dict:
         # F7 adapter surface: submitted/accepted/retried/expired confirmations.
         # Measurement only — never read by a decision.
         "menu_counters": adapter.menu_counters(),
+        # ONE STORY → ONE PLAN guard surface (measurement only, never an
+        # input): claims, prunes, and duplicate candidates dropped at intake.
+        "story_counters": adapter.story_counters(),
         "placed": order_book.placed,
         "placed_with_tp": order_book.placed_with_tp,
         "intents_armed": intents["intents_armed"],

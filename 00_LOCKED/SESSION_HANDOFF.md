@@ -1,5 +1,35 @@
-# SESSION HANDOFF — SMC BOT
+# SESSION HANDOFF - SMC BOT
 
+## 2026-11-15 - PRODUCT 6M MENU + ONE-STORY DIAGNOSTIC (`LOGIC_CHANGED: NO` - measurement only)
+
+- **6m product one-story diagnostic PASS** (measurement only; no edge claim, no ship recommendation). Book shape of the CURRENT product stack (multi-TF menu + one-story guard ON + structural TP / §5a / risk) over the frozen PFE-2 windows.
+- **Window (frozen, dual-run):** the three PFE-2 menu windows verbatim (Jun/Sep/Oct 2025-01..10 exec, load 2025-05-01) - the continuous 6-month menu run stays documented infeasible (PFE-2 §1.1); November 2025 still has no bounded menu window (residual). Script `06_RESEARCH/scripts/product_6m_one_story_diag.py` drives `phase3_structure_funnel.py --composition menu` (PFE-2 harness, unchanged except one additive measurement line: `story_counters` in the summary).
+- **Numbers:** raw fills **27 → 9** (jun 4 / sep 1 / oct 4), **9 unique plans** (placed == fills in every window), identical-plan groups **0**, overlapping **0**. Guard engaged at intake: 30 duplicate winners dropped (jun 13 / sep 1 / oct 16); armed counts match PFE-2 exactly (60/170/97). Determinism PASS all three windows (`trades.csv` + `report.json` byte-identical, summary equal modulo runtime/tag/notes).
+- **Mixes (fills):** trigger **F 8 / A 1**; direction **long 5 / short 4**; detection TF **M15 7 / D1 1 / H4 1**; model tags span 6 combos; months **jun 4 / sep 1 / oct 4**; exits SL 8 / TP 1; tp_source **structural 6 / fallback 3**.
+- **SINGLE_STORYLINE_ENGINE: NO** (diversified book shape on the evidence above). **Nuance documented:** post-guard 9 unique plans vs pre-guard 8 - pre-guard the F-spray tripped the circuit breaker (2 blocked), suppressing other plans; the guard removes the spray, so the breaker never trips and a distinct plan (the A story) places. Not a contradiction; books are not subsets.
+- **Artifacts:** `06_RESEARCH/results/product_6m_one_story/` (summary.json + run1/run2/{jun,sep,oct}, gitignored); report `06_RESEARCH/PRODUCT_6M_ONE_STORY_DIAGNOSTIC_REPORT.md`. Suite **1518 passed / 7 skipped**; `locked_constants.py` diff empty.
+- **NEXT ACTION (single):** **Architect review of the 6m diversity/book shape → decide 5y scale run vs bounded demo** - from the unique-story mix, not from profit. Tester pack v1.1-test.8 unchanged; PFE-4 paper/demo rules unchanged.
+
+## 2026-11-15 - OPS / TESTER PACK v1.1-test.8 (`LOGIC_CHANGED: NO`)
+
+- **One-story-one-trade is ACCEPTED** (Lead Architect 2026-11-15). Do not reopen trigger/C3/SL/TP/pillar or `story_guard` logic; do not retune the breaker from that window.
+- **Ops goal met:** unzip → paste `terminal_path` → double-click `run_live.bat` → product menu path runs on DEMO; watchdog sees a fresh heartbeat.
+- **Heartbeat:** code was already right (`terminal_data_path` first). Proven locally on demo 474608655: resolved `…\Terminal\6FE846…\MQL5\Files\smc_heartbeat.txt (source: terminal_data_path)`, mtime age 0.9 s, `state=running` → `state=shutdown` on exit. The **docs were wrong** ("next to terminal64.exe") and are fixed: the EA sandbox is `MT5 → File → Open Data Folder → MQL5\Files`, input `InpHeartbeatFile=smc_heartbeat.txt`.
+- **Pack:** `dist/SMC_v1.1-test.8_tester.zip` (single top folder, 159 files, 432 KB, no research/data/secrets). Ships ONLY `SMC_Safety_Watchdog.mq5` — the build no longer packages deprecated `SMC_Structure_Draw.mq5` / `SmartMoneyConcepts.mq5`. Tester config drops `heartbeat_path` (derived), keeps `dry_run=false` + `require_demo=true` + `D1/H4/H1/M15`.
+- **Smoke:** extract → `--help` exit 0; config loads through `load_operator_config`; 90 s and 300 s demo sessions printed the board (`POIS` / `JUDGEMENT`) with the heartbeat live; clean SESSION STOP.
+- **Not exercised:** EA attach (GUI), a real DEMO placement (both sessions `dry_run=true`), stale-heartbeat flatten drill.
+- **Docs:** `05_MQL5_SAFETY/SHIPPING_NOTE.md` rewritten; `AUTO_BUILD_RELEASE.py` = v1.1-test.8. Suite **1518 passed / 7 skipped**; `locked_constants.py` untouched; no strategy change.
+- **NEXT ACTION (single):** **bounded paper/demo session on the product path** (one owner, one terminal, 2-week target) after the EA attach + stale-heartbeat drill is confirmed on the GUI.
+## 2026-11-15 — ONE STORY → ONE PLAN → ONE LIVE ORDER (`LOGIC_CHANGED: YES` — uniqueness only)
+
+- **Rule (Lead Architect, normative):** one concrete story → one plan → **at most one** live/backtest order. Many ways to read structure stay (models, BOS/CHOCH, FVG, triggers); many tickets on one plan do not. No unique approved plan ⇒ sleep and wait for another story.
+- **Measured problem:** frozen PFE-2 menu windows held **27 fills but only 8 distinct plans** (Jun 11→4, Sep 2→1, Oct 14→3); every duplicate group = same direction + trigger F + byte-identical entry/SL/TP + overlapping zones + different `poi_id`. Seek 6m: 80 fills, 0 identical-plan groups — the spray is the menu bridge, not the seek engine.
+- **'Same story' = same symbol (implicit) · direction · overlapping POI zone (`ZoneDedup` rule) · trigger type · entry · SL · TP (exact floats).** No new tolerance, no new constant; unknown zone bounds ⇒ never collapsed.
+- **Seam: `PipelineAdapter` intake**, both product paths (menu `queue_menu_candidate`, seek route mint) — before the risk gate, so a duplicate never sizes, never mints a ticket, and its POI is retired instead of retried later. Claims are sealed on real placement and then follow the book (`story_live_plans`), so an identical plan that re-arms after its trade closed is a NEW story and is allowed.
+- **Files:** new `04_SRC/smc/risk/story_guard.py`; `multi_tf_runtime.ZoneDedup.seen` now shares `zones_overlap`; adapter guard + counters; `BacktestRunner.story_live_plans`; paper parity (`PaperRunner.story_live_plans` + tracked-pending plan fields); `04_SRC/tests/test_one_story_one_trade.py` (11). **Fixed in passing:** duplicate `on_candidate_accepted` definition (the later one silently shadowed the F7 menu settle).
+- **Smoke (Oct 1–10 menu, no optimization):** fills **14 → 4**, armed 97 / winners 23 unchanged, `menu_submitted` 23 → 7 (16 dropped duplicates), 3 F plans + 1 **new** A plan (pre-fix spray tripped the **circuit breaker**, 2 blocked; now 0 blocked). Dual run `trades.csv` **byte-identical** ⇒ determinism PASS. Book shape only — **no performance/edge claim**, n=4.
+- **Docs:** design lock `06_RESEARCH/ONE_STORY_ONE_TRADE_DESIGN.md`; artifacts `06_RESEARCH/results/one_story_oct/` + `one_story_oct_b/` (gitignored). `locked_constants.py` untouched; no trigger/C3/expiry/SL/TP change.
+- **NEXT ACTION (single):** **ops/tester pack, then bounded paper/demo on the product path** (heartbeat + watchdog drill first). Menu performance and any 6-month menu funnel stay after that; expert scoring on PFE-3 remains the parallel human gate.
 ## 2026-11-15 — PFE-3: EXPERT VALIDATION PACK (STRUCTURE + CONFIRM + ENTRY) (`LOGIC_CHANGED: NO`)
 
 - **Pack built from frozen PFE-2 artifacts only** (no strategy run in this step): `06_RESEARCH/scripts/pfe3_expert_pack.py` → `06_RESEARCH/results/pfe3_expert_pack/` (`events.csv`, `summary.json`, 56 charts, **EXPERT_REVIEW_PACK.pdf**, 62 pages) + markdown twin `06_RESEARCH/PFE3_EXPERT_VALIDATION_PACK.md`.
