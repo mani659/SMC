@@ -1,5 +1,14 @@
 # SESSION HANDOFF — SMC BOT
 
+## 2026-11-15 — PFE-3: EXPERT VALIDATION PACK (STRUCTURE + CONFIRM + ENTRY) (`LOGIC_CHANGED: NO`)
+
+- **Pack built from frozen PFE-2 artifacts only** (no strategy run in this step): `06_RESEARCH/scripts/pfe3_expert_pack.py` → `06_RESEARCH/results/pfe3_expert_pack/` (`events.csv`, `summary.json`, 56 charts, **EXPERT_REVIEW_PACK.pdf**, 62 pages) + markdown twin `06_RESEARCH/PFE3_EXPERT_VALIDATION_PACK.md`.
+- **Contents:** Section A **27 menu fills** (every fill in the three PFE-2 menu windows; 17 structural TP / 10 fallback), Section B **30 armed menu POIs that never produced a winner** (up to 10 per window, even stride), Section C **10 seek fills** clearly labelled CONTINUITY ONLY. Menu winners that did not fill: **0** (placed == fills in every window — reported, not padded).
+- **Selection pre-registered in the script** before any chart existed and applied mechanically (all menu fills; even-stride negative/seek samples); no event added or removed after generation. Charts: zone band with detection TF + model tags, entry / original SL / TP, sweep + confirmation instants (menu stamp), exit; caption carries identities and outcome only — **no performance wording anywhere**.
+- **Rubric:** CORRECT / PARTIAL / WRONG / UNCLEAR per event, scored in `events.csv` (`expert_score`, `expert_note`) or on the page; architect draft notes are collapsed in the markdown so scoring stays blind.
+- **No gate, threshold, C3, SL or TP change; no menu vs seek edge ranking; no PnL claim.** O1–O5 remain CLOSED status-quo.
+- **NEXT ACTION (single):** **expert scores on the 56 events**, then paper/demo — or an explicit waiver. A menu perf-only engagement (to make a true 6-month menu funnel runnable) remains optional and comes after.
+
 ## 2026-11-14 — PFE-2: FROZEN 6-MONTH PRODUCT BACKTEST (MENU PRIMARY + SEEK SECONDARY) (`LOGIC_CHANGED: NO`)
 
 - **Report:** `06_RESEARCH/PFE2_SIX_MONTH_PRODUCT_BACKTEST.md`; artifacts `06_RESEARCH/results/pfe2_6m/` (`summary.json` + 9 runs). **DIAGNOSTIC ONLY — NOT PERFORMANCE.**

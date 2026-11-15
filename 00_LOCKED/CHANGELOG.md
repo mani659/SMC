@@ -6,6 +6,13 @@
 
 ---
 
+### 2026-11-15 — PFE-3 EXPERT VALIDATION PACK (`LOGIC_CHANGED: NO`)
+
+- **Added** `06_RESEARCH/scripts/pfe3_expert_pack.py` + `06_RESEARCH/PFE3_EXPERT_VALIDATION_PACK.md` + `06_RESEARCH/results/pfe3_expert_pack/` (`events.csv`, `summary.json`, **56 charts**, `EXPERT_REVIEW_PACK.pdf` 62 pages). Built only from the frozen PFE-2 artifacts — no strategy run, no gate or threshold touched.
+- **Sample (pre-registered, mechanical):** **27 menu fills** (all fills in the three PFE-2 menu windows; 17 structural TP / 10 fallback), **30 armed menu POIs with no winner** (even stride, up to 10 per window), **10 seek fills** labelled CONTINUITY ONLY; menu winners that never filled = 0 and reported as such.
+- **Charts:** M5 candles with the POI zone band (detection TF + model tags), entry / original SL / TP, sweep and confirmation instants from the menu stamp, exit marker, caption block with composition/tier/trigger/tp_source/close_kind and a CORRECT / PARTIAL / WRONG / UNCLEAR rubric line. No performance wording anywhere in the pack.
+- **Governance:** architect draft notes kept collapsed and separate from the expert column so scoring stays blind; no menu-vs-seek ranking; NEXT = expert scores → paper after accept/waiver.
+
 ### 2026-11-14 — PFE-2 SIX-MONTH PRODUCT BACKTEST (MENU PRIMARY + SEEK SECONDARY, `LOGIC_CHANGED: NO`)
 
 - **Seek (secondary, full 6 months, dual-run; exec 2025-05-01 → 2025-10-31):** armed **1,865**, routes **670**, placed **81**, fills **80**, duplicates 3,438, HTF batches 3,001, batch_errors 23 (cold start), `tp_source` **55 structural / 25 fallback**, exits **36 TP / 44 SL**, triggers F65·B10·A2·E2·C1; determinism **PASS** (trades.csv + report.json byte-identical). Diagnostic net −2.4038 (n=80, NOT performance).
