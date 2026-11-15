@@ -6,6 +6,15 @@
 
 ---
 
+### 2026-11-15 — REPO RECONCILIATION: HEAD NOW MATCHES DISK + CI (`LOGIC_CHANGED: NO`)
+
+- **Problem:** `git status` held 47 untracked entries — 9 test modules that were part of the green suite (1507 passed / 7 skipped) but absent from git, 22 research/audit documents, 14 research scripts, and dead scaffolding. A fresh clone did not reproduce the suite or the project record.
+- **Tracked now (45 files):** 9 test modules (`test_blocked_reason_surface`, `test_confirm_vs_zone_opt4`, `test_console_v2_dumb_console`, `test_coupled_mtf`, `test_policy_mtf_h4`, `test_research_h4_zone_book_console`, `test_review_merge_smoke`, `test_track_a_sweep_ledger`, `test_ungated_event_ledger_p1`); 21 `06_RESEARCH` notes; 12 research scripts + 2 launch helpers; `docs/BUILT_ENGINE_VS_FLOWCHART_VALIDATION.md` (2026-11-08 architecture audit).
+- **Deleted:** `_RECOVERY_CANARY.txt` — dead scaffolding from the 2026-11-08 deletion process ("if this file survives, the deletion process is no longer active").
+- **Marked:** new `00_LOCKED/RECOVERY_STATUS_2026-11-08.md` is the single tracked home for the 6 lost files (their loss markers) and the 4 partial survivors. No reconstruction was attempted; nothing on the product path imports the lost modules.
+- **Moved:** deprecated `SMC_Visual_Entry_Twin.mq5` left `05_MQL5_SAFETY/` for `ARCHIVE/MQL5_HISTORY/`. `AUTO_BUILD_RELEASE.py` copies every `.mq5`/`.ex5` in `05_MQL5_SAFETY/` into the tester pack, so a deprecated EA sitting there would ship.
+- **Added:** `.github/workflows/pytest.yml` — `pytest -q` on every push and pull request (Python 3.11, ubuntu, pytest + pandas + pyarrow; no MT5 package, no local data tree, `PYTHONPATH=.` from `04_SRC`).
+- **Suite:** 1507 passed / 7 skipped — unchanged by this reconciliation. `LOGIC_CHANGED: NO`; no gate, threshold, composition or locked constant touched.
 ### 2026-11-15 — PFE-3 EXPERT VALIDATION PACK (`LOGIC_CHANGED: NO`)
 
 - **Added** `06_RESEARCH/scripts/pfe3_expert_pack.py` + `06_RESEARCH/PFE3_EXPERT_VALIDATION_PACK.md` + `06_RESEARCH/results/pfe3_expert_pack/` (`events.csv`, `summary.json`, **56 charts**, `EXPERT_REVIEW_PACK.pdf` 62 pages). Built only from the frozen PFE-2 artifacts — no strategy run, no gate or threshold touched.

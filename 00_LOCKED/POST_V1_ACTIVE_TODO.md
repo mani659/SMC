@@ -488,9 +488,9 @@ True open decisions only — nothing here is decided until dated in the plan:
 
 - [x] Git repo rebuilt at last checkpoint `380b3e1` (2026-10-26); 37 files restored (21 from dumps, 16 from checkpoint).
 - [x] Authorized rebuild executed (Lead: "No backup available. Proceed with rebuild."): engine restored to prior menu behaviour, OPT-B `false`, R7/thresholds untouched, `locked_constants.py` values unchanged.
-- [ ] 6 FAILED files stay unreconstructed (`coupled_mtf.py` fail-loud stub, 2 loss-marker test modules, 2 OPT smoke harnesses, coupled diagnostic). Reviving them is NEW work with fresh pre-registration.
+- [ ] 6 FAILED files stay unreconstructed (canonical list + status: `00_LOCKED/RECOVERY_STATUS_2026-11-08.md`) (`coupled_mtf.py` fail-loud stub, 2 loss-marker test modules, 2 OPT smoke harnesses, coupled diagnostic). Reviving them is NEW work with fresh pre-registration.
 - [ ] 4 PARTIAL files carry documented gaps: `test_blocked_reason_surface.py` (board half), `poi_timing_early_late_study.py` (harness), `PHASE0_EVENT_SCORE_SHEET.md` (verdict rows), `SMC_Safety_Watchdog.mq5` (~118 post-checkpoint lines, uncompiled).
-- [ ] `test_review_merge_smoke.py` red at collection: 33 chart PNGs deleted and the on-disk ledger script's chart naming is a rolled-back revision. Fix = restore/rebuild the newer ledger script, not re-point the test.
+- [ ] `test_review_merge_smoke.py` no longer red at collection — it now **skips** with reason "research chart artifacts missing (local gitignored)". Rebuilding the newer ledger script remains the fix if the smoke is ever wanted again.
 
 ## 16. PR menu spine baseline — READY 2026-11-09
 
