@@ -1,6 +1,6 @@
 SMC Tester Setup Guide - plain text version
-Release: v1.1-test.7
-Git SHA: 2011d9b (2011d9bdb997bb8fab704859f19b14c6886a7c96)
+Release: v1.1-test.8
+Git SHA: 830a26d (830a26d486a6477800bdfd8268d15422707fe2f9)
 Python verified on build machine: Python 3.11.9
 
 This is the text twin of TESTER_SETUP_GUIDE.pdf. Use whichever is easier
@@ -14,7 +14,7 @@ HARD RULE FIRST
 - If something goes wrong, send VERSION.txt and the logs - do not patch.
 
 STEP 1 - Unzip to a folder
-- Download SMC_v1.1-test.7_tester.zip
+- Download SMC_v1.1-test.8_tester.zip
 - Extract it to a normal folder, for example Desktop\SMC_Bot
 - IMPORTANT: do not run from inside the zip. Extract first.
 
@@ -32,9 +32,14 @@ STEP 4 - Install the safety watchdog EA (.ex5)
 - The watchdog file lives in mql5/ in the package
 - Copy the .ex5 into your MetaTrader terminal's MQL5/Experts folder
 - In MetaEditor/MT5, attach the EA to the XAU chart
-- Leave the EA input 'heartbeat path' at its DEFAULT (smc_heartbeat.txt):
-  the bot writes the heartbeat to <terminal>\MQL5\Files\smc_heartbeat.txt
-  automatically (derived from terminal_path in the config).
+- Compile it if you only have .mq5: open SMC_Safety_Watchdog.mq5 in
+  MetaEditor (F4 in MetaTrader), press F7 (Compile), close MetaEditor,
+  then right-click Navigator > Expert Advisors > Refresh.
+- Leave the EA input InpHeartbeatFile at its DEFAULT (smc_heartbeat.txt).
+- The bot writes the heartbeat into your terminal DATA folder:
+  <data folder>\MQL5\Files\smc_heartbeat.txt
+  (MetaTrader 5 > File > Open Data Folder). That is the EA sandbox; it
+  is often NOT next to terminal64.exe. The bot derives it itself.
 - Typical inputs: symbol filter, magic number
 - If you only have .mq5, compile it to .ex5 in MetaEditor first
 
@@ -42,6 +47,8 @@ STEP 5 - Edit the config file
 - Open config/live_tester.json in a text editor
 - terminal_path: paste the FULL path to terminal64.exe on your PC
 - symbol: usually XAUUSDm
+- Leave heartbeat_path OUT of the config: the bot derives the
+  EA-readable path from your terminal. Never point it at logs/.
 - DEMO TRADING IS ON: dry_run=false means the bot CAN place real (demo)
   orders. Losses are possible on the demo account; no real money.
 - require_demo stays true: real (live) accounts are still blocked.
@@ -57,8 +64,10 @@ STEP 6 - Start the bot
 STEP 7 - What success looks like
 - A console window opens
 - You should see a STRUCTURE board
-- You should see heartbeat activity: the file lives in your terminal's
-  MQL5\Files\smc_heartbeat.txt (next to terminal64.exe)
+- You should see heartbeat activity: the file is
+  <data folder>\MQL5\Files\smc_heartbeat.txt
+  (MetaTrader 5 > File > Open Data Folder > MQL5 > Files). Its
+  timestamp changes every second while the bot runs.
 - You do NOT need to edit code to make this work
 
 STEP 8 - How to stop

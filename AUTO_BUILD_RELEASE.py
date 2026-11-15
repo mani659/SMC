@@ -8,7 +8,7 @@ REL = ROOT / "06_RESEARCH/releases"
 DIST.mkdir(parents=True, exist_ok=True)
 REL.mkdir(parents=True, exist_ok=True)
 
-VERSION = "v1.1-test.7"
+VERSION = "v1.1-test.8"
 sha_short = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT,
                            capture_output=True, text=True, check=True).stdout.strip()
 sha_full = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT,
@@ -55,7 +55,6 @@ w(CONFIG / "live_tester.json",
       "timeframe": "M5",
       "detection_timeframes": ["H4", "H1"],
       "allow_single_tf_degraded": False,
-      "heartbeat_path": r"logs/phase_d/heartbeat.txt",
       "heartbeat_interval_s": 1.0,
       "poll_interval_s": 0.5,
       "console_refresh_s": 5.0,
@@ -80,8 +79,8 @@ w(DIST / "requirements.txt",
 w(DIST / "run_live.bat",
   "@echo off\n"
   "rem ============================================================\n"
-  "rem SMC tester package launcher (v1.1-test.7)\n"
-  "rem Run this bat from the extracted SMC_v1.1-test.7 folder.\n"
+  "rem SMC tester package launcher (v1.1-test.8)\n"
+  "rem Run this bat from the extracted SMC_v1.1-test.8 folder.\n"
   "rem Do NOT run from inside the zip - extract first.\n"
   "rem Ctrl+C stops the session cleanly (heartbeat shutdown marker).\n"
   "rem ============================================================\n"
@@ -177,7 +176,7 @@ f"Python verified on build machine: {pyver}\n"
 "- If something goes wrong, send VERSION.txt and the logs - do not patch.\n"
 "\n"
 "STEP 1 - Unzip to a folder\n"
-"- Download SMC_v1.1-test.7_tester.zip\n"
+"- Download SMC_v1.1-test.8_tester.zip\n"
 "- Extract it to a normal folder, for example Desktop\\SMC_Bot\n"
 "- IMPORTANT: do not run from inside the zip. Extract first.\n"
 "\n"
@@ -195,9 +194,14 @@ f"- This package was built and verified on Python {pyver}\n"
 "- The watchdog file lives in mql5/ in the package\n"
 "- Copy the .ex5 into your MetaTrader terminal's MQL5/Experts folder\n"
 "- In MetaEditor/MT5, attach the EA to the XAU chart\n"
-"- Leave the EA input 'heartbeat path' at its DEFAULT (smc_heartbeat.txt):\n"
-"  the bot writes the heartbeat to <terminal>\\MQL5\\Files\\smc_heartbeat.txt\n"
-"  automatically (derived from terminal_path in the config).\n"
+"- Compile it if you only have .mq5: open SMC_Safety_Watchdog.mq5 in\n"
+"  MetaEditor (F4 in MetaTrader), press F7 (Compile), close MetaEditor,\n"
+"  then right-click Navigator > Expert Advisors > Refresh.\n"
+"- Leave the EA input InpHeartbeatFile at its DEFAULT (smc_heartbeat.txt).\n"
+"- The bot writes the heartbeat into your terminal DATA folder:\n"
+"  <data folder>\\MQL5\\Files\\smc_heartbeat.txt\n"
+"  (MetaTrader 5 > File > Open Data Folder). That is the EA sandbox; it\n"
+"  is often NOT next to terminal64.exe. The bot derives it itself.\n"
 "- Typical inputs: symbol filter, magic number\n"
 "- If you only have .mq5, compile it to .ex5 in MetaEditor first\n"
 "\n"
@@ -205,6 +209,8 @@ f"- This package was built and verified on Python {pyver}\n"
 "- Open config/live_tester.json in a text editor\n"
 "- terminal_path: paste the FULL path to terminal64.exe on your PC\n"
 "- symbol: usually XAUUSDm\n"
+"- Leave heartbeat_path OUT of the config: the bot derives the\n"
+"  EA-readable path from your terminal. Never point it at logs/.\n"
 "- DEMO TRADING IS ON: dry_run=false means the bot CAN place real (demo)\n"
 "  orders. Losses are possible on the demo account; no real money.\n"
 "- require_demo stays true: real (live) accounts are still blocked.\n"
@@ -219,8 +225,10 @@ f"- This package was built and verified on Python {pyver}\n"
 "STEP 7 - What success looks like\n"
 "- A console window opens\n"
 "- You should see a STRUCTURE board\n"
-"- You should see heartbeat activity: the file lives in your terminal's\n"
-"  MQL5\\Files\\smc_heartbeat.txt (next to terminal64.exe)\n"
+"- You should see heartbeat activity: the file is\n"
+"  <data folder>\\MQL5\\Files\\smc_heartbeat.txt\n"
+"  (MetaTrader 5 > File > Open Data Folder > MQL5 > Files). Its\n"
+"  timestamp changes every second while the bot runs.\n"
 "- You do NOT need to edit code to make this work\n"
 "\n"
 "STEP 8 - How to stop\n"
@@ -253,15 +261,21 @@ w(DIST / "SUPPORT.txt",
 mql5_src = ROOT / "05_MQL5_SAFETY"
 mql5_dst = DIST / "mql5"
 mql5_dst.mkdir(parents=True, exist_ok=True)
+SHIP_MQL5 = ("SMC_Safety_Watchdog.ex5", "SMC_Safety_Watchdog.mq5")
 if mql5_src.exists():
+    # Ship the ONE safety EA only. Deprecated/reference sources that
+    # live in 05_MQL5_SAFETY (SMC_Structure_Draw.mq5,
+    # SmartMoneyConcepts.mq5, the visual twin) are NOT part of the
+    # tester run surface.
+    for stale in mql5_dst.glob("*"):
+        if stale.is_file():
+            stale.unlink()
     names = []
-    for p in mql5_src.iterdir():
-        if p.name.endswith(".ex5"):
-            shutil.copy2(p, mql5_dst / p.name)
-            names.append(p.name)
-        elif p.name.endswith(".mq5"):
-            shutil.copy2(p, mql5_dst / p.name)
-            names.append(p.name)
+    for name in SHIP_MQL5:
+        p = mql5_src / name
+        if p.exists():
+            shutil.copy2(p, mql5_dst / name)
+            names.append(name)
     print("MQL5_FILES_COPIED:", names)
 else:
     print("MQL5_DIR_MISSING")
@@ -365,7 +379,7 @@ story.append(PageBreak())
 
 story.append(Paragraph("Step 1 - Unzip to a folder", STEP_HEAD))
 story.append(Paragraph(
-    "Download <b>SMC_v1.1-test.7_tester.zip</b> and extract it to a normal folder "
+    "Download <b>SMC_v1.1-test.8_tester.zip</b> and extract it to a normal folder "
     "on your computer, for example <b>Desktop\\SMC_Bot</b>.", BODY))
 story.append(Paragraph(
     "<b>Important:</b> do not run from inside the zip. Extract the whole zip first, "
@@ -399,10 +413,11 @@ story.append(Paragraph(
     "<b>MQL5/Experts</b> folder.", BODY))
 story.append(Paragraph(
     "In MetaEditor / MetaTrader 5, attach the EA to the <b>XAU chart</b>. Leave the "
-    "EA input <b>heartbeat path</b> at its <b>default (smc_heartbeat.txt)</b>: the bot "
-    "writes the heartbeat to <b>&lt;terminal&gt;\\MQL5\\Files\\smc_heartbeat.txt</b> "
-    "automatically, derived from terminal_path in the config. Typical inputs are the "
-    "symbol filter and magic number.", BODY))
+    "EA input <b>InpHeartbeatFile</b> at its <b>default (smc_heartbeat.txt)</b>. The bot "
+    "writes the heartbeat into your terminal's <b>DATA folder</b>: "
+    "<b>&lt;data folder&gt;\\MQL5\\Files\\smc_heartbeat.txt</b> "
+    "(MetaTrader 5 &gt; File &gt; Open Data Folder) - often NOT next to "
+    "terminal64.exe. Typical inputs are the symbol filter and magic number.", BODY))
 story.append(Paragraph(
     "If you only have <b>.mq5</b>, compile it to <b>.ex5</b> in MetaEditor first.", BODY))
 story.append(placeholder_image(380, 120,
@@ -447,9 +462,11 @@ story.append(placeholder_image(380, 130,
 story.append(Paragraph("Step 7 - What success looks like", STEP_HEAD))
 story.append(Paragraph(
     "A <b>console window opens</b>. You should see a <b>STRUCTURE board</b>. You should "
-    "also see <b>heartbeat activity</b>: the heartbeat file lives in your terminal's "
-    "<b>MQL5\\Files\\smc_heartbeat.txt</b> (next to terminal64.exe). You do "
-    "<b>not</b> need to edit code to make this work.", BODY))
+    "also see <b>heartbeat activity</b>: the file is "
+    "<b>&lt;data folder&gt;\\MQL5\\Files\\smc_heartbeat.txt</b> "
+    "(MetaTrader 5 &gt; File &gt; Open Data Folder &gt; MQL5 &gt; Files) and its "
+    "timestamp changes every second while the bot runs. You do <b>not</b> need "
+    "to edit code to make this work.", BODY))
 story.append(placeholder_image(380, 150,
     "SCREENSHOT TBD - example: console window with a STRUCTURE board.\n"
     "This is a placeholder, not a real screenshot."))
@@ -483,7 +500,7 @@ doc.build(story)
 print("PDF_WRITTEN:", PDF, PDF.stat().st_size, "bytes")
 
 # ---- re-zip including the new PDF ----
-zip_path = DIST / "SMC_v1.1-test.7_tester.zip"
+zip_path = DIST / "SMC_v1.1-test.8_tester.zip"
 if zip_path.exists():
     zip_path.unlink()
 with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:
@@ -494,7 +511,7 @@ with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:
             continue
         if p.suffix.lower() == ".zip":   # never ship a stale pack inside the pack
             continue
-        z.write(p, arcname=f"SMC_v1.1-test.7/{p.relative_to(DIST).as_posix()}",
+        z.write(p, arcname=f"SMC_v1.1-test.8/{p.relative_to(DIST).as_posix()}",
                compress_type=zipfile.ZIP_DEFLATED)
 print("ZIP_REBUILT:", zip_path, zip_path.stat().st_size, "bytes")
 print("DIST_TREE:")
