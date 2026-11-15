@@ -37,6 +37,7 @@ from datetime import datetime, timedelta
 from smc.config.timeframe import Timeframe
 from smc.core.candle import Candle
 from smc.orchestration.detection_driver import DetectionDriver
+from smc.risk.story_guard import zones_overlap
 from smc.orchestration.engine import PipelineEngine
 from smc.orchestration.multi_tf import (
     M8_HTF_TIMEFRAMES,
@@ -193,7 +194,11 @@ class ZoneDedup:
         for known_direction, known_top, known_bottom, _owner in self._zones:
             if known_direction != direction:
                 continue
-            if known_top >= bottom and top >= known_bottom:
+            # ONE overlap implementation, shared with the locked
+            # one-story-one-trade rule (smc.risk.story_guard) — the formula
+            # is unchanged (inclusive ``known_top >= bottom and top >=
+            # known_bottom``), it just no longer exists twice.
+            if zones_overlap(known_top, known_bottom, top, bottom):
                 return True
         return False
 

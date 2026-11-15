@@ -627,6 +627,19 @@ class BacktestRunner(BarHandler):
     # ------------------------------------------------------------------ #
     # M4 — pipeline integration (real detection → validation → triggers)
     # ------------------------------------------------------------------ #
+    def story_live_plans(self) -> list:
+        """Everything in this book that may still trade (locked-story liveness).
+
+        Read by ``PipelineAdapter`` for the ONE STORY rule: a resting limit,
+        an open position or a live R9 intent all mean that plan is already
+        being traded, so an identical plan arriving now must not place. Pure
+        projection over the stores — never mutated, never an input to risk.
+        """
+        plans: list = list(self.orders.active())
+        plans.extend(self.positions.open_positions())
+        plans.extend(intent.candidate for intent in self.intents.alive_intents())
+        return plans
+
     def set_pipeline_adapter(self, adapter) -> None:
         """Attach the M4 pipeline adapter (real detection each bar).
 

@@ -73,6 +73,7 @@ from smc.core.candle import Candle
 from smc.core.enums import POIState
 from smc.orchestration.engine import PipelineEngine, SeekPosture
 from smc.risk.fill_regime_policy import market_reentered_zone
+from smc.risk.story_guard import same_story, story_key
 from smc.triggers.trigger_expiry import poi_give_up_bars, signal_expired
 
 __all__ = ["PipelineAdapter"]
@@ -155,6 +156,28 @@ class PipelineAdapter:
         # paper runner does; research submit-captures do not, and keep the
         # historical one-submit semantics).
         self._menu_pending: dict[str, dict] = {}
+        # ONE STORY → ONE PLAN → ONE LIVE ORDER (locked product rule,
+        # 2026-11-15; design 06_RESEARCH/ONE_STORY_ONE_TRADE_DESIGN.md).
+        # ``_story_claims`` holds the plan identity of every candidate this
+        # adapter has accepted for submission; a claim lives exactly as long
+        # as the plan does (resting order / open position / in-flight
+        # candidate). A second candidate with the SAME plan is dropped at
+        # intake — before the runner's risk gate — so it can never place.
+        # Claims are explicit, not inferred: an UNSEALED claim means its
+        # candidate is still in flight (routed workflow / queued winner) and
+        # blocks duplicates until it places or is released. ``on_candidate_
+        # accepted`` seals it; from then on the claim follows the BOOK (a
+        # sealed claim is pruned once no resting order / open position / live
+        # intent carries its plan), so a later identical plan is a new story.
+        self._story_claims: list[dict] = []
+        self._story_bar: int | None = None
+        self._story_stats: dict[str, int] = {
+            "stories_claimed": 0,
+            "stories_pruned": 0,
+            "duplicate_story_dropped": 0,
+            "duplicate_story_seek": 0,
+            "duplicate_story_menu": 0,
+        }
         self._menu_stats: dict[str, int] = {
             "menu_submitted": 0,
             "menu_accepted": 0,
@@ -215,6 +238,126 @@ class PipelineAdapter:
                 return True
         return False
 
+    # ------------------------------------------------------------------ #
+    # ONE STORY → ONE PLAN → ONE LIVE ORDER (locked rule, 2026-11-15)
+    # ------------------------------------------------------------------ #
+    def story_counters(self) -> dict:
+        """Measurement surface for the uniqueness rule (never an input)."""
+        return {**self._story_stats, "story_claims": len(self._story_claims)}
+
+    def _live_story_keys(self) -> list:
+        """Plan identity of everything that currently trades (liveness set).
+
+        Derived from the actual book, never from a timer: resting orders,
+        open positions and live R9 intents come from the runner
+        (``story_live_plans``), plus this adapter's own in-flight candidates
+        (menu pendings, routed workflows, queued menu candidates).
+        """
+        objects: list = []
+        provider = getattr(self._runner, "story_live_plans", None)
+        if callable(provider):
+            objects.extend(list(provider() or ()))
+        objects.extend(
+            pending["candidate"] for pending in self._menu_pending.values()
+        )
+        objects.extend(w.candidate for w in self._workflows.values())
+        objects.extend(self._menu_candidates)
+        keys = []
+        for obj in objects:
+            key = story_key(obj)
+            if key is not None:
+                keys.append(key)
+        return keys
+
+    def _prune_story_claims(self) -> None:
+        """Drop SEALED claims whose plan no longer lives in the book.
+
+        An UNSEALED claim is released explicitly (workflow dropped, window
+        closed, POI retired) rather than guessed from the book: between
+        intake and placement a research submit-capture runner keeps no
+        record of the candidate, and inferring "gone" there would end the
+        block one bar too early — exactly the spray this rule forbids.
+        """
+        if not self._story_claims:
+            return
+        live = self._live_story_keys()
+        kept = [
+            claim for claim in self._story_claims
+            if not claim["sealed"]
+            or any(same_story(claim["key"], other) for other in live)
+        ]
+        self._story_stats["stories_pruned"] += len(self._story_claims) - len(kept)
+        self._story_claims = kept
+
+    def _claim_story(self, candidate) -> None:
+        """Record the plan of a candidate accepted for entry (unsealed)."""
+        key = story_key(candidate)
+        if key is None:
+            return
+        poi_id = getattr(candidate, "poi_id", None)
+        if poi_id is None:
+            return  # no episode identity → no claim (M3 test seam only)
+        self._story_claims.append(
+            {"key": key, "owner": str(poi_id), "sealed": False,
+             "bar": self._story_bar}
+        )
+        self._story_stats["stories_claimed"] += 1
+
+    def seal_story(self, poi_id) -> None:
+        """A real placement happened: the claim now follows the book."""
+        if poi_id is None:
+            return
+        wanted = str(poi_id)
+        for claim in self._story_claims:
+            if claim["owner"] == wanted:
+                claim["sealed"] = True
+
+    def release_story(self, poi_id) -> None:
+        """The claiming candidate can no longer trade — free its plan."""
+        if poi_id is None:
+            return
+        wanted = str(poi_id)
+        self._story_claims = [
+            claim for claim in self._story_claims if claim["owner"] != wanted
+        ]
+
+    def _duplicate_story(self, candidate, *, source: str) -> str | None:
+        """Claiming poi id when ``candidate`` repeats a LIVE story, else None.
+
+        Called at intake (menu winner or seek route) — before the runner's
+        risk gate — so a duplicate plan never becomes a second order, never
+        consumes sizing, and never mints a second ticket. An unprovable key
+        (missing entry/SL, unknown zone bounds) is never collapsed.
+        """
+        self._prune_story_claims()
+        key = story_key(candidate)
+        if key is None:
+            return None
+        for claim in self._story_claims:
+            if same_story(key, claim["key"]):
+                self._story_stats["duplicate_story_dropped"] += 1
+                counter = f"duplicate_story_{source}"
+                self._story_stats[counter] = self._story_stats.get(counter, 0) + 1
+                return claim["owner"]
+        return None
+
+    def _drop_duplicate_poi(self, candidate) -> None:
+        """Retire the losing POI so it cannot re-propose the same plan.
+
+        The duplicate's story is already being traded through another POI;
+        keeping its workflow alive would place the same plan later, after the
+        first order resolved — exactly the spray this rule forbids.
+        """
+        poi_id = getattr(candidate, "poi_id", None)
+        if poi_id is None:
+            return
+        pid = str(poi_id)
+        self._menu_claimed_pois.add(pid)
+        self._routed.add(pid)
+        self._workflows.pop(pid, None)
+        self._menu_pending.pop(pid, None)
+        self._scan_cursor.pop(pid, None)
+
     def queue_menu_candidate(self, candidate: CandidateEntry) -> None:
         """Receive a winner candidate confirmed by the product menu.
 
@@ -222,9 +365,17 @@ class PipelineAdapter:
         per-candidate outcomes, resubmitted each bar until it is accepted or
         its menu window closes — a risk gate (news/session/breaker) must not
         silently destroy a confirmation that is still inside its window.
+
+        ONE STORY (locked 2026-11-15): a winner whose plan already lives is
+        dropped here — it won its window, but its story is already being
+        traded, so this POI is retired instead of placing a second ticket.
         """
         if candidate is None:
             return
+        if self._duplicate_story(candidate, source="menu") is not None:
+            self._drop_duplicate_poi(candidate)
+            return
+        self._claim_story(candidate)
         self._menu_stats["menu_submitted"] += 1
         poi_id = getattr(candidate, "poi_id", None)
         if poi_id:
@@ -332,16 +483,6 @@ class PipelineAdapter:
             return
         self._settle_menu_candidate(poi_id, accepted, reason)
 
-    def on_candidate_accepted(self, candidate) -> None:
-        """Existing accept seam: a real placement consumes the §11 one-shot.
-
-        Also settles an F7 pending confirmation (a placed winner must not be
-        resubmitted).
-        """
-        poi_id = getattr(candidate, "poi_id", None)
-        if poi_id is not None:
-            self._settle_menu_candidate(poi_id, True, "placed")
-
     def _resubmit_menu_pending(self, now: datetime) -> None:
         """F7: one resubmission attempt per bar, bounded by the window."""
         if not self._menu_pending or self._runner is None:
@@ -351,6 +492,7 @@ class PipelineAdapter:
             if deadline is not None and now > deadline:
                 self._menu_pending.pop(poi_id, None)
                 self._menu_stats["menu_expired_unplaced"] += 1
+                self.release_story(poi_id)  # ONE STORY: window closed unplaced
                 # Release the claim: the menu window is closed, so the normal
                 # scan may own this POI again if it is still live.
                 self._menu_claimed_pois.discard(poi_id)
@@ -369,6 +511,10 @@ class PipelineAdapter:
     ) -> None:
         """Per-bar pipeline step (called by the runner's entry step)."""
         state = self._ensure_state(bar_index)
+        self._story_bar = bar_index
+        # ONE STORY: claims follow the book — prune the sealed ones whose
+        # plan is no longer live (order cancelled/expired/closed).
+        self._prune_story_claims()
         # F7: retry confirmed-but-unaccepted menu winners before the scan.
         self._resubmit_menu_pending(now)
         if self._runner is not None and self._menu_candidates:
@@ -458,7 +604,16 @@ class PipelineAdapter:
                         # this completion — resume the chronological scan on
                         # the next bar (a later in-between completion may win).
                         self._scan_cursor[poi.id] = bar_index + 1
+                    elif self._duplicate_story(candidate, source="seek") is not None:
+                        # ONE STORY (locked 2026-11-15): this POI's plan is
+                        # already live through another POI. Burn this POI's
+                        # one-shot instead of retrying it every bar — a
+                        # retry would place the same plan after the first
+                        # order resolved (the spray the rule forbids).
+                        self._routed.add(poi.id)
+                        self._scan_cursor.pop(poi.id, None)
                     else:
+                        self._claim_story(candidate)
                         workflow = _Workflow(
                             candidate=candidate,
                             created_bar=bar_index,
@@ -481,6 +636,7 @@ class PipelineAdapter:
                     workflow.completion_index, workflow.expiry_bars, bar_index
                 ):
                     self._workflows.pop(poi.id, None)  # §24: dead signal
+                    self.release_story(poi.id)  # ONE STORY: free the plan
                 elif self._runner is not None:
                     self._runner.submit_entry(workflow.candidate)
 
@@ -491,18 +647,28 @@ class PipelineAdapter:
                 # Dead thesis: drop the workflow and pull any resting
                 # limit so it can never fill against a violated zone.
                 self._workflows.pop(poi.id, None)
+                self.release_story(poi.id)  # ONE STORY: dead thesis, free plan
                 if self._runner is not None:
                     self._runner.cancel_pending_for_poi(poi.id)
             elif result == POIState.TESTED.value:
                 self._tested_bar.setdefault(poi.id, bar_index)
 
     def on_candidate_accepted(self, candidate: CandidateEntry) -> None:
-        """Consume the POI one-shot — called ONLY on an accepted placement."""
+        """Consume the POI one-shot — called ONLY on an accepted placement.
+
+        THE single accept seam (this method used to be defined twice; the
+        later definition silently shadowed the F7 settle, so the two are
+        merged here): a real placement consumes the §11 one-shot, settles an
+        F7 pending confirmation (a placed winner must not be resubmitted),
+        and seals the ONE STORY claim (the plan now follows the book).
+        """
         if candidate.poi_id is not None:
             pid = str(candidate.poi_id)
             self._workflows.pop(candidate.poi_id, None)
             self._menu_claimed_pois.add(pid)
             self._routed.add(pid)
+            self._settle_menu_candidate(pid, True, "placed")
+            self.seal_story(pid)
 
     def active_workflows(self) -> dict:
         """Public read-only snapshot: POI id → live CandidateEntry.
@@ -551,6 +717,7 @@ class PipelineAdapter:
                 if machine.current(poi) is POIState.FRESH:
                     machine.transition(poi, POIState.TESTED)
             self._workflows.pop(poi_id, None)
+            self.release_story(poi_id)  # ONE STORY: no placement, free plan
             return
 
     def current_atr(self, bar_index: int) -> float:

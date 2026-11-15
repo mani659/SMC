@@ -192,6 +192,12 @@ class _TrackedPending:
     # FR fill-regime policy (R8): this pending's own lifetime in bars
     # (§23 bars_open convention). None = runner-timeframe default.
     rest_bars: int | None = None
+    # Executable plan (locked ONE STORY rule, 2026-11-15): the resting
+    # order's own entry/SL/TP, so ``story_live_plans`` can prove that a plan
+    # is already being traded without re-deriving it from the candidate.
+    entry_price: float | None = None
+    sl: float | None = None
+    tp: float | None = None
 
 
 @dataclass(slots=True)
@@ -373,6 +379,19 @@ class PaperRunner:
     def set_pipeline_adapter(self, adapter) -> None:
         """Called by ``PipelineAdapter.attach`` — wiring parity with backtest."""
         self._entry_queue = []
+
+    def story_live_plans(self) -> list:
+        """Everything this paper book may still trade (locked-story liveness).
+
+        Parity with ``BacktestRunner.story_live_plans``: a tracked resting
+        pending, a tracked open position or a live R9 intent means the plan
+        is already being traded. Read-only projection; the adapter never
+        mutates it and no risk decision reads it.
+        """
+        plans: list = list(self._pendings.values())
+        plans.extend(self._positions.values())
+        plans.extend(intent.candidate for intent in self.intents.alive_intents())
+        return plans
 
     def submit_entry(self, candidate) -> None:
         """Adapter seam: queue a candidate for THIS bar's entry step."""
@@ -723,6 +742,11 @@ class PaperRunner:
                     fvg_context=candidate.fvg_context(),
                     sweep_level=candidate.sweep_level,
                     placed_at=now,
+                    # Locked ONE STORY rule (2026-11-15): the plan exactly
+                    # as placed — liveness proof for the story guard.
+                    entry_price=candidate.entry_price,
+                    sl=candidate.sl_price,
+                    tp=candidate.tp_price,
                     model_tags=candidate.model_tags,
                     pillar_path=candidate.pillar_path,
                     disp_magnitude_atr=candidate.disp_magnitude_atr,
@@ -1078,6 +1102,11 @@ class PaperRunner:
                     fvg_context=candidate.fvg_context(),
                     sweep_level=candidate.sweep_level,
                     placed_at=now,
+                    # Locked ONE STORY rule (2026-11-15): the plan exactly
+                    # as placed — liveness proof for the story guard.
+                    entry_price=candidate.entry_price,
+                    sl=candidate.sl_price,
+                    tp=candidate.tp_price,
                     model_tags=candidate.model_tags,
                     pillar_path=candidate.pillar_path,
                     disp_magnitude_atr=candidate.disp_magnitude_atr,
