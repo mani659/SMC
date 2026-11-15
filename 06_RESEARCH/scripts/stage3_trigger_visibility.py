@@ -54,8 +54,11 @@ SCRIPTS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SRC_DIR))
 sys.path.insert(0, str(SCRIPTS_DIR))
 
-import matplotlib
-matplotlib.use("Agg")
+
+def _ensure_matplotlib_agg():
+    """Set Agg backend lazily so module helpers/constants import without matplotlib."""
+    import matplotlib
+    matplotlib.use("Agg")
 
 from smc.config.model_type import ModelType
 from smc.config.timeframe import Timeframe
@@ -415,6 +418,7 @@ def render_stage3_panel(out_path: Path, *, series, anchor, zone_low: float,
                         signal_info: dict | None = None,
                         caption2: str = "") -> None:
     """One M5 Stage-3 / negative-example panel in the pack visual language."""
+    _ensure_matplotlib_agg()
     from generate_d1_poi_pack import (CANVAS_W_IN, CANVAS_H_IN, CANVAS_DPI,
                                       CANDLE_UP, CANDLE_DOWN, EVENT_COLOR,
                                       EVENT_BAR_COLOR)
