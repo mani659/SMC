@@ -1582,7 +1582,11 @@ class OperatorSession:
         interval = float(getattr(self.config, "alive_interval_s", 300.0) or 0.0)
         if interval <= 0:
             return False
-        if now_mono - self._last_alive_mono < interval:
+        # Float guard: monotonic() values with a large magnitude make an exact
+        # interval-boundary subtraction land a few ulps low (e.g. 299.9999999),
+        # which would silently skip a ping that is due. A 1 ns tolerance keeps
+        # the "at most one per interval" guarantee without boundary flakes.
+        if now_mono - self._last_alive_mono < interval - 1e-9:
             return False
         self._last_alive_mono = now_mono
         hb = self._heartbeat
