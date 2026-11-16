@@ -1,5 +1,16 @@
 # SESSION HANDOFF - SMC BOT
 
+## 2026-11-16 - PRODUCT 1Y MENU + ONE-STORY DIAGNOSTIC (`LOGIC_CHANGED: NO` - measurement only)
+
+- **1y product one-story diagnostic PASS** (measurement only; no edge claim, no ship recommendation). Target window exec **2024-11-01 → 2025-10-31 UTC**, load **2024-09-01** (61 days warm-up); fully inside the canonical parquet (2021-04 → 2026-04).
+- **Continuous attempt profiled live, then blocked (not silently substituted):** TRUE continuous menu run over the year (70,885 M5 bars) decayed **26.1 → 7.1 → 2.5 bars/s (cumulative) by bar 6,000** and was killed at the pre-registered 45-min budget with <10% covered — the PFE-2 §1.1 quadratic menu-bookkeeping collapse re-confirmed at 1y scale; extrapolated remainder >7 h and still decaying. Proposed (not implemented): a menu-bookkeeping performance patch is **production code — out of scope by ban; left to the Architect**.
+- **Mode B (sanctioned fallback): SEGMENTED CONTINUOUS TILING** — 12 **adjacent** calendar-month segments exactly tiling the year (no gaps/overlaps/sampling), dual-run each, every segment loading from 2024-09-01. Explicit merge rules: fills are unique-timestamp events (segment fill sum == combined, verified); armed counts NOT summed (menu state restarts); boundary re-arm dedupe mechanical and counted (**0 dropped**).
+- **Numbers:** raw fills **239**, **unique filled plans 239**, identical-plan groups **0** (overlapping 0; non-overlapping re-arm groups 0), guard dropped **580 duplicate winners** across segments (per-segment in the report), placed 252 → fills 239 (13 resting placements never filled). Armed per segment 193–462 (not additive). `menu_errors 0` everywhere. Determinism **PASS all 12 segments** (trades.csv + report.json byte-identical; summaries equal modulo runtime/tag/notes).
+- **Mixes (fills):** trigger **F 226 / A 13**; direction **long 135 / short 104**; detection TF **M15 161 / H1 37 / H4 35 / D1 6**; model_tags span 45 combos (M8 in 138); months **12–30 each, no clump**; exits SL 174 / TP 65; tp_source **structural 155 / fallback 84**.
+- **SINGLE_STORYLINE_ENGINE: NO** at year scale (diversified book; same mechanical verdict rule as PRODUCT_6M).
+- **Artifacts:** `06_RESEARCH/results/product_1y_one_story/` (summary.json + run1/run2 per segment + cont_probe.log, gitignored); report `06_RESEARCH/PRODUCT_1Y_ONE_STORY_DIAGNOSTIC_REPORT.md`. Suite **1518 passed / 7 skipped**; `locked_constants.py` diff empty.
+- **NEXT ACTION (single):** **Architect review of the 1y unique-story census → bounded demo (own terminal) and/or 5y census — Architect rules.** Tester pack still deferred; PFE-4 paper/demo rules unchanged.
+
 ## 2026-11-15 - PRODUCT 9 FILLS DECODE (READ-ONLY, `LOGIC_CHANGED: NO`)
 
 - The 9 unique product-menu fills (PRODUCT_6M one-story diagnostic) decoded read-only: report `06_RESEARCH/PRODUCT_9_FILLS_DECODE_REPORT.md`, CSV + 9 house-style charts in `06_RESEARCH/results/product_9_fills_decode/`. All 9 confirmed inside their marked zones (completion + entry); F = BOS+OB fields, the one A = CHOCH rule_1 fields; plain labels SUPPLY 1 / DEMAND 1 / MERGED 3 / UNKNOWN 4 (m8_kind not exported); 0 duplicate pairs inside the 9; liquidity labels NOT_LABELED. No strategy change, no retune; `locked_constants.py` untouched. **NEXT = Architect review of the 9 fills → 1y product menu+one-story diagnostic.**
