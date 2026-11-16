@@ -16,6 +16,8 @@ constant logic lives here.
 from __future__ import annotations
 
 import logging
+import ntpath
+import os
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -26,6 +28,17 @@ _FILES_SUBDIR = Path("MQL5") / "Files"
 EA_READABLE_DEFAULT_FILENAME = HEARTBEAT_FILENAME
 
 
+def _looks_like_windows_path(raw: str) -> bool:
+    s = str(raw).strip()
+    if len(s) >= 2 and s[1] == ":":
+        return True
+    return s.startswith("\\\\") or s.startswith("//")
+
+
+def _win_join(*parts: str) -> Path:
+    return Path(ntpath.normpath(ntpath.join(*parts)))
+
+
 def terminal_dir(terminal_path: str) -> Path | None:
     """Terminal install directory derived from a terminal64.exe path.
 
@@ -34,7 +47,30 @@ def terminal_dir(terminal_path: str) -> Path | None:
     """
     if terminal_path is None:
         return None
-    tp = Path(str(terminal_path).strip())
+    raw = str(terminal_path).strip()
+    if not raw:
+        return None
+    if _looks_like_windows_path(raw):
+        base = ntpath.basename(raw)
+        if not base:
+            return None
+        if base.lower().endswith("terminal64.exe"):
+            parent = ntpath.dirname(raw)
+        else:
+            parent = raw
+        if not parent:
+            return None
+        try:
+            norm = ntpath.normpath(parent)
+            return Path(norm).resolve(strict=False) if os.name == "nt" else Path(norm)
+        except (OSError, ValueError):
+            logger.exception(
+                "heartbeat path resolution failed operation=resolve_terminal_path "
+                "path=%s",
+                raw,
+            )
+            return None
+    tp = Path(raw)
     if not tp.name:
         return None
     if tp.name.lower().endswith("terminal64.exe"):
@@ -47,7 +83,7 @@ def terminal_dir(terminal_path: str) -> Path | None:
         logger.exception(
             "heartbeat path resolution failed operation=resolve_terminal_path "
             "path=%s",
-            tp,
+            raw,
         )
         return None
 
@@ -62,6 +98,8 @@ def ea_readable_heartbeat_dir(terminal_path: str) -> Path | None:
     td = terminal_dir(terminal_path)
     if td is None:
         return None
+    if _looks_like_windows_path(str(terminal_path)):
+        return _win_join(str(td), "MQL5", "Files")
     return td / _FILES_SUBDIR
 
 
@@ -75,7 +113,23 @@ def data_folder_heartbeat_path(terminal_data_path: str) -> Path | None:
     """
     if not terminal_data_path:
         return None
-    dp = Path(str(terminal_data_path).strip())
+    raw = str(terminal_data_path).strip()
+    if not raw:
+        return None
+    if _looks_like_windows_path(raw):
+        base = ntpath.basename(raw.rstrip("\\/"))
+        if not base and not (len(raw) >= 2 and raw[1] == ":"):
+            return None
+        try:
+            return _win_join(raw, "MQL5", "Files", HEARTBEAT_FILENAME)
+        except (OSError, ValueError):
+            logger.exception(
+                "heartbeat path resolution failed operation=resolve_data_path "
+                "path=%s",
+                raw,
+            )
+            return None
+    dp = Path(raw)
     if not dp.name:
         return None
     try:
@@ -84,7 +138,7 @@ def data_folder_heartbeat_path(terminal_data_path: str) -> Path | None:
         logger.exception(
             "heartbeat path resolution failed operation=resolve_data_path "
             "path=%s",
-            dp,
+            raw,
         )
         return None
 
@@ -96,6 +150,11 @@ def ea_readable_heartbeat_path(terminal_path: str) -> Path | None:
     This is the path the operator should write to so the EA sees the heartbeat
     with its default ``InpHeartbeatFile = "smc_heartbeat.txt"``.
     """
+    if _looks_like_windows_path(str(terminal_path or "")):
+        td = terminal_dir(terminal_path)
+        if td is None:
+            return None
+        return _win_join(str(td), "MQL5", "Files", HEARTBEAT_FILENAME)
     d = ea_readable_heartbeat_dir(terminal_path)
     if d is None:
         return None
@@ -126,13 +185,18 @@ def heartbeat_path_candidates(
         if p is not None:
             out.append(("terminal_path", p))
     if explicit_heartbeat_path:
-        out.append(("config", Path(str(explicit_heartbeat_path).strip())))
+        raw = str(explicit_heartbeat_path).strip()
+        if _looks_like_windows_path(raw):
+            out.append(("config", Path(ntpath.normpath(raw))))
+        else:
+            out.append(("config", Path(raw)))
     out.append(("default", Path(default_fallback)))
-    seen: set[Path] = set()
+    seen: set[str] = set()
     uniq: list[tuple[str, Path]] = []
     for source, p in out:
-        if p not in seen:
-            seen.add(p)
+        key = str(p)
+        if key not in seen:
+            seen.add(key)
             uniq.append((source, p))
     return uniq
 
