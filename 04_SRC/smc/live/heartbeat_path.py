@@ -18,7 +18,7 @@ from __future__ import annotations
 import logging
 import ntpath
 import os
-from pathlib import Path
+from pathlib import Path, PurePath, PureWindowsPath
 
 logger = logging.getLogger(__name__)
 
@@ -35,8 +35,15 @@ def _looks_like_windows_path(raw: str) -> bool:
     return s.startswith("\\\\") or s.startswith("//")
 
 
-def _win_join(*parts: str) -> Path:
-    return Path(ntpath.normpath(ntpath.join(*parts)))
+def _win_path(*parts: str) -> Path:
+    """Windows-style path object.
+
+    On POSIX hosts we return a PureWindowsPath so / and string
+    form remain Windows-correct for MT5-derived paths used in tests/CI, while
+    avoiding cwd-relative mangling of drive-letter strings.
+    """
+    norm = ntpath.normpath(ntpath.join(*parts))
+    return Path(norm) if os.name == "nt" else PureWindowsPath(norm)  # type: ignore[return-value]
 
 
 def terminal_dir(terminal_path: str) -> Path | None:
@@ -62,7 +69,7 @@ def terminal_dir(terminal_path: str) -> Path | None:
             return None
         try:
             norm = ntpath.normpath(parent)
-            return Path(norm).resolve(strict=False) if os.name == "nt" else Path(norm)
+            return Path(norm).resolve(strict=False) if os.name == "nt" else PureWindowsPath(norm)  # type: ignore[return-value]
         except (OSError, ValueError):
             logger.exception(
                 "heartbeat path resolution failed operation=resolve_terminal_path "
@@ -99,7 +106,7 @@ def ea_readable_heartbeat_dir(terminal_path: str) -> Path | None:
     if td is None:
         return None
     if _looks_like_windows_path(str(terminal_path)):
-        return _win_join(str(td), "MQL5", "Files")
+        return _win_path(str(td), "MQL5", "Files")
     return td / _FILES_SUBDIR
 
 
@@ -121,7 +128,7 @@ def data_folder_heartbeat_path(terminal_data_path: str) -> Path | None:
         if not base and not (len(raw) >= 2 and raw[1] == ":"):
             return None
         try:
-            return _win_join(raw, "MQL5", "Files", HEARTBEAT_FILENAME)
+            return _win_path(raw, "MQL5", "Files", HEARTBEAT_FILENAME)
         except (OSError, ValueError):
             logger.exception(
                 "heartbeat path resolution failed operation=resolve_data_path "
@@ -154,7 +161,7 @@ def ea_readable_heartbeat_path(terminal_path: str) -> Path | None:
         td = terminal_dir(terminal_path)
         if td is None:
             return None
-        return _win_join(str(td), "MQL5", "Files", HEARTBEAT_FILENAME)
+        return _win_path(str(td), "MQL5", "Files", HEARTBEAT_FILENAME)
     d = ea_readable_heartbeat_dir(terminal_path)
     if d is None:
         return None
@@ -217,7 +224,9 @@ def probe_writable(path: Path) -> bool:
         operation = "remove heartbeat probe"
         probe.unlink(missing_ok=True)
         return True
-    except OSError:
+    except (OSError, AttributeError, NotImplementedError):
+        # AttributeError/NotImplementedError: non-concrete/pure paths (e.g.
+        # Windows-derived paths represented on POSIX CI) are not writable here.
         logger.exception(
             "heartbeat path probe failed operation=%s target=%s probe=%s",
             operation,
