@@ -35,15 +35,55 @@ def _looks_like_windows_path(raw: str) -> bool:
     return s.startswith("\\\\") or s.startswith("//")
 
 
+class _WinPathCompat(PureWindowsPath):
+    """Windows-style path with POSIX-friendly component semantics."""
+
+    def __new__(cls, *args):
+        if len(args) == 1 and isinstance(args[0], PurePath):
+            norm = ntpath.normpath(str(args[0]))
+        elif len(args) == 1:
+            norm = ntpath.normpath(os.fspath(args[0]))
+        else:
+            norm = ntpath.normpath(ntpath.join(*(os.fspath(a) for a in args)))
+        return super().__new__(cls, norm)
+
+    def __eq__(self, other):
+        try:
+            if isinstance(other, (str, os.PathLike)):
+                other_s = os.fspath(other)
+            else:
+                return NotImplemented
+        except Exception:
+            return NotImplemented
+        return ntpath.normpath(str(self)) == ntpath.normpath(str(other_s))
+
+    def __hash__(self):
+        return hash(ntpath.normpath(str(self)))
+
+    def __truediv__(self, other):
+        return _WinPathCompat(str(self), os.fspath(other))
+
+    def __rtruediv__(self, other):
+        return _WinPathCompat(os.fspath(other), str(self))
+
+    def joinpath(self, *args):
+        return _WinPathCompat(str(self), *(os.fspath(a) for a in args))
+
+    @property
+    def parent(self):
+        p = super().parent
+        return _WinPathCompat(str(p))
+
+
 def _win_path(*parts: str) -> Path:
     """Windows-style path object.
 
-    On POSIX hosts we return a PureWindowsPath so / and string
-    form remain Windows-correct for MT5-derived paths used in tests/CI, while
-    avoiding cwd-relative mangling of drive-letter strings.
+    On POSIX hosts we return a Windows-compatible path wrapper so `.name`,
+    `.parent`, joins and equality remain correct for MT5-derived paths in CI,
+    while avoiding cwd-relative mangling of drive-letter strings.
     """
     norm = ntpath.normpath(ntpath.join(*parts))
-    return Path(norm) if os.name == "nt" else PureWindowsPath(norm)  # type: ignore[return-value]
+    return Path(norm) if os.name == "nt" else _WinPathCompat(norm)  # type: ignore[return-value]
 
 
 def terminal_dir(terminal_path: str) -> Path | None:
@@ -69,7 +109,7 @@ def terminal_dir(terminal_path: str) -> Path | None:
             return None
         try:
             norm = ntpath.normpath(parent)
-            return Path(norm).resolve(strict=False) if os.name == "nt" else PureWindowsPath(norm)  # type: ignore[return-value]
+            return Path(norm).resolve(strict=False) if os.name == "nt" else _WinPathCompat(norm)  # type: ignore[return-value]
         except (OSError, ValueError):
             logger.exception(
                 "heartbeat path resolution failed operation=resolve_terminal_path "
