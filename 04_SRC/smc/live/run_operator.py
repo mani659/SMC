@@ -1036,7 +1036,11 @@ class OperatorSession:
         else:
             now_mono = time.monotonic()
             min_gap = max(1.0, float(self.config.console_refresh_s))
-            if now_mono - self._last_structure_mono < min_gap:
+            # Allow the initial bar-triggered refresh when no cadence anchor has
+            # been established yet. On fresh hosts (e.g. CI runners) monotonic()
+            # can be < min_gap while _last_structure_mono is still 0.0, which
+            # would incorrectly suppress the first snapshot build.
+            if self._last_structure_mono != 0.0 and now_mono - self._last_structure_mono < min_gap:
                 return
             self._last_structure_mono = now_mono
         adapter = self._adapter
