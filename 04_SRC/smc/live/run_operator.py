@@ -118,6 +118,13 @@ RECONNECT_BACKOFF_SECONDS = (1.0, 2.0, 5.0)
 RECONNECT_MAX_ATTEMPTS = 10
 RECONNECT_LOG_INTERVAL_SECONDS = 30.0
 
+# Console cadence timers compare ``time.monotonic()`` deltas. A delta that
+# measures exactly one interval can round a few ulps LOW (e.g. 299.99999999999994
+# for a 300 s gap), which would delay a due console action by one poll. Timers
+# therefore compare against ``interval - MONO_CADENCE_EPS``. Operational
+# console timing only — NOT a trading/risk constant.
+MONO_CADENCE_EPS = 1e-9
+
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
@@ -1040,7 +1047,10 @@ class OperatorSession:
             # been established yet. On fresh hosts (e.g. CI runners) monotonic()
             # can be < min_gap while _last_structure_mono is still 0.0, which
             # would incorrectly suppress the first snapshot build.
-            if self._last_structure_mono != 0.0 and now_mono - self._last_structure_mono < min_gap:
+            # Same float guard as _maybe_alive: a boundary delta can land an
+            # ulp low and delay a due rebuild by one bar.
+            if self._last_structure_mono != 0.0 and \
+                    now_mono - self._last_structure_mono < min_gap - MONO_CADENCE_EPS:
                 return
             self._last_structure_mono = now_mono
         adapter = self._adapter
@@ -1474,7 +1484,8 @@ class OperatorSession:
             interval = 0.0
         if interval <= 0:
             return False
-        if now_mono - self._last_judge_mono < interval:
+        # Same float guard as _maybe_alive: a boundary delta can land an ulp low.
+        if now_mono - self._last_judge_mono < interval - MONO_CADENCE_EPS:
             return False
         self._last_judge_mono = now_mono
         try:
@@ -1553,7 +1564,9 @@ class OperatorSession:
         sig = marker_sig
         if sig == self._last_marker_sig:
             return
-        if now_mono - self._last_marker_mono < max(1.0, float(self.config.console_refresh_s)):
+        # Same float guard as _maybe_alive: a boundary delta can land an ulp low.
+        if now_mono - self._last_marker_mono < \
+                max(1.0, float(self.config.console_refresh_s)) - MONO_CADENCE_EPS:
             return
         self._last_marker_mono = now_mono
         self._last_marker_sig = sig
@@ -1582,11 +1595,10 @@ class OperatorSession:
         interval = float(getattr(self.config, "alive_interval_s", 300.0) or 0.0)
         if interval <= 0:
             return False
-        # Float guard: monotonic() values with a large magnitude make an exact
-        # interval-boundary subtraction land a few ulps low (e.g. 299.9999999),
-        # which would silently skip a ping that is due. A 1 ns tolerance keeps
-        # the "at most one per interval" guarantee without boundary flakes.
-        if now_mono - self._last_alive_mono < interval - 1e-9:
+        # Float guard (MONO_CADENCE_EPS): an exact-boundary subtraction can land
+        # a few ulps low (e.g. 299.9999999), which would silently skip a ping
+        # that is due — without breaking the "at most one per interval" rule.
+        if now_mono - self._last_alive_mono < interval - MONO_CADENCE_EPS:
             return False
         self._last_alive_mono = now_mono
         hb = self._heartbeat
