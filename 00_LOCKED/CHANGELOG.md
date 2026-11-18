@@ -6,6 +6,14 @@
 
 ---
 
+### 2026-11-18 - PARALLEL BOOKS — FULL-YEAR RESEARCH BT **IN FLIGHT** (detached, `LOGIC_CHANGED: NO`, `PROD_DEFAULTS_CHANGED: NO`)
+
+- **Goal:** measure the Architect promote ruling (`F, B, C, E, A`; D excluded; design/spike geometry; shared envelope; cross-book dedupe; one story per book) over the full product_1y window — research measurement only, no live default, no edge claim, no stop redesign.
+- **Harness (new):** `06_RESEARCH/scripts/parallel_books_full_bt.py` + `parallel_books_full_bt_launch.ps1`. Reuses the spike's real menu → adapter → runner seam, tiles the year as **12 adjacent calendar-month segments** (continuous replay documented infeasible, `PRODUCT_1Y` §1.1), 12 × 2 hypotheses = 24 runs, all five books per run. Resumable (`.done` per run), 20 s heartbeat thread, PID file, stdout/stderr logs, per-run `run_metrics.json`, final `verdict.json` + `EXIT_CODE.txt`. Refuses to run if `D` is selected or if the shipped `config/live_demo.json` ever carries books.
+- **Launched detached:** python PID **11652** (WMI-parented, 2026-11-18T13:28:47Z) so the agent session is never blocked; artifacts gitignored under `06_RESEARCH/results/parallel_books_full_bt/`; in-flight note `06_RESEARCH/PARALLEL_BOOKS_FULL_BT_INFLIGHT.md` (paths, PID, resume, limits).
+- **Preflight (feb25, 3 trading days, both hyps):** seam validated on the five-book set — fills 3 (B 1 / F 2), routes F 3 / B 1 / C 1, CROSS_TAG_LEAK NO, 0 unattributed, 0 unwanted double-lots, `poi_outside_books` 0, product anchor loss **0** after fixing a harness-side string-format bug in the trimmed anchor filter (`" " < "T"` let same-day later product fills into a slice; the earlier smoke's parity verdict is unaffected because both arms used the same filter).
+- **Pending:** report `06_RESEARCH/PARALLEL_BOOKS_FULL_BT_REPORT.md` + governance on resume, then Architect review. `PROD_DEFAULTS_CHANGED: NO`.
+
 ### 2026-11-18 - PARALLEL BOOKS — INTEGRATED DRY-RUN SMOKE (`LOGIC_CHANGED: NO`, `PROD_DEFAULTS_CHANGED: NO`)
 
 - **Goal:** integrated smoke of the patched books layer on a short frozen slice — no year BT, no live default flip, no threshold change, dry-run throughout.

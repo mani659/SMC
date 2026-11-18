@@ -1,5 +1,15 @@
 # SESSION HANDOFF - SMC BOT
 
+## 2026-11-18 - PARALLEL BOOKS — FULL-YEAR RESEARCH BT **IN FLIGHT** (detached, `PROD_DEFAULTS_CHANGED: NO`)
+
+- **STATUS `IN_FLIGHT`** — the Architect promote ruling is being measured detached, NOT in this chat session: harness `06_RESEARCH/scripts/parallel_books_full_bt.py` (+ `parallel_books_full_bt_launch.ps1`), python **PID 11652**, launched 2026-11-18T13:28:47Z under WmiPrvSE (survives IDE reload / terminal close). Do **not** start a second run.
+- **Books:** `F, B, C, E, A` (D excluded, R-K); design/spike geometry — `F` = DAY+H4+H1+M15, `B/C/E/A` = mid tiers (H4/H1/M15), each `trigger_types=(T,)` only; `ParallelBookMenu` seam; shared risk envelope, cross-book dedupe ON, one story PER BOOK.
+- **Window:** exec **2024-11-01 → 2025-10-31 UTC**, load warm-up **2024-09-01** (product_1y `run1` armed universe + per-segment truth). Shape = **12 adjacent calendar-month segments** (continuous year replay documented infeasible, `PRODUCT_1Y` §1.1), 12 segments × 2 hypotheses = **24 runs**, all five books in one pass per run.
+- **Artifacts (gitignored):** `06_RESEARCH/results/parallel_books_full_bt/` — `pid.txt`, `launcher.log`, `stdout.log`, `stderr.log`, `heartbeat.json` (20 s), `progress.json`, per-run `<seg>/books_F-B-C-E-A_<HYP>/{summary.json,fills.csv,winners.json,run_metrics.json,.done}`, final `verdict.json` + `EXIT_CODE.txt`. In-flight note `06_RESEARCH/PARALLEL_BOOKS_FULL_BT_INFLIGHT.md`.
+- **Resume (read-only first):** check `heartbeat.json` (`alive`, `runs_done/24`) + `tail stdout.log`; if complete (`verdict.json` + `EXIT_CODE.txt` = 0) **write the report — never re-run**; if the process died, relaunch the same harness (finished runs skip via `.done`) with `PYTHONPATH=../../04_SRC:. python parallel_books_full_bt.py --books F,B,C,E,A --out 06_RESEARCH/results/parallel_books_full_bt` or the launcher ps1. Preflight (feb25, 3-day slice, both hyps) already passed the seam: anchor loss 0, CROSS_TAG_LEAK NO, 0 unattributed, 0 outside-books, 0 double-lots.
+- **Verdict gates:** cross-tag purity, 0 unattributed, 0 cross-book double-lots, `poi_outside_books == 0`, all five books exercised, no product_1y fill lost per segment. Diagnostic PnL labelled **NOT performance**; risk skips are the shared envelope's (M-4 open).
+- **NEXT ACTION (single):** **on process exit → read `verdict.json` + artifacts → write `06_RESEARCH/PARALLEL_BOOKS_FULL_BT_REPORT.md` + governance (HANDOFF/TODO/CHANGELOG) → Architect review of the multi-book year.**
+
 ## 2026-11-18 - PARALLEL BOOKS — INTEGRATED DRY-RUN SMOKE (`LOGIC_CHANGED: NO`, `PROD_DEFAULTS_CHANGED: NO`)
 
 - **Smoke PASS** on a **5-trading-day END-trimmed feb25 slice** (1,440 M5 bars, 59 armed POIs, both hypotheses), harness `06_RESEARCH/scripts/parallel_books_smoke.py` (research-only, reuses the spike's real menu → adapter → runner seam). Artifacts gitignored `06_RESEARCH/results/parallel_books_smoke/` (`verdict.json` etc.).
