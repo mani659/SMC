@@ -43,6 +43,7 @@ from smc.backtest.cost_model import CostConfig, CostModel
 from smc.backtest.fill_model import CloseKind
 from smc.backtest.intents import IntentBook
 from smc.backtest.orders import PendingOrderBook
+from smc.execution.order_identity import book_comment
 from smc.backtest.positions import ClosedPosition, PositionStore
 from smc.config.timeframe import Timeframe
 from smc.core.candle import Candle
@@ -564,7 +565,10 @@ class BacktestRunner(BarHandler):
             placed_at=now,
             poi_id=candidate.poi_id,
             trigger=candidate.trigger,
-            comment=candidate.route_id or "",
+            # Order identity: a parallel-book candidate stamps its book id on
+            # the menu stamp and gets an ``SMC-<TAG>-`` prefix; a production /
+            # unstamped candidate returns the comment unchanged.
+            comment=book_comment(candidate, candidate.route_id or ""),
             model_tags=candidate.model_tags,
             pillar_path=candidate.pillar_path,
             disp_magnitude_atr=candidate.disp_magnitude_atr,

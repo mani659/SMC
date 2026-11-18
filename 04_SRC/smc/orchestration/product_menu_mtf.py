@@ -420,7 +420,17 @@ class ProductMenuEngine:
     # Read-only surface
     # ------------------------------------------------------------------ #
     def tier_for(self, detection_tf: Timeframe) -> MenuTier | None:
-        """The tier whose detection TF is ``detection_tf`` (``None`` if none)."""
+        """The tier whose detection TF is ``detection_tf`` (``None`` if none).
+
+        Instance-scoped (parallel dedicated books): an engine built with an
+        injected ``tiers=`` set resolves against ITS OWN table first, so N
+        books can coexist in one process without patching module globals. The
+        module map remains the fallback, which keeps every existing caller —
+        and the shipped default tier set — byte-identical.
+        """
+        for tier in self.tiers:
+            if tier.detection_tf is detection_tf:
+                return tier
         return _TIER_BY_DETECTION.get(detection_tf)
 
     def episodes(self) -> tuple[MenuEpisode, ...]:

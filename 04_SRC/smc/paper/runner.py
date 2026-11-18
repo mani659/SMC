@@ -60,6 +60,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
 from smc.backtest.intents import IntentBook
+from smc.execution.order_identity import book_comment
 from smc.backtest.pipeline_adapter import PipelineAdapter
 from smc.config.timeframe import Timeframe
 from smc.core.candle import Candle
@@ -725,7 +726,7 @@ class PaperRunner:
                     price=candidate.entry_price,
                     sl=candidate.sl_price,
                     tp=candidate.tp_price,
-                    comment=candidate.route_id or "",
+                    comment=book_comment(candidate, candidate.route_id or ""),
                 )
             )
             self.kpi.record_order_ack(
@@ -760,7 +761,7 @@ class PaperRunner:
                     rest_bars=remaining,
                     symbol=self.broker.orders.symbol,
                     magic=getattr(self.broker.orders, "magic", None),
-                    comment=candidate.route_id or "",
+                    comment=book_comment(candidate, candidate.route_id or ""),
                 )
                 self.intents.mark_placed(intent, bar_index, outcome.ticket)
                 accepted = getattr(self.adapter, "on_candidate_accepted", None)
@@ -1073,7 +1074,7 @@ class PaperRunner:
                     price=candidate.entry_price,
                     sl=candidate.sl_price,
                     tp=candidate.tp_price,
-                    comment=candidate.route_id or "",
+                    comment=book_comment(candidate, candidate.route_id or ""),
                 )
             )
             self.kpi.record_order_ack(
@@ -1126,7 +1127,7 @@ class PaperRunner:
                     # order's symbol/magic/comment carry to the position.
                     symbol=self.broker.orders.symbol,
                     magic=getattr(self.broker.orders, "magic", None),
-                    comment=candidate.route_id or "",
+                    comment=book_comment(candidate, candidate.route_id or ""),
                 )
                 accepted = getattr(self.adapter, "on_candidate_accepted", None)
                 if accepted is not None:

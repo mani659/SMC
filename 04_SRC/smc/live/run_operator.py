@@ -522,16 +522,39 @@ class OperatorSession:
         if cfg.strategy_mode == "PRODUCT_V1":
             # Product menu layer: sweep -> LTF confirmation. OPT-B posture is
             # an explicit config decision (default OFF).
+            from smc.orchestration.parallel_books import (
+                ParallelBookMenu,
+                resolve_book_selection,
+            )
             from smc.orchestration.product_menu_mtf import ProductMenuEngine
 
-            menu_confirmation = ProductMenuEngine(
-                symbol=cfg.symbol,
-                same_bar_asof=cfg.enable_opt_b_same_bar_confirm,
+            # Parallel dedicated books (SPIKE, default OFF): an empty
+            # ``parallel_books`` config keeps the shipped single menu path
+            # byte-identical. A configured book list runs each tag's own menu
+            # over the SAME feed, adapter, runner and risk envelope.
+            books = resolve_book_selection(
+                getattr(cfg, "parallel_books", ())
             )
-            self._log(
-                "MENU CONFIRMATION ACTIVE tier_table=DAY/H4/H1/M15 "
-                f"opt_b_same_bar={cfg.enable_opt_b_same_bar_confirm}"
-            )
+            if books:
+                menu_confirmation = ParallelBookMenu(
+                    books,
+                    symbol=cfg.symbol,
+                    same_bar_asof=cfg.enable_opt_b_same_bar_confirm,
+                )
+                self._log(
+                    "PARALLEL BOOKS ACTIVE books="
+                    + ",".join(book.book_id for book in books)
+                    + f" opt_b_same_bar={cfg.enable_opt_b_same_bar_confirm}"
+                )
+            else:
+                menu_confirmation = ProductMenuEngine(
+                    symbol=cfg.symbol,
+                    same_bar_asof=cfg.enable_opt_b_same_bar_confirm,
+                )
+                self._log(
+                    "MENU CONFIRMATION ACTIVE tier_table=DAY/H4/H1/M15 "
+                    f"opt_b_same_bar={cfg.enable_opt_b_same_bar_confirm}"
+                )
         # The watchdog EA reads MQL5/Files/smc_heartbeat.txt in its FileOpen
         # sandbox. For an INSTALLED (non-portable) terminal that sandbox is the
         # terminal DATA folder (mt5.terminal_info().data_path — captured at

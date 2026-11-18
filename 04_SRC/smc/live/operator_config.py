@@ -83,6 +83,7 @@ ALLOWED_KEYS = frozenset({
     "timeframe",
     "strategy_mode",             # PRODUCT_V1 (default) | ARCHIVE_TIGHT_HTF | RESEARCH_H4_ZONE_BOOK | COUPLED_MTF
     "enable_opt_b_same_bar_confirm",  # OPT-B: hybrid same-bar/as-of confirm (default OFF)
+    "parallel_books",              # spike: dedicated books; [] = today's single menu
     "detection_timeframes",        # C1: explicit detection TF list (H4+H1)
     "allow_single_tf_degraded",    # C1: test-only single-TF opt-in (default False)
     "allowed_sessions",
@@ -186,6 +187,12 @@ class OperatorConfig:
     # False = the serial anchor (first confirm bar closing at/after the sweep
     # close). True must be an explicit operator decision — never implicit.
     enable_opt_b_same_bar_confirm: bool = False
+    # Parallel dedicated confirmation books (SPIKE, default OFF).
+    # ``()`` = the shipped single-menu path, byte-identical to today. An
+    # explicit list (e.g. ``["F", "B"]`` or ``["PROD"]``) selects the
+    # dedicated books; nothing here is enabled by default and the shipped
+    # live_demo config never sets it.
+    parallel_books: tuple = ()
     allowed_sessions: tuple[str, ...] | None = None   # None = no session gate
     # Heartbeat is written where the MQL5 Safety Watchdog EA can read it.
     # When ``terminal_path`` is set, the operator resolves the write path to
@@ -319,6 +326,31 @@ def load_operator_config(path: str | Path) -> OperatorConfig:
             data["enable_opt_b_same_bar_confirm"],
             "enable_opt_b_same_bar_confirm",
         )
+    if "parallel_books" in data:
+        raw_books = data["parallel_books"]
+        if raw_books is None:
+            kwargs["parallel_books"] = ()
+        elif isinstance(raw_books, list) and all(
+            isinstance(b, (str, dict)) for b in raw_books
+        ):
+            selection = tuple(raw_books)
+            # Validate eagerly: an unknown / excluded book (e.g. "D", R-K)
+            # fails at config load, never mid-session.
+            from smc.orchestration.parallel_books import (
+                resolve_book_selection,
+            )
+            try:
+                resolve_book_selection(selection)
+            except ValueError as exc:
+                raise ConfigError(
+                    f"config.parallel_books invalid: {exc}"
+                ) from exc
+            kwargs["parallel_books"] = selection
+        else:
+            raise ConfigError(
+                "config.parallel_books must be null or a list of book ids / "
+                'book objects (e.g. [] or ["F", "B"] or ["PROD"])'
+            )
     if "allow_single_tf_degraded" in data:
         kwargs["allow_single_tf_degraded"] = _coerce_bool(
             data["allow_single_tf_degraded"], "allow_single_tf_degraded"

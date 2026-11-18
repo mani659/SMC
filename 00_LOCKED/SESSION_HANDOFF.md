@@ -1,5 +1,13 @@
 # SESSION HANDOFF - SMC BOT
 
+## 2026-11-18 - PARALLEL BOOK SPIKE — IMPLEMENTATION (dead by default, `PROD_DEFAULTS_CHANGED: NO`)
+
+- **Spike PASS.** Parallel dedicated confirmation books are now wireable behind an explicit flag; the shipped single-menu path is untouched (`parallel_books` default `()`, no shipped config sets it).
+- **Code:** `04_SRC/smc/orchestration/parallel_books.py` (`BookConfig`, `resolve_book_selection`, `ParallelBookMenu`, `cross_book_plan_key`/`same_cross_book_plan`), `04_SRC/smc/execution/order_identity.py` (`book_comment` / `book_identity` / `book_magic`), instance-scoped `ProductMenuEngine.tier_for` (module map kept as fallback → shipped defaults identical), order-comment hook at the three placement choke points (default text unchanged), operator key `parallel_books` + `run_operator` wiring. Rules: one-story PER BOOK (own engine/armed/episodes/one-shot per book), cross-book identical-plan dedupe (`cross_book_duplicate` counter + owner/loser event), shared risk envelope (the layer owns no risk component), `SMC-<TAG>-` comment + candidate book stamp (magic not wired, R-D), direction on the candidate (R-J), opposite-direction counted not blocked (R-B open).
+- **Measurement (gitignored `06_RESEARCH/results/parallel_book_spike/`):** default parity — shipped menu vs `books=["PROD"]` same-process A/B, first 10 trading days of feb25 → winners 22/22 (LONG) and 19/19 (SHORT), fills 11/11 and 12/12, identical identity sets and identical product-fill anchors. Books F+B on feb25 → 156/93 winners, 44/37 fills; union fills **B 25 / F 29** with `{B:100%}` / `{F:100%}` (B has zero in production), detection mix M15 31 / H1 13 / H4 9 / D1 1; **0 cross-book duplicates** on this data (none arose; gate unit-proven); 45 opposite-direction coexistence events; shared-envelope skips breaker 8 / same-level 2 / session 10; runtime 807.9 s + 640.3 s.
+- **Tests:** `test_parallel_books.py` (21); suite **1,544 passed / 7 skipped**; `locked_constants.py` diff empty; no shipped config enables books. Note `06_RESEARCH/PARALLEL_BOOK_SPIKE_NOTE.md` (limits: one MID-heavy month, 10-day parity slice, full year not re-run).
+- **NEXT ACTION (single):** **Architect review of the spike → demo flag set F+B, or demo as-is.**
+
 ## 2026-11-17 - R0 ADMISSION MAP + R1 PURE SINGLE-TAG BOOKS (`LOGIC_CHANGED: NO` - measurement only)
 
 - **R0 (docs-only, code-cited): `06_RESEARCH/R0_TRIGGER_ADMISSION_MAP.md`.** Per-tier confirm menus (DAY D1→H1: all six; M15/H1/H4: `_TIER_ADF`), chronological race semantics (first-valid + one-shot, grade = same-bar tie-break only), one-story placement at the `PipelineAdapter` intake (after the menu, before risk), CURRENT vs INTENDED table, BCE pointer.
