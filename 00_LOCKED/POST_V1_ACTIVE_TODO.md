@@ -522,3 +522,11 @@ True open decisions only — nothing here is decided until dated in the plan:
 - [x] **F6/F7 done (2026-11-10):** menu gated on the pipeline's ONE §5 machine (FRESH/TESTED; `menu_blocked_by_state`), `retire(poi_id)` from the prune path; a blocked menu winner is resubmitted each bar until accepted or its menu window closes (claim released, `menu_expired_unplaced`), retry only for runners reporting `supports_candidate_outcomes` (paper yes, research capture no). Note `06_RESEARCH/F5_F7_LIFECYCLE_NOTE.md`; suite 1437/6.
 - [ ] **F3 live pin acceptance** on the next operator start (`[sizing] PASS` + `sizing_pin.json ok:true`); `dry_run` stays `true` until then.
 - [ ] **Architect review of the post-F5–F7 ledger** (same plan-complement window, new path `06_RESEARCH/results/plan_complement_ledger_post_f5f7/`) — geometry/identity only, no profitability claim.
+
+## 19. Parallel dedicated confirmation paths — DESIGN READY 2026-11-18 (rulings pending)
+
+- [x] **Design written:** `06_RESEARCH/PARALLEL_DEDICATED_PATH_DESIGN.md` — book = `(symbol, tag, detection_tier_set, confirm_tf_map)`; per-book menu + intake; no cross-book chronological kill; one-story recommended per book + cross-book plan dedupe; one shared risk envelope. Evidence: R1 MID fills B 264 / C 219 / E 183 vs 0 in production; DAY tier completes B/C/E 0/270 windows.
+- [ ] **Rulings R-A…R-L required before any wiring** (story scope, opposite-direction policy, capital split, magic/comment identity, DAY-tier participation, book count, runtime budget, cross-book dedupe, allocation, direction-at-arm-seam, D exclusion, first demo mode).
+- [ ] **Phase 1 (research):** multi-book harness extension of `r1_pure_tag_books.py` — shared envelope contention, cross-book duplicates, per-book story counters, wall-time budget.
+- [ ] **Phase 2 (demo flag, dead by default):** `parallel_books: false` config-only wiring; no new order code; no production default change.
+- [ ] **Precondition:** F4 risk-envelope ruling + direction exported at the arm seam (R-J).

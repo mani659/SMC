@@ -1,10 +1,19 @@
 # CHANGELOG
 
 
-**Last Updated:** 2026-11-08
+**Last Updated:** 2026-11-18
 **Rules:** Every change to the project is recorded here. Format: date, session title, what was added/changed/fixed.
 
 ---
+
+### 2026-11-18 - PARALLEL DEDICATED CONFIRMATION PATHS — DESIGN (`LOGIC_CHANGED: NO` - design only)
+
+- **Goal:** define how the product becomes "full functioning as intended" — every confirmation tag has a dedicated path, books trade in parallel without cross-tag chronological kill, one-story applies inside a book only. Design doc only: `06_RESEARCH/PARALLEL_DEDICATED_PATH_DESIGN.md`.
+- **Problem restated from R0/R1/BCE:** admission gate (`_TIER_ADF` excludes B/C/E on H4/H1/M15; `MENU_TIER_EXCLUDED` 173/218 rows = 79.4%) plus a chronological one-shot race with a shared story slot; the fully-permissive DAY tier still completes B/C/E 0/270 windows, so widening the alphabet cannot fix it.
+- **Design:** book = `(symbol, tag, detection_tier_set, confirm_tf_map)` built from the shipped `MenuTier` with `trigger_types=(T,)` (the R1 injection promoted to configuration); one menu + intake queue per book; no cross-book episode arbitration; one-story recommended PER BOOK with a separate cross-book plan-identity dedupe; one shared risk envelope (circuit breaker, daily loss, max-trades, same-level/sweep guards) with per-book attribution; proposed tier sets (B/C/E MID-only, A MID, F all four incl. DAY, D excluded as zero-volume-dead).
+- **Non-goals kept:** no expectancy, no SL/TP redesign, no production default tier/menu change, no parallel live code this engagement; `locked_constants.py` diff empty; suite untouched.
+- **Open rulings:** R-A…R-L (story scope, opposite-direction conflict, capital split, magic/comment identity, DAY participation, book count, runtime budget, cross-book dedupe, allocation, direction at arm seam, D exclusion, first demo mode).
+- **Phases:** 0 design (done) → 1 research multi-book harness → 2 demo flag dead-by-default → 3 architect-ruled demo/default. NEXT = Architect accept of rulings.
 
 ### 2026-11-17 - R0 TRIGGER ADMISSION MAP + R1 PURE SINGLE-TAG BOOKS (`LOGIC_CHANGED: NO` - measurement only)
 
