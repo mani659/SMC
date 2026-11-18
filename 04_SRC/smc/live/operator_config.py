@@ -84,6 +84,7 @@ ALLOWED_KEYS = frozenset({
     "strategy_mode",             # PRODUCT_V1 (default) | ARCHIVE_TIGHT_HTF | RESEARCH_H4_ZONE_BOOK | COUPLED_MTF
     "enable_opt_b_same_bar_confirm",  # OPT-B: hybrid same-bar/as-of confirm (default OFF)
     "parallel_books",              # spike: dedicated books; [] = today's single menu
+    "allow_parallel_books_live",   # R-L: multi-book + dry_run=false is refused by default
     "detection_timeframes",        # C1: explicit detection TF list (H4+H1)
     "allow_single_tf_degraded",    # C1: test-only single-TF opt-in (default False)
     "allowed_sessions",
@@ -193,6 +194,10 @@ class OperatorConfig:
     # dedicated books; nothing here is enabled by default and the shipped
     # live_demo config never sets it.
     parallel_books: tuple = ()
+    # R-L guardrail (M-5): multi-book orders are dry-run only unless the
+    # operator explicitly accepts live multi-book placement. Default False —
+    # a config that merely lists books can never place live tickets.
+    allow_parallel_books_live: bool = False
     allowed_sessions: tuple[str, ...] | None = None   # None = no session gate
     # Heartbeat is written where the MQL5 Safety Watchdog EA can read it.
     # When ``terminal_path`` is set, the operator resolves the write path to
@@ -351,6 +356,10 @@ def load_operator_config(path: str | Path) -> OperatorConfig:
                 "config.parallel_books must be null or a list of book ids / "
                 'book objects (e.g. [] or ["F", "B"] or ["PROD"])'
             )
+    if "allow_parallel_books_live" in data:
+        kwargs["allow_parallel_books_live"] = _coerce_bool(
+            data["allow_parallel_books_live"], "allow_parallel_books_live"
+        )
     if "allow_single_tf_degraded" in data:
         kwargs["allow_single_tf_degraded"] = _coerce_bool(
             data["allow_single_tf_degraded"], "allow_single_tf_degraded"
@@ -488,5 +497,19 @@ def load_operator_config(path: str | Path) -> OperatorConfig:
         )
     if "structure_draw_path" in data:
         kwargs["structure_draw_path"] = str(data["structure_draw_path"]).strip()
+
+    # R-L (M-5): a multi-book selection is dark by default. Running it against
+    # a live account requires the explicit posture flag — never an implicit
+    # consequence of listing books.
+    if (
+        kwargs.get("parallel_books")
+        and not kwargs.get("dry_run", True)
+        and not kwargs.get("allow_parallel_books_live", False)
+    ):
+        raise ConfigError(
+            "config.parallel_books with dry_run=false is refused (R-L): "
+            "multi-book placement needs an explicit ruling — set "
+            "allow_parallel_books_live=true to accept it, or keep dry_run=true"
+        )
 
     return OperatorConfig(**kwargs)

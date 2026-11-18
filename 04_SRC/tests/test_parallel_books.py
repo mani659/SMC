@@ -26,6 +26,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
+from smc.backtest.pipeline_adapter import PipelineAdapter
 from smc.backtest.runner import CandidateEntry
 from smc.config.model_type import ModelType
 from smc.config.timeframe import Timeframe
@@ -39,6 +40,7 @@ from smc.execution.order_identity import (
     book_identity,
     book_magic,
 )
+from smc.orchestration.engine import PipelineEngine
 from smc.orchestration.parallel_books import (
     MID_TIER_NAMES,
     PROD_BOOK_ID,
@@ -433,3 +435,257 @@ def test_one_envelope_gates_both_books():
     # one is what prevents the same level being taken twice.
     fresh = RiskEngine()
     assert fresh.evaluate_entry(request()).action is RiskAction.ENTER
+
+
+# --------------------------------------------------------------------------- #
+# 7. Audit fixes (PARALLEL_BOOKS_DESIGN_IMPL_AUDIT.md)
+# --------------------------------------------------------------------------- #
+class _StubRunner:
+    """Runner seam: records submits, optional outcome reporting, live plans."""
+
+    supports_candidate_outcomes = False
+
+    def __init__(self, *, reports_outcomes: bool = False) -> None:
+        self.supports_candidate_outcomes = reports_outcomes
+        self.submitted: list = []
+        self.live: list = []
+        self.adapter = None
+
+    def set_pipeline_adapter(self, adapter) -> None:
+        self.adapter = adapter
+
+    def submit_entry(self, candidate) -> None:
+        self.submitted.append(candidate)
+
+    def story_live_plans(self) -> list:
+        return list(self.live)
+
+
+class _StubEngine:
+    state_machine = None
+
+
+def _adapter(*, reports_outcomes: bool = False, menu=None):
+    engine = _StubEngine() if menu is None else PipelineEngine()
+    runner = _StubRunner(reports_outcomes=reports_outcomes)
+    adapter = PipelineAdapter(engine, menu_confirmation=menu)
+    adapter.attach(runner)
+    return adapter, runner
+
+
+# --- M-1: R-K on EVERY config shape --------------------------------------- #
+def test_m1_dict_book_form_refuses_D_R_K():
+    for selection in (
+        [{"book_id": "D", "tag": "D", "detection_tiers": ["M15"]}],
+        {"tag": "D", "detection_tiers": ["M15"]},
+        [{"book_id": "D", "tag": "F", "detection_tiers": ["H4"]}],
+        [{"book_id": "d", "tag": "d", "detection_tiers": ["M15"]}],
+    ):
+        with pytest.raises(ValueError, match="excluded"):
+            resolve_book_selection(selection)
+    with pytest.raises(ValueError, match="excluded"):
+        resolve_book_selection(["D"])
+    # A legal dict entry still resolves (the fix is a refusal, not a ban).
+    (book,) = resolve_book_selection(
+        {"book_id": "B", "tag": "B", "detection_tiers": ["H4"]}
+    )
+    assert book.tag_letter == "B" and book.detection_tiers == ("H4",)
+
+
+# --- C-1: durable cross-book plan memory ---------------------------------- #
+def test_c1_second_book_is_blocked_after_the_first_books_window_closed():
+    menu = _menu("B", "F")
+    _set_stub(menu, "B", fire=True)
+    _set_stub(menu, "F", fire=False)
+    first = _demand_poi(Timeframe.H4, "poi-1")
+    menu.register_armed(first, Timeframe.H4)
+    menu.on_execution_bar({Timeframe.H4: [_sweep(Timeframe.H4)]},
+                          as_of=H4_CLOSE)
+    (emitted,) = menu.on_execution_bar(
+        {Timeframe.M15: [_confirm(Timeframe.M15, 300)]},
+        as_of=BASE + timedelta(hours=5, minutes=15),
+    )
+    assert emitted.trigger == "B"
+    window_end = emitted.window_end_ts
+    assert window_end is not None
+
+    # 8 days later the first book's MENU WINDOW is long closed; the second
+    # book confirms the SAME executable plan on a NEW poi (same fixed zone).
+    offset = 8 * 24 * 60
+    _set_stub(menu, "B", fire=False)
+    _set_stub(menu, "F", fire=True)
+    second = _demand_poi(Timeframe.H4, "poi-2")
+    menu.register_armed(second, Timeframe.H4)
+    menu.on_execution_bar(
+        {Timeframe.H4: [_sweep(Timeframe.H4, offset)]},
+        as_of=BASE + timedelta(minutes=offset + 240),
+    )
+    assert BASE + timedelta(minutes=offset + 240) > window_end
+    winners = menu.on_execution_bar(
+        {Timeframe.M15: [_confirm(Timeframe.M15, offset + 300)]},
+        as_of=BASE + timedelta(minutes=offset + 315),
+    )
+
+    assert winners == []                                    # one ticket only
+    counters = menu.counters()
+    assert counters["book_emitted_counts"] == {"B": 1, "F": 0}
+    assert counters["cross_book_duplicates"] >= 1            # counted skip
+    assert counters["cross_book_plans_live"] == 1            # durable memory
+    events = [e for e in menu.cross_book_events()
+              if e["event"] == "cross_book_duplicate"]
+    assert events and all(e["owner_book"] == "B" for e in events)
+    assert all(e["book_id"] == "F" for e in events)
+
+
+def test_c1_registry_remembers_across_time_until_the_plan_is_released():
+    menu = _menu("B", "F")
+    key = cross_book_plan_key(_candidate())
+    menu.cross_book_plans.remember(key, book_id="B", poi_id="poi-1",
+                                   window_end=H4_CLOSE)
+    # Long after the window: still remembered (no timer in the identity).
+    assert menu.cross_book_plans.recall(key, book_id="F") is not None
+    # The SAME book is not a cross-book duplicate of itself.
+    assert menu.cross_book_plans.recall(key, book_id="B") is None
+    # The adapter's liveness seam is the only way a plan is forgotten.
+    assert menu.release_plan("B|poi-1") == 1
+    assert menu.cross_book_plans.recall(key, book_id="F") is None
+
+
+def test_c1_registry_is_freed_when_the_placed_plan_ends():
+    menu = _menu("B", "F")
+    adapter, runner = _adapter(menu=menu)
+    first = _candidate(stamp={"book_id": "B", "book_tag": "B"})
+    menu.cross_book_plans.remember(cross_book_plan_key(first),
+                                   book_id="B", poi_id="poi-1")
+    adapter.queue_menu_candidate(first)
+    adapter.on_candidate_accepted(first)
+    runner.live = [first]
+    adapter._prune_story_claims()
+    assert len(menu.cross_book_plans) == 1        # still live → still blocked
+    runner.live = []
+    adapter._prune_story_claims()                 # the trade ended
+    assert len(menu.cross_book_plans) == 0        # a NEW plan is allowed
+
+
+def test_c1_adapter_blocks_a_cross_tag_plan_the_story_key_cannot_see():
+    adapter, runner = _adapter()
+    first = _candidate(stamp={"book_id": "B", "book_tag": "B"})
+    adapter.queue_menu_candidate(first)
+    adapter.on_candidate_accepted(first)          # a real placement seals it
+    runner.live = [first]                        # resting/open: plan is live
+
+    # Same direction/entry/SL/TP/zone, DIFFERENT tag (so ``same_story`` — which
+    # includes the trigger — can never match it) and a different POI.
+    later = _candidate(poi_id="poi-2", trigger="F", route_id="poi-2:F@99",
+                       stamp={"book_id": "F", "book_tag": "F"})
+    adapter.queue_menu_candidate(later)
+
+    assert [c.poi_id for c in runner.submitted] == ["poi-1"]
+    counters = adapter.story_counters()
+    assert counters["duplicate_story_cross_book"] == 1
+    assert counters["duplicate_story_menu"] == 1  # machine-readable reason
+    assert counters["duplicate_story_dropped"] == 1
+
+    # Liveness, not time: once the plan no longer trades, a new plan is fine.
+    runner.live = []
+    adapter.queue_menu_candidate(_candidate(
+        poi_id="poi-3", trigger="B", route_id="poi-3:B@100",
+        stamp={"book_id": "F", "book_tag": "F"},
+    ))
+    assert len(runner.submitted) == 2
+
+
+# --- M-2: route-keyed pending / claims ------------------------------------ #
+def test_m2_two_books_on_one_poi_keep_independent_pending_slots():
+    adapter, runner = _adapter(reports_outcomes=True)
+    window = (H4_CLOSE + timedelta(hours=20)).isoformat()
+    book_b = _candidate(stamp={"book_id": "B", "book_tag": "B",
+                               "window_end_ts": window})
+    book_f = _candidate(
+        trigger="F", route_id="poi-1:F@13", entry_price=2502.0,
+        sl_price=2491.0,
+        stamp={"book_id": "F", "book_tag": "F", "window_end_ts": window},
+    )
+    adapter.queue_menu_candidate(book_b)
+    adapter.queue_menu_candidate(book_f)
+
+    # DIFFERENT plans, same POI: both survive, one slot each (no collision).
+    assert set(adapter._menu_pending) == {"B|poi-1", "F|poi-1"}
+    assert adapter.story_counters()["story_claims"] == 2
+    assert adapter.menu_counters()["menu_submitted"] == 2
+
+    # One book's placement settles ONLY its own slot and claim.
+    adapter.notify_candidate_outcome(book_b, accepted=True)
+    assert set(adapter._menu_pending) == {"F|poi-1"}
+    assert adapter.menu_counters()["menu_pending"] == 1
+
+    # The surviving book still gets its own retry.
+    adapter._resubmit_menu_pending(H4_CLOSE)
+    assert [c.poi_id for c in runner.submitted] == ["poi-1"]
+    assert runner.submitted[0].trigger == "F"
+
+
+def test_m2_legacy_unstamped_keys_are_byte_identical():
+    adapter, runner = _adapter(reports_outcomes=True)
+    window = (H4_CLOSE + timedelta(hours=20)).isoformat()
+    adapter.queue_menu_candidate(_candidate(
+        stamp={"window_end_ts": window}))
+    assert set(adapter._menu_pending) == {"poi-1"}
+    adapter.on_candidate_accepted(_candidate(stamp={"window_end_ts": window}))
+    assert adapter._menu_pending == {}
+    assert len(runner.submitted) == 0   # outcome-reporting runner: pending only
+
+
+# --- M-3: no legacy seek fall-through outside the books -------------------- #
+def test_m3_mid_only_books_never_seek_a_D1_poi():
+    menu = _menu("B")                      # mid-only: carries no DAY tier
+    adapter, _runner = _adapter(menu=menu)
+    poi = _demand_poi(Timeframe.D1, "poi-d1")
+    adapter.engine.arm_at(poi, 0)
+    scanned: list = []
+    adapter.engine.scan_route = lambda *a, **k: scanned.append(1)
+
+    bar = _bar(Timeframe.M5, 5)
+    adapter.generate_candidates(bar, 0, bar.timestamp)
+
+    assert scanned == []                              # no legacy seek
+    assert adapter.active_workflows() == {}           # nothing routed
+    assert adapter.menu_counters()["poi_outside_books"] == 1
+    # Counted once, not once per bar.
+    adapter.generate_candidates(bar, 1, bar.timestamp)
+    assert adapter.menu_counters()["poi_outside_books"] == 1
+
+
+def test_m3_the_shipped_single_menu_keeps_its_seek_path():
+    adapter, _runner = _adapter(menu=ProductMenuEngine(symbol="TEST"))
+    assert adapter._outside_book_tiers(_demand_poi(Timeframe.D1)) is False
+
+
+def test_m3_a_book_covered_tier_is_not_skipped():
+    adapter, _runner = _adapter(menu=_menu("F"))     # F carries DAY
+    assert adapter._outside_book_tiers(_demand_poi(Timeframe.D1)) is False
+
+
+# --- M-5: R-L operator guardrail ------------------------------------------ #
+def test_m5_multi_book_live_needs_the_explicit_posture_flag(tmp_path):
+    from smc.live.operator_config import ConfigError, load_operator_config
+
+    path = tmp_path / "operator.json"
+    path.write_text(json.dumps({"parallel_books": ["F", "B"],
+                                "dry_run": False}), encoding="utf-8")
+    with pytest.raises(ConfigError, match="R-L"):
+        load_operator_config(path)
+
+    path.write_text(json.dumps({"parallel_books": ["F", "B"],
+                                "dry_run": False,
+                                "allow_parallel_books_live": True}),
+                    encoding="utf-8")
+    cfg = load_operator_config(path)
+    assert cfg.allow_parallel_books_live is True
+
+    # Default stays safe: multi-book without dry_run=false is still dry-run,
+    # and the shipped default (no books) never needs the flag.
+    path.write_text(json.dumps({"parallel_books": ["F", "B"]}),
+                    encoding="utf-8")
+    cfg = load_operator_config(path)
+    assert cfg.dry_run is True and cfg.allow_parallel_books_live is False

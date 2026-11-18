@@ -12,6 +12,19 @@ Scope audited: `06_RESEARCH/PARALLEL_DEDICATED_PATH_DESIGN.md` (design),
 `06_RESEARCH/PARALLEL_BOOK_SPIKE_NOTE.md`, and the artifacts under
 `06_RESEARCH/results/parallel_book_spike/`.
 
+> **FIX STATUS (2026-11-18, after this audit): C-1, M-1, M-2, M-3 and M-5 are
+> CLOSED at code level; M-4 and the eight minors REMAIN OPEN.** The findings
+> below are the audit as written and are kept verbatim. What changed:
+> durable `CrossBookPlanRegistry` (liveness-scoped, trigger-excluded) + a
+> trigger-excluded adapter backstop (`duplicate_story_cross_book`); R-K
+> refused on dict/`BookConfig` forms; adapter pending/claim state keyed by
+> `<book>|<poi>`; `refuses_uncovered_tiers` + `poi_outside_books` instead of
+> the legacy seek fall-through; `allow_parallel_books_live` (R-L) required for
+> non-dry-run multi-book. Evidence, probes and the new tests:
+> **`06_RESEARCH/PARALLEL_BOOKS_AUDIT_FIXES_NOTE.md`**. Suite 1,555 passed /
+> 7 skipped; `locked_constants` diff empty; `parallel_books` default still
+> `()`.
+
 ---
 
 ## 1. Executive verdict

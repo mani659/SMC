@@ -72,6 +72,10 @@ from smc.config.timeframe import Timeframe
 from smc.core.candle import Candle
 from smc.core.enums import POIState
 from smc.orchestration.engine import PipelineEngine, SeekPosture
+from smc.orchestration.parallel_books import (
+    cross_book_plan_key,
+    same_cross_book_plan,
+)
 from smc.risk.fill_regime_policy import market_reentered_zone
 from smc.risk.story_guard import same_story, story_key
 from smc.triggers.trigger_expiry import poi_give_up_bars, signal_expired
@@ -155,7 +159,14 @@ class PipelineAdapter:
         # populated when the runner reports per-candidate outcomes (the live
         # paper runner does; research submit-captures do not, and keep the
         # historical one-submit semantics).
+        # C-1/M-2: keyed by ROUTE identity — ``<book>|<poi>`` for a book-stamped
+        # candidate, the plain POI id otherwise. Two books winning on the SAME
+        # POI with DIFFERENT plans therefore keep two independent pendings
+        # (and two independent claims) instead of silently overwriting one.
         self._menu_pending: dict[str, dict] = {}
+        # M-3: POIs whose detection tier NO selected book carries. They must
+        # not fall through to the legacy single-menu seek path; counted once.
+        self._outside_book_pois: set[str] = set()
         # ONE STORY → ONE PLAN → ONE LIVE ORDER (locked product rule,
         # 2026-11-15; design 06_RESEARCH/ONE_STORY_ONE_TRADE_DESIGN.md).
         # ``_story_claims`` holds the plan identity of every candidate this
@@ -177,6 +188,10 @@ class PipelineAdapter:
             "duplicate_story_dropped": 0,
             "duplicate_story_seek": 0,
             "duplicate_story_menu": 0,
+            # C-1: dropped by the trigger-EXCLUDED cross-book plan identity
+            # (the ONE-STORY key includes the trigger and can never catch a
+            # second tag).
+            "duplicate_story_cross_book": 0,
         }
         self._menu_stats: dict[str, int] = {
             "menu_submitted": 0,
@@ -185,6 +200,8 @@ class PipelineAdapter:
             "menu_resubmitted": 0,
             "menu_expired_unplaced": 0,
             "menu_dropped_poi_retired": 0,
+            # M-3: POIs skipped because no book carries their tier.
+            "poi_outside_books": 0,
         }
         if menu_confirmation is not None:
             self.set_menu_confirmation(menu_confirmation)
@@ -238,12 +255,93 @@ class PipelineAdapter:
                 return True
         return False
 
+    def _outside_book_tiers(self, poi) -> bool:
+        """M-3: True when NO selected book carries this POI's tier.
+
+        Only the parallel multiplexer opts in (``refuses_uncovered_tiers``):
+        it owns the whole menu, so a POI it cannot carry must be skipped and
+        counted (``poi_outside_books``) rather than routed through the
+        archived legacy seek path — that path would place without a book
+        stamp, without the ``SMC-<TAG>-`` comment and without cross-book
+        dedupe. The shipped single menu carries every tier, so its behaviour
+        is untouched.
+        """
+        menu = self.menu_confirmation
+        if not getattr(menu, "refuses_uncovered_tiers", False):
+            return False
+        if self.menu_covers_poi(poi):
+            return False
+        zone_tf = getattr(getattr(poi, "zone", None), "timeframe", None)
+        tier_fn = getattr(menu, "tier_for", None)
+        if zone_tf is None or not callable(tier_fn):
+            return False
+        return tier_fn(zone_tf) is None
+
     # ------------------------------------------------------------------ #
     # ONE STORY → ONE PLAN → ONE LIVE ORDER (locked rule, 2026-11-15)
     # ------------------------------------------------------------------ #
     def story_counters(self) -> dict:
         """Measurement surface for the uniqueness rule (never an input)."""
         return {**self._story_stats, "story_claims": len(self._story_claims)}
+
+    @staticmethod
+    def _menu_stamp(candidate) -> dict:
+        """The candidate's ``product_menu`` stamp (``{}`` when absent)."""
+        raw = getattr(candidate, "signal_data_json", None)
+        if not raw:
+            return {}
+        try:
+            payload = json.loads(raw)
+        except (TypeError, ValueError):
+            return {}
+        if not isinstance(payload, dict):
+            return {}
+        stamp = payload.get("product_menu")
+        return stamp if isinstance(stamp, dict) else {}
+
+    def _book_id(self, candidate) -> str | None:
+        """The stamping book (``None`` for the legacy single-menu path)."""
+        book = self._menu_stamp(candidate).get("book_id")
+        return str(book) if book else None
+
+    def _route_key(self, candidate) -> str | None:
+        """Route identity: ``<book>|<poi>`` when stamped, else the POI id.
+
+        This is the ONE key for pending confirmation slots and story claims;
+        book-stamping it is what stops two books' different plans on the same
+        POI from colliding (M-2) while leaving the legacy single-menu keys
+        byte-identical.
+        """
+        poi_id = getattr(candidate, "poi_id", None)
+        if poi_id is None:
+            return None
+        book = self._book_id(candidate)
+        return f"{book}|{poi_id}" if book else str(poi_id)
+
+    def _pending_keys_for_poi(self, poi_id) -> list[str]:
+        """Every pending slot owned by ``poi_id`` (one per book)."""
+        wanted = str(poi_id)
+        return [
+            key for key, pending in self._menu_pending.items()
+            if key == wanted or pending.get("poi_id") == wanted
+        ]
+
+    def _pop_pending_for_poi(self, poi_id) -> int:
+        keys = self._pending_keys_for_poi(poi_id)
+        for key in keys:
+            self._menu_pending.pop(key, None)
+        return len(keys)
+
+    def _release_menu_plan(self, route_key) -> None:
+        """C-1 liveness seam: the plan can no longer trade — forget it.
+
+        The book layer keeps cross-book plan memory until the plan dies (not
+        until its menu window closes); this is the signal it dies.
+        """
+        menu = self.menu_confirmation
+        release = getattr(menu, "release_plan", None)
+        if callable(release):
+            release(route_key)
 
     def _live_story_keys(self) -> list:
         """Plan identity of everything that currently trades (liveness set).
@@ -281,13 +379,22 @@ class PipelineAdapter:
         if not self._story_claims:
             return
         live = self._live_story_keys()
-        kept = [
-            claim for claim in self._story_claims
-            if not claim["sealed"]
-            or any(same_story(claim["key"], other) for other in live)
-        ]
-        self._story_stats["stories_pruned"] += len(self._story_claims) - len(kept)
+        kept: list[dict] = []
+        ended: list[dict] = []
+        for claim in self._story_claims:
+            if not claim["sealed"] or any(
+                same_story(claim["key"], other) for other in live
+            ):
+                kept.append(claim)
+            else:
+                ended.append(claim)
+        self._story_stats["stories_pruned"] += len(ended)
         self._story_claims = kept
+        # C-1: a plan that stopped trading frees the book layer's durable
+        # memory too, so a LATER identical plan is a new story (over-
+        # suppression would be safe but wrong: the account holds nothing).
+        for claim in ended:
+            self._release_menu_plan(claim.get("owner"))
 
     def _claim_story(self, candidate) -> None:
         """Record the plan of a candidate accepted for entry (unsealed)."""
@@ -297,19 +404,30 @@ class PipelineAdapter:
         poi_id = getattr(candidate, "poi_id", None)
         if poi_id is None:
             return  # no episode identity → no claim (M3 test seam only)
+        owner = self._route_key(candidate) or str(poi_id)
         self._story_claims.append(
-            {"key": key, "owner": str(poi_id), "sealed": False,
-             "bar": self._story_bar}
+            {"key": key, "owner": owner, "poi": str(poi_id),
+             # C-1: the SAME order without the trigger, so a second book's
+             # confirmation of this plan is recognised even after its
+             # window would have "forgotten" it.
+             "cross": cross_book_plan_key(candidate),
+             "book_id": self._book_id(candidate),
+             "sealed": False, "bar": self._story_bar}
         )
         self._story_stats["stories_claimed"] += 1
 
     def seal_story(self, poi_id) -> None:
-        """A real placement happened: the claim now follows the book."""
+        """A real placement happened: the claim now follows the book.
+
+        ``poi_id`` is a route key (``<book>|<poi>``, precise when two books
+        own the same POI) or a plain POI id (legacy/unstamped: every claim of
+        that POI is sealed, as before).
+        """
         if poi_id is None:
             return
         wanted = str(poi_id)
         for claim in self._story_claims:
-            if claim["owner"] == wanted:
+            if claim["owner"] == wanted or claim.get("poi") == wanted:
                 claim["sealed"] = True
 
     def release_story(self, poi_id) -> None:
@@ -318,8 +436,11 @@ class PipelineAdapter:
             return
         wanted = str(poi_id)
         self._story_claims = [
-            claim for claim in self._story_claims if claim["owner"] != wanted
+            claim for claim in self._story_claims
+            if claim["owner"] != wanted and claim.get("poi") != wanted
         ]
+        # C-1: the book layer's durable plan memory follows the same clock.
+        self._release_menu_plan(wanted)
 
     def _duplicate_story(self, candidate, *, source: str) -> str | None:
         """Claiming poi id when ``candidate`` repeats a LIVE story, else None.
@@ -335,11 +456,35 @@ class PipelineAdapter:
             return None
         for claim in self._story_claims:
             if same_story(key, claim["key"]):
-                self._story_stats["duplicate_story_dropped"] += 1
-                counter = f"duplicate_story_{source}"
-                self._story_stats[counter] = self._story_stats.get(counter, 0) + 1
+                self._note_duplicate(source)
                 return claim["owner"]
+        # C-1 BACKSTOP (independent of the book layer's registry): plan
+        # identity WITHOUT the trigger. ``story_key`` includes the trigger by
+        # design, so it can never arbitrate between two tags — a B plan and an
+        # F plan of the same order are not ``same_story``. Book-stamped
+        # candidates are compared on the trigger-excluded key against every
+        # LIVE claim (resting, pending, in-flight), which is exactly the set
+        # the menu window does not see.
+        cross = cross_book_plan_key(candidate)
+        book_id = self._book_id(candidate)
+        if cross is not None and book_id is not None:
+            for claim in self._story_claims:
+                other = claim.get("cross")
+                if other is None:
+                    continue
+                if claim.get("book_id") == book_id:
+                    continue  # one book: the ONE-STORY key already covers it
+                if same_cross_book_plan(cross, other):
+                    self._story_stats["duplicate_story_cross_book"] += 1
+                    self._note_duplicate(source)
+                    return claim["owner"]
         return None
+
+    def _note_duplicate(self, source: str) -> None:
+        """Count one dropped duplicate (aggregate + per intake path)."""
+        self._story_stats["duplicate_story_dropped"] += 1
+        counter = f"duplicate_story_{source}"
+        self._story_stats[counter] = self._story_stats.get(counter, 0) + 1
 
     def _drop_duplicate_poi(self, candidate) -> None:
         """Retire the losing POI so it cannot re-propose the same plan.
@@ -355,7 +500,7 @@ class PipelineAdapter:
         self._menu_claimed_pois.add(pid)
         self._routed.add(pid)
         self._workflows.pop(pid, None)
-        self._menu_pending.pop(pid, None)
+        self._pop_pending_for_poi(pid)
         self._scan_cursor.pop(pid, None)
 
     def queue_menu_candidate(self, candidate: CandidateEntry) -> None:
@@ -388,16 +533,19 @@ class PipelineAdapter:
             if poi_id and self._runner_reports_outcomes():
                 # No window stamp → no bounded retry. Never invent a deadline.
                 deadline = self._menu_deadline(candidate)
+                route_key = self._route_key(candidate) or str(poi_id)
                 if deadline is not None:
                     # The pending entry owns the submission: this bar's
                     # ``generate_candidates`` submits it ONCE (before the
                     # runner drains its queue), and every later bar resubmits
                     # it once more. Submitting here as well would double-enter
                     # the same confirmation within one bar.
-                    self._menu_pending[str(poi_id)] = {
+                    self._menu_pending[route_key] = {
                         "candidate": candidate,
                         "deadline": deadline,
                         "attempted": False,
+                        "poi_id": str(poi_id),
+                        "book_id": self._book_id(candidate),
                     }
                     return
             self._runner.submit_entry(candidate)
@@ -427,17 +575,7 @@ class PipelineAdapter:
         that is missing the confirmation is not retried (no invented
         deadline).
         """
-        raw = getattr(candidate, "signal_data_json", None)
-        stamp: dict = {}
-        if raw:
-            try:
-                payload = json.loads(raw)
-            except (TypeError, ValueError):
-                payload = {}
-            if isinstance(payload, dict):
-                found = payload.get("product_menu")
-                if isinstance(found, dict):
-                    stamp = found
+        stamp = self._menu_stamp(candidate)
         end = stamp.get("window_end_ts")
         if end:
             try:
@@ -459,16 +597,27 @@ class PipelineAdapter:
             )
         return None
 
-    def _settle_menu_candidate(self, poi_id, accepted: bool, reason) -> None:
-        """Settle one pending menu confirmation (F7)."""
-        pending = self._menu_pending.pop(str(poi_id), None)
-        if pending is None:
-            return
+    def _settle_menu_candidate(self, route_key, accepted: bool, reason) -> None:
+        """Settle one pending menu confirmation (F7).
+
+        ``route_key`` is ``<book>|<poi>`` (or a plain POI id for the legacy
+        single-menu path). A bare POI id also settles that POI's book-stamped
+        slots, so old callers keep their meaning.
+        """
+        key = str(route_key)
+        if key not in self._menu_pending:
+            matches = [
+                k for k, pending in self._menu_pending.items()
+                if pending.get("poi_id") == key
+            ]
+            if not matches:
+                return
+            key = matches[0]
         if accepted:
+            self._menu_pending.pop(key, None)
             self._menu_stats["menu_accepted"] += 1
             return
         # Not accepted: keep it pending for the next bar's resubmission.
-        self._menu_pending[str(poi_id)] = pending
         self._menu_stats["menu_retry_blocked"] += 1
 
     def notify_candidate_outcome(self, candidate, *, accepted: bool, reason=None) -> None:
@@ -478,25 +627,29 @@ class PipelineAdapter:
         ``accepted=True`` settles it (placed, deferred to an R9 intent, or a
         dry-run placement that the runner counts as placed).
         """
-        poi_id = getattr(candidate, "poi_id", None)
-        if poi_id is None:
+        route_key = self._route_key(candidate)
+        if route_key is None:
             return
-        self._settle_menu_candidate(poi_id, accepted, reason)
+        self._settle_menu_candidate(route_key, accepted, reason)
 
     def _resubmit_menu_pending(self, now: datetime) -> None:
         """F7: one resubmission attempt per bar, bounded by the window."""
         if not self._menu_pending or self._runner is None:
             return
-        for poi_id, pending in list(self._menu_pending.items()):
+        for route_key, pending in list(self._menu_pending.items()):
             deadline = pending.get("deadline")
+            poi_id = pending.get("poi_id") or route_key
             if deadline is not None and now > deadline:
-                self._menu_pending.pop(poi_id, None)
+                self._menu_pending.pop(route_key, None)
                 self._menu_stats["menu_expired_unplaced"] += 1
-                self.release_story(poi_id)  # ONE STORY: window closed unplaced
+                # ONE STORY: window closed unplaced — frees the claim AND the
+                # book layer's durable plan memory for this route key.
+                self.release_story(route_key)
                 # Release the claim: the menu window is closed, so the normal
                 # scan may own this POI again if it is still live.
-                self._menu_claimed_pois.discard(poi_id)
-                self._routed.discard(poi_id)
+                if not self._pending_keys_for_poi(poi_id):
+                    self._menu_claimed_pois.discard(poi_id)
+                    self._routed.discard(poi_id)
                 continue
             self._runner.submit_entry(pending["candidate"])
             if pending["attempted"]:
@@ -545,10 +698,23 @@ class PipelineAdapter:
 
             # 1. Trigger scan — only while the POI may still route and
             #    only when no route was ever produced (§11 one-shot)
-            #    and NOT claimed or covered by menu confirmation.
+            #    and NOT claimed or covered by menu confirmation
+            #    and (M-3) NOT outside every selected book's tier set.
+            outside_books = self._outside_book_tiers(poi)
+            if outside_books:
+                # The multiplexer owns this POI's tiers and no book carries
+                # its detection tier: the archived single-menu seek path must
+                # NOT quietly take it back (no book stamp, no SMC-<TAG>-,
+                # no cross-book dedupe). Skip once, counted.
+                if poi.id not in self._outside_book_pois:
+                    self._outside_book_pois.add(poi.id)
+                    self._menu_stats["poi_outside_books"] += 1
+                self._routed.add(poi.id)
+                self._scan_cursor.pop(poi.id, None)
             seek_route = (
                 workflow is None
                 and poi.id not in self._routed
+                and not outside_books
                 and not self.menu_covers_poi(poi)
                 and self._may_route(
                     poi, state_machine.current(poi), bar_index, bar=bar)
@@ -664,11 +830,14 @@ class PipelineAdapter:
         """
         if candidate.poi_id is not None:
             pid = str(candidate.poi_id)
+            # C-1/M-2: settle and seal THIS route only — a second book's
+            # pending/claim on the same POI is a different order.
+            route_key = self._route_key(candidate) or pid
             self._workflows.pop(candidate.poi_id, None)
             self._menu_claimed_pois.add(pid)
             self._routed.add(pid)
-            self._settle_menu_candidate(pid, True, "placed")
-            self.seal_story(pid)
+            self._settle_menu_candidate(route_key, True, "placed")
+            self.seal_story(route_key)
 
     def active_workflows(self) -> dict:
         """Public read-only snapshot: POI id → live CandidateEntry.
@@ -797,10 +966,11 @@ class PipelineAdapter:
             retire = getattr(menu, "retire", None)
             if callable(retire):
                 retire(poi_id)
-            # F7: a dead POI's pending confirmation dies with it.
-            if self._menu_pending.pop(poi_id, None) is not None:
+            # F7: a dead POI's pending confirmations die with it (every book).
+            if self._pop_pending_for_poi(poi_id):
                 self._menu_stats["menu_dropped_poi_retired"] += 1
                 self._menu_claimed_pois.discard(poi_id)
+                self._release_menu_plan(poi_id)
         # LEG 5 (design R3.2): engine first, registry second — the ids this
         # prune just released lose their ZoneDedup keys in the SAME step,
         # then the still-tracked episodes that satisfy the R3.1 death

@@ -27,7 +27,9 @@ Rules honoured by this spike (architect rulings)
   book B can never consume book F's POI or close its window. The adapter's
   existing plan-level story guard stays AS-CODED (it keys on trigger, so it
   never arbitrates between two different tags).
-* **R-K — D excluded**: :data:`EXCLUDED_TAGS` refuses a ``D`` book loudly.
+* **R-K — D excluded**: :data:`EXCLUDED_TAGS` refuses a ``D`` book loudly,
+  for EVERY config shape (string presets AND dict ``BookConfig`` entries —
+  the tag is resolved first, then refused).
 * **Shared risk envelope**: this layer owns NO risk component. Books share one
   broker/runner/``RiskEngine`` (one breaker, one daily loss, one same-level and
   sweep memory per account) because they run through the same runner.
@@ -35,7 +37,17 @@ Rules honoured by this spike (architect rulings)
   (same direction/entry/SL/TP, overlapping zone) are deduplicated — the second
   ticket is suppressed and counted with a machine-readable reason. Trigger is
   deliberately EXCLUDED from this identity: the whole point is that a
-  different tag can reproduce the same order.
+  different tag can reproduce the same order. The memory is a DURABLE
+  session-scoped registry (:class:`CrossBookPlanRegistry`), not the menu
+  window: a plan stays remembered until the plan stops being live
+  (``release_plan`` from the adapter's liveness seam), so a second book
+  confirming the same order after the first window closed is still one plan.
+  The adapter carries an independent trigger-excluded backstop
+  (``duplicate_story_cross_book``) over its resting/pending/in-flight claims.
+* **No legacy fall-through (M-3)**: a POI whose detection tier NO book carries
+  is NOT routed through the archived single-menu seek path; it is skipped and
+  counted (``poi_outside_books``). Only the multiplexer opts in
+  (``refuses_uncovered_tiers``); the shipped single menu is unchanged.
 * **Identity**: every emitted candidate is stamped ``book_id`` / ``book_tag``
   on its ``product_menu`` stamp, which the order identity helpers turn into a
   comment prefix. A ``PROD`` book is stamped too but keeps today's comment.
@@ -74,6 +86,7 @@ __all__ = [
     "ALL_TIER_NAMES",
     "BookConfig",
     "CrossBookPlanKey",
+    "CrossBookPlanRegistry",
     "EXCLUDED_TAGS",
     "MID_TIER_NAMES",
     "PROD_BOOK_ID",
@@ -200,9 +213,22 @@ class BookConfig:
         return tuple(replace(tier, trigger_types=(self.tag,)) for tier in tiers)
 
 
+def _refuse_excluded(name) -> None:
+    """R-K: refuse an excluded tag letter / book id, loudly (every form)."""
+    key = str(name or "").strip().upper()
+    if key in EXCLUDED_TAGS:
+        raise ValueError(f"book {key} is excluded: {EXCLUDED_TAGS[key]}")
+
+
 def _coerce_book(entry) -> BookConfig:
-    """One selection entry → :class:`BookConfig` (loud on anything unknown)."""
+    """One selection entry → :class:`BookConfig` (loud on anything unknown).
+
+    R-K is enforced on the RESOLVED tag (letters and dict entries alike) and
+    on the book id, so no config shape can construct an excluded book.
+    """
     if isinstance(entry, BookConfig):
+        _refuse_excluded(entry.book_id)
+        _refuse_excluded(entry.tag_letter)
         return entry
     if isinstance(entry, dict):
         raw_tag = entry.get("tag")
@@ -211,9 +237,12 @@ def _coerce_book(entry) -> BookConfig:
             letter = str(raw_tag).strip().upper()[:1]
             if letter not in _TRIGGER_BY_LETTER:
                 raise ValueError(f"unknown book tag {raw_tag!r}")
+            _refuse_excluded(letter)
             tag = _TRIGGER_BY_LETTER[letter]
+        book_id = str(entry.get("book_id") or entry.get("id") or "")
+        _refuse_excluded(book_id)
         return BookConfig(
-            book_id=str(entry.get("book_id") or entry.get("id") or ""),
+            book_id=book_id,
             tag=tag,
             detection_tiers=tuple(entry.get("detection_tiers") or ()),
             symbol=str(entry.get("symbol") or "XAUUSD"),
@@ -223,8 +252,7 @@ def _coerce_book(entry) -> BookConfig:
         raise ValueError("empty book selection entry")
     if name == PROD_BOOK_ID:
         return BookConfig(PROD_BOOK_ID)
-    if name in EXCLUDED_TAGS:
-        raise ValueError(f"book {name} is excluded: {EXCLUDED_TAGS[name]}")
+    _refuse_excluded(name)
     if name not in TAG_BOOK_TIER_SETS:
         raise ValueError(
             f"unknown book {name!r}; expected {PROD_BOOK_ID} or one of "
@@ -323,6 +351,93 @@ def same_cross_book_plan(
     return zones_overlap(a.zone_high, a.zone_low, b.zone_high, b.zone_low)
 
 
+class CrossBookPlanRegistry:
+    """Durable, session-scoped memory of admitted cross-book plans (R-H).
+
+    Unlike the menu window (``MenuWinner.window_end_ts``), this registry is
+    NOT time scoped. An admitted plan stays remembered until the caller says
+    the plan can no longer trade (``release``), which is the same liveness
+    clock the ONE-STORY guard uses: resting order / open position / in-flight
+    candidate. A second book confirming the same executable order after the
+    first book's window closed is therefore still one plan.
+
+    Identity is :class:`CrossBookPlanKey` (direction + entry/SL/TP + zone
+    overlap, trigger EXCLUDED). Unknown geometry is never stored, so it can
+    never collapse two orders.
+
+    The registry is bookkeeping only: it owns no risk, no sizing and no
+    decision besides "has another book already admitted this exact order".
+    """
+
+    def __init__(self) -> None:
+        self._entries: list[dict] = []
+
+    def __len__(self) -> int:
+        return len(self._entries)
+
+    def entries(self) -> tuple[dict, ...]:
+        """Read-only snapshot of the remembered plans."""
+        return tuple(self._entries)
+
+    @staticmethod
+    def route_key(book_id, poi_id) -> str:
+        """Stable per-(book, POI) identity (two books never share a slot)."""
+        return f"{book_id}|{poi_id}"
+
+    def recall(
+        self, key: CrossBookPlanKey | None, *, book_id: str | None = None
+    ) -> dict | None:
+        """The OTHER book already holding this exact plan (``None`` = free)."""
+        if key is None:
+            return None
+        for entry in self._entries:
+            if book_id is not None and entry["book_id"] == book_id:
+                continue
+            if same_cross_book_plan(key, entry["key"]):
+                return entry
+        return None
+
+    def remember(
+        self,
+        key: CrossBookPlanKey | None,
+        *,
+        book_id: str,
+        poi_id,
+        window_end=None,
+    ) -> dict | None:
+        """Record one admitted plan (``None`` key → nothing to remember)."""
+        if key is None:
+            return None
+        entry = {
+            "key": key,
+            "book_id": str(book_id),
+            "poi_id": poi_id,
+            "route_key": self.route_key(book_id, poi_id),
+            # Reported for traceability only — NEVER a pruning clock.
+            "window_end": window_end,
+        }
+        self._entries.append(entry)
+        return entry
+
+    def release(self, identity) -> int:
+        """Forget the plan of ``identity`` (route key ``book|poi`` or POI id).
+
+        Called from the adapter's liveness seam: a plan that can no longer
+        trade (workflow dropped, window closed unplaced, zone violated, POI
+        retired) must not suppress a later, genuinely new plan.
+        """
+        if identity is None:
+            return 0
+        wanted = str(identity)
+        kept = [
+            entry for entry in self._entries
+            if entry["route_key"] != wanted and str(entry["poi_id"]) != wanted
+        ]
+        removed = len(self._entries) - len(kept)
+        self._entries = kept
+        return removed
+
+
 # --------------------------------------------------------------------------- #
 # Multiplexer — the drop-in menu surface
 # --------------------------------------------------------------------------- #
@@ -332,6 +447,10 @@ class ParallelBookMenu:
     Construction is explicit: nothing here is reachable unless a caller (the
     operator config or a research harness) passes a non-empty book list.
     """
+
+    #: M-3: a POI whose tier no book carries must NOT fall back to the
+    #: archived single-menu seek path. The adapter reads this flag.
+    refuses_uncovered_tiers = True
 
     def __init__(
         self,
@@ -384,8 +503,9 @@ class ParallelBookMenu:
                 for ctf in tier.confirmation_tfs
             )
         )
-        # Admitted cross-book plans, bounded by the menu window they came from.
-        self._plans: list[dict] = []
+        # Admitted cross-book plans (C-1). DURABLE: scoped by plan liveness,
+        # not by the menu window — see :class:`CrossBookPlanRegistry`.
+        self.cross_book_plans = CrossBookPlanRegistry()
         self._events: list[dict] = []
         self._stats: dict = {
             "cross_book_duplicates": 0,
@@ -459,6 +579,7 @@ class ParallelBookMenu:
         aggregate["cross_opposite_direction"] = self._stats[
             "cross_opposite_direction"
         ]
+        aggregate["cross_book_plans_live"] = len(self.cross_book_plans)
         aggregate["books"] = per_book
         aggregate["book_winner_counts"] = dict(self._stats["book_winners"])
         aggregate["book_emitted_counts"] = dict(self._stats["books_emitted"])
@@ -481,6 +602,17 @@ class ParallelBookMenu:
     def cross_book_events(self) -> tuple[dict, ...]:
         """Machine-readable cross-book decisions (dedupe + direction conflicts)."""
         return tuple(self._events)
+
+    def release_plan(self, identity) -> int:
+        """C-1 liveness seam: the plan of ``identity`` no longer trades.
+
+        ``identity`` is the adapter's route key (``<book>|<poi>``) or a plain
+        POI id. Called by :class:`~smc.backtest.pipeline_adapter.PipelineAdapter`
+        when a claim dies (workflow dropped, window closed unplaced, zone
+        violated, POI retired) — the registry is bounded by liveness, never
+        by a timer.
+        """
+        return self.cross_book_plans.release(identity)
 
     def tag_purity(self) -> dict[str, set]:
         """Trigger letters emitted per book (``{tag: 100%}`` expected)."""
@@ -545,11 +677,11 @@ class ParallelBookMenu:
         """Run every book on the same closed feed and collect admitted winners.
 
         Books run in fixed order. Each winner is stamped with its book
-        identity; an executable plan already admitted by ANOTHER book inside
-        its menu window suppresses the second ticket (counter + event), so two
-        tags confirming the same order can never double-lot.
+        identity; an executable plan already admitted by ANOTHER book — at
+        ANY earlier point of the session, not only inside its menu window —
+        suppresses the second ticket (counter + event), so two tags
+        confirming the same order can never double-lot.
         """
-        self._prune_plans(as_of)
         emitted: list[MenuWinner] = []
         for bid in self._order:
             engine = self._engines[bid]
@@ -571,13 +703,12 @@ class ParallelBookMenu:
                         "as_of": as_of.isoformat() if as_of else None,
                     })
                     continue
-                if key is not None:
-                    self._plans.append({
-                        "key": key,
-                        "book_id": bid,
-                        "poi_id": winner.poi_id,
-                        "window_end": winner.window_end_ts,
-                    })
+                self.cross_book_plans.remember(
+                    key,
+                    book_id=bid,
+                    poi_id=winner.poi_id,
+                    window_end=winner.window_end_ts,
+                )
                 self._note_direction_conflict(key, bid, winner, as_of)
                 self._stats["books_emitted"][bid] += 1
                 emitted.append(
@@ -606,33 +737,9 @@ class ParallelBookMenu:
             signal_data_json=json.dumps(payload, sort_keys=True, default=str),
         )
 
-    def _prune_plans(self, as_of) -> None:
-        """Drop admitted plans whose menu window has closed.
-
-        After the window, an identical plan is a NEW confirmation (same
-        liveness clock the F7 retry uses); the adapter's own story guard still
-        covers the resting/open order.
-        """
-        if not self._plans:
-            return
-        kept = []
-        for plan in self._plans:
-            end = plan.get("window_end")
-            if end is not None and as_of is not None and as_of > end:
-                continue
-            kept.append(plan)
-        self._plans = kept
-
     def _duplicate_owner(self, key: CrossBookPlanKey | None, book_id: str) -> dict | None:
         """The other book already holding this exact plan (``None`` = free)."""
-        if key is None:
-            return None
-        for plan in self._plans:
-            if plan["book_id"] == book_id:
-                continue
-            if same_cross_book_plan(key, plan["key"]):
-                return plan
-        return None
+        return self.cross_book_plans.recall(key, book_id=book_id)
 
     def _note_direction_conflict(self, key, book_id, winner, as_of) -> None:
         """Count opposite-direction coexistence (R-B left OPEN by design).
@@ -642,7 +749,7 @@ class ParallelBookMenu:
         """
         if key is None:
             return
-        for plan in self._plans:
+        for plan in self.cross_book_plans.entries():
             if plan["book_id"] == book_id:
                 continue
             other = plan["key"]

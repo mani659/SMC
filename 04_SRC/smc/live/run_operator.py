@@ -536,6 +536,17 @@ class OperatorSession:
                 getattr(cfg, "parallel_books", ())
             )
             if books:
+                # R-L (M-5): multi-book placement is dry-run/posture-gated.
+                # Refuse loudly instead of quietly placing N books live.
+                if not cfg.dry_run and not getattr(
+                    cfg, "allow_parallel_books_live", False
+                ):
+                    raise SystemExit(
+                        "ABORT: parallel_books with dry_run=false is refused "
+                        "(R-L). Books are shadow/dry-run until the shared "
+                        "envelope is ruled; set allow_parallel_books_live=true "
+                        "to accept live multi-book placement."
+                    )
                 menu_confirmation = ParallelBookMenu(
                     books,
                     symbol=cfg.symbol,
