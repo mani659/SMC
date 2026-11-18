@@ -6,6 +6,14 @@
 
 ---
 
+### 2026-11-18 - PARALLEL BOOKS — INTEGRATED DRY-RUN SMOKE (`LOGIC_CHANGED: NO`, `PROD_DEFAULTS_CHANGED: NO`)
+
+- **Goal:** integrated smoke of the patched books layer on a short frozen slice — no year BT, no live default flip, no threshold change, dry-run throughout.
+- **Harness:** `06_RESEARCH/scripts/parallel_books_smoke.py` (new, research-only) — reuses the spike's real menu → adapter → runner replay seam and asserts parity, per-book purity, double-lot, outside-books and the R-L guardrail; artifacts gitignored under `06_RESEARCH/results/parallel_books_smoke/`.
+- **Window:** feb25, first **5 trading days END-trimmed** (`anchor_until` 2025-02-10T03:55Z), 1,440 M5 bars, 59 armed POIs, LONG + SHORT.
+- **Results:** PROD parity **PASS** (winners 8/8 L, 8/8 S; fills 6/6 L, 6/6 S; identity sets + anchors identical). F+B dry-run **PASS** (winners B 9/F 8 L, B 13/F 8 S; fills B 5/F 5 both; CROSS_TAG_LEAK NO; 0 unattributed; 0 unwanted double-lots; `poi_outside_books` 0; envelope skips breaker 2/session 1 L, breaker 2/session 2 S). R-L guardrail **PASS** at both `load_operator_config` and `_build_stack`; dry-run multi-book needs no flag; shipped config still single-menu.
+- **Verified:** suite **1,555 passed / 7 skipped** (unchanged); `locked_constants.py` + `04_SRC/smc/config` diff empty; no shipped default enables books. **Note:** `06_RESEARCH/PARALLEL_BOOKS_SMOKE_NOTE.md` (limits: 5-day slice, dedupe had no data firing, M-4 open, no edge claim). **NEXT = Architect promote ruling → research BT `[F,B,C,E,A]`.**
+
 ### 2026-11-18 - PARALLEL BOOK SPIKE — IMPLEMENTATION (dead by default, `PROD_DEFAULTS_CHANGED: NO`)
 
 - **Goal:** wire the accepted parallel dedicated confirmation paths behind an explicit opt-in flag; production default behaviour stays single-book / as-coded. No edge claim, no stop redesign, no locked-constant edit.

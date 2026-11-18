@@ -154,11 +154,14 @@ git diff -- 00_LOCKED/locked_constants.py 04_SRC/smc/config
 (empty)
 ```
 
-**Not run:** the `['F','B']` dry-run smoke, any backtest (research or full
-year), any live/paper session, any MT5 interaction. The C-1 guard is now
-unit- and probe-proven; it still has **zero data firings** (feb25 produced no
-cross-book duplicates), so no claim is made that it changed behaviour on the
-measured month.
+**Not run here:** any backtest (research or full year), any live/paper
+session, any MT5 interaction. The C-1 guard is unit- and probe-proven; it
+still has **zero data firings** (feb25 produced no cross-book duplicates), so
+no claim is made that it changed behaviour on the measured month.
+
+The `['F','B']` dry-run smoke has since run on a 5-trading-day feb25 slice —
+see `06_RESEARCH/PARALLEL_BOOKS_SMOKE_NOTE.md` (parity, purity, double-lot,
+outside-books and R-L guardrail all PASS; still zero data firings).
 
 ## 6. Promote matrix (after fixes)
 

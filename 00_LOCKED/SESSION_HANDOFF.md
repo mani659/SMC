@@ -1,5 +1,14 @@
 # SESSION HANDOFF - SMC BOT
 
+## 2026-11-18 - PARALLEL BOOKS — INTEGRATED DRY-RUN SMOKE (`LOGIC_CHANGED: NO`, `PROD_DEFAULTS_CHANGED: NO`)
+
+- **Smoke PASS** on a **5-trading-day END-trimmed feb25 slice** (1,440 M5 bars, 59 armed POIs, both hypotheses), harness `06_RESEARCH/scripts/parallel_books_smoke.py` (research-only, reuses the spike's real menu → adapter → runner seam). Artifacts gitignored `06_RESEARCH/results/parallel_books_smoke/` (`verdict.json` etc.).
+- **PROD parity PASS:** shipped single menu vs `parallel_books=["PROD"]`, same process/bars → winners 8/8 (LONG) and 8/8 (SHORT), fills 6/6 and 6/6, identical winner/fill identity sets and identical product-fill anchors. No regression from the C-1/M-2 re-keying.
+- **F+B dry-run PASS:** `["F","B"]` with `dry_run=true` and **no** `allow_parallel_books_live` → winners B 9/F 8 (LONG), B 13/F 8 (SHORT); fills B 5/F 5 both hypotheses; **CROSS_TAG_LEAK NO**; 0 unattributed fills; both books exercised; **0 unwanted cross-book double-lots** (0 suppressed — honest zero, no identical plan arose on the slice; gate remains unit/probe-proven); **`poi_outside_books` 0** (F carries all tiers, no legacy seek fall-through); shared risk envelope no crash, skips breaker 2/session 1 (LONG), breaker 2/session 2 (SHORT); opposite-direction coexistence counted 9 / 4 (R-B open).
+- **R-L guardrail PASS:** multi-book + `dry_run=false` refused at BOTH seams — `load_operator_config` → `ConfigError`, and a code-built config → `SystemExit` in `_build_stack` (probe used a connector that fails on any call; it was never reached). Dry-run multi-book needs no flag; shipped `config/live_demo.json` has no `parallel_books` key → `()` (single menu).
+- **Verification:** suite **1,555 passed / 7 skipped** (unchanged, no test edited); `locked_constants` + `04_SRC/smc/config` diff empty. No year backtest, no live/paper/MT5 run, no default or installer change, no edge claim. Note `06_RESEARCH/PARALLEL_BOOKS_SMOKE_NOTE.md` (limits: 5 trading days, dedupe 0-firing, M-4 open).
+- **NEXT ACTION (single):** **Architect promote ruling for `['F','B']` → research BT `[F,B,C,E,A]`.**
+
 ## 2026-11-18 - PARALLEL BOOK SPIKE — IMPLEMENTATION (dead by default, `PROD_DEFAULTS_CHANGED: NO`)
 
 - **Spike PASS.** Parallel dedicated confirmation books are now wireable behind an explicit flag; the shipped single-menu path is untouched (`parallel_books` default `()`, no shipped config sets it).
