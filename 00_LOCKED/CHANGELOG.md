@@ -6,6 +6,14 @@
 
 ---
 
+### 2026-11-19 - PROJECT-WIDE IDEA→EXECUTION AUDIT (`LOGIC_CHANGED: NO`, docs only)
+
+- **Deliverable:** `06_RESEARCH/PROJECT_WIDE_AUDIT_2026-11-19.md` — independent read-only audit of every program from concept to executed measurement. Per-item PASS/FAIL with the mechanism, not prose impressions.
+- **Passed (12):** determinism + locked-constants governance; detection abundance (2,497 completions/yr, 1,093 theses/6m); funnel accounting honesty (every death in a named gate); ZoneDedup lifecycle fix (30 → 606 armed, byte-identical trades); one-story guard (27 fills → 9 plans; 580 duplicate winners dropped/yr); BCE starvation diagnosis (173/218 = 79.4% on non-D1 tiers, structurally unconfirmable); R1 pure books (B 264 / C 219 / E 183 vs zero in production, 237/239 anchor); O1–O5 falsifications; near-miss (`PLACEMENT_NOT_PRIMARY`); PFE 1→1.5→2→3 sequence; parallel-books implementation (C-1/M-1/M-2/M-3/M-5 closed); ops hardening (heartbeat path proven, attach/drill/soak not run).
+- **Failed (16):** placement-gate scarcity, reactive admission (`FAIL_TIGHT`, 3 admitted, 0 control overlap), LTF-return representation (100% `representation_coverage_failure`), boundary sweep (O1 97.1% far), sweep hard stage (O2 no separation), TF priority (O3 drops all 11 fills), 30-pip SL / 1:5 TP (O4/O5), trigger/matrix as cause of B/C/E (BCE: `MATRIX_BLOCKED=0`), Trigger D (no volume feed), coupled-MTF policy (0 confirms), DUMB-as-essence (75.2× overshoot, rubric never run), episode store as an answer (observability only), continuous year replay (2.5 bars/s collapse), Mode T ticket grading (gap-gate bias), counts-as-quality (TEXTURE_ONLY discipline), ML/gate-loosening (banned).
+- **Root causes:** AND-chain never priced; measurement harness composed the wrong half of the product (P0-1/P0-2, fixed by PFE-1.5); tier-scoped `_TIER_ADF` silently removed 3 of 6 triggers; `poi_id` identity instead of plan identity; quadratic menu bookkeeping capping study size; n treated as argument instead of constraint.
+- **Standing:** `PROD_DEFAULTS_CHANGED: NO`, `LOCKED_CONSTANTS_DIFF: empty`, suite untouched. Parallel-books year BT still **IN_FLIGHT 12/24** at audit time; M-4 remains open; entry representation is the only genuinely open strategy question.
+
 ### 2026-11-18 - PARALLEL BOOKS — FULL-YEAR RESEARCH BT **IN FLIGHT** (detached, `LOGIC_CHANGED: NO`, `PROD_DEFAULTS_CHANGED: NO`)
 
 - **Goal:** measure the Architect promote ruling (`F, B, C, E, A`; D excluded; design/spike geometry; shared envelope; cross-book dedupe; one story per book) over the full product_1y window — research measurement only, no live default, no edge claim, no stop redesign.
