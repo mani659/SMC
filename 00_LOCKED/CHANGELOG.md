@@ -6,6 +6,13 @@
 
 ---
 
+### 2026-11-19 - POST-PARALLEL-BOOKS RESEARCH & VALIDATION PLAN (`LOGIC_CHANGED: NO`, docs only)
+
+- **Deliverable:** `06_RESEARCH/POST_PARALLEL_BOOKS_RESEARCH_PLAN_2026-11-19.md` — proposed stage ladder with priority order, per-stage entry gates, verdict branches and research doctrine. Needs Architect ratification; nothing starts from it yet.
+- **Order:** S0 verdict intake → S1 attribution closeout (M-4) → S2 admission ruling (structural, never PnL) → S3 re-baseline at the new density → S4 entry representation → S5 menu performance (authorized prod change) → S6 OOS → S7 paper soak → S8 promotion. Rationale: the measured lever (admission) is decided first, n is rebuilt before any strategy question is judged, and production code is touched only after the book is ratified.
+- **Gates:** G0 verdict green · G1 per-book attribution with no decision drift · G2 dated ruling · G3 reconciled census · G4 pre-registered kill criteria · G5 byte-identical perf patch · G6 frozen holdout · G7 two-week soak · G8 signed waiver chain.
+- **Doctrine D1–D12** encodes the audit's failure modes: pre-registration, composition-parity fingerprint, dual-run determinism, asserted full detection set, no aggregate-only counters, denominators with every rate, one question per pack, declared budget, failure-is-a-result, no threshold movement for n, disposable artifacts, end-of-task governance. `PROD_DEFAULTS_CHANGED: NO`, suite untouched.
+
 ### 2026-11-19 - PROJECT-WIDE IDEA→EXECUTION AUDIT (`LOGIC_CHANGED: NO`, docs only)
 
 - **Deliverable:** `06_RESEARCH/PROJECT_WIDE_AUDIT_2026-11-19.md` — independent read-only audit of every program from concept to executed measurement. Per-item PASS/FAIL with the mechanism, not prose impressions.
