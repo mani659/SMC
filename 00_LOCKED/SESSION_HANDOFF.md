@@ -2,6 +2,7 @@
 
 ## 2026-11-18 - PARALLEL BOOKS — FULL-YEAR RESEARCH BT **IN FLIGHT** (detached, `PROD_DEFAULTS_CHANGED: NO`)
 
+- **PROGRESS 2026-11-19T07:53Z: 12/24 runs done** (nov24→apr25 complete, both hypotheses; may25 LONG in progress), PID alive, `stderr.log` empty, 0 dupes on every finished run. Pace ≈1.5 h/run over 18.4 h wall → remaining ≈18 h (honest estimate, not a promise).
 - **STATUS `IN_FLIGHT`** — the Architect promote ruling is being measured detached, NOT in this chat session: harness `06_RESEARCH/scripts/parallel_books_full_bt.py` (+ `parallel_books_full_bt_launch.ps1`), python **PID 11652**, launched 2026-11-18T13:28:47Z under WmiPrvSE (survives IDE reload / terminal close). Do **not** start a second run.
 - **Books:** `F, B, C, E, A` (D excluded, R-K); design/spike geometry — `F` = DAY+H4+H1+M15, `B/C/E/A` = mid tiers (H4/H1/M15), each `trigger_types=(T,)` only; `ParallelBookMenu` seam; shared risk envelope, cross-book dedupe ON, one story PER BOOK.
 - **Window:** exec **2024-11-01 → 2025-10-31 UTC**, load warm-up **2024-09-01** (product_1y `run1` armed universe + per-segment truth). Shape = **12 adjacent calendar-month segments** (continuous year replay documented infeasible, `PRODUCT_1Y` §1.1), 12 segments × 2 hypotheses = **24 runs**, all five books in one pass per run.
