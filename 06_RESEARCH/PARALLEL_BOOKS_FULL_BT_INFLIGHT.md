@@ -1,6 +1,9 @@
-# PARALLEL BOOKS — FULL RESEARCH BACKTEST (IN FLIGHT)
+# PARALLEL BOOKS — FULL RESEARCH BACKTEST (COMPLETE — 2026-11-20)
 
-**Status:** `IN_FLIGHT` — launched detached 2026-11-18T13:28:47Z, harness
+**Status:** `COMPLETE / FAIL` — process exited 2026-11-20T11:07:11Z with `EXIT_CODE.txt = 1`,
+`verdict.pass = false` (two structural gates failed: `no_cross_book_double_lot`,
+`no_product_fill_lost`). See `06_RESEARCH/PARALLEL_BOOKS_FULL_BT_REPORT.md`.
+**Launched:** detached 2026-11-18T13:28:47Z, harness
 `06_RESEARCH/scripts/parallel_books_full_bt.py`, python PID **11652**
 (launcher `cmd.exe` PID 17504, parented under WmiPrvSE so it survives IDE
 reloads / terminal closure).

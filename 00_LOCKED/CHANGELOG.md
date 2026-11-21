@@ -6,6 +6,16 @@
 
 ---
 
+### 2026-11-20 - PARALLEL BOOKS FULL-YEAR RESEARCH BT COMPLETE (`LOGIC_CHANGED: NO`, measurement only)
+
+- **Result:** `FAIL` on two structural gates — `EXIT_CODE.txt = 1`, `verdict.pass = false`. (1) `no_cross_book_double_lot` failed: one unwanted double-lot (E+F, long, 2025-03-06 14:05). (2) `no_product_fill_lost` failed: 60 missing product fills across the 24 runs. Passing gates: 24/24 runs, no cross-tag leak, 0 unattributed, `poi_outside_books = 0`, all five books exercised every run.
+- **Fills (exec window, union):** 988 total — F 353, B 241, C 185, E 156, A 53. Routes union 3771 (F 1132 / B 840 / C 795 / E 646 / A 358). Trigger mix 100% per book letter. Cross-book duplicate skips 0; adapter backstop drops 0; cross-opposite-direction 22,588; shared risk skips {breaker 198, session 200, far 17, same-level 15} (not attributed per book — M-4 open).
+- **Measurement trap recorded:** per-segment `run_metrics.json` `fills` sums to 1,448, not 988; the verdict union (988) is authoritative. Do not sum per-segment fills.
+- **Diagnostic PnL (residue only, never performance):** F −56.47, B −23.23, C −8.14, E −0.37, A −4.96, total −93.18.
+- **Runtime:** 164,114 s ≈ 45.6 h (≈1.9 h/run). `stderr.log` empty; exit 1 is the harness's own gate failure, not a crash.
+- **Licences:** S1 (attribution closeout) only. No admission ruling, no re-baseline, no strategy conclusion, no default flip, no threshold move. Defaults unchanged; `locked_constants` untouched; no re-run.
+- **Report:** `06_RESEARCH/PARALLEL_BOOKS_FULL_BT_REPORT.md` (RETURN BLOCK included).
+
 ### 2026-11-19 - POST-PARALLEL-BOOKS RESEARCH & VALIDATION PLAN (`LOGIC_CHANGED: NO`, docs only)
 
 - **Deliverable:** `06_RESEARCH/POST_PARALLEL_BOOKS_RESEARCH_PLAN_2026-11-19.md` — proposed stage ladder with priority order, per-stage entry gates, verdict branches and research doctrine. Needs Architect ratification; nothing starts from it yet.
