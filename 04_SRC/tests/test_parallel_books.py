@@ -689,3 +689,27 @@ def test_m5_multi_book_live_needs_the_explicit_posture_flag(tmp_path):
                     encoding="utf-8")
     cfg = load_operator_config(path)
     assert cfg.dry_run is True and cfg.allow_parallel_books_live is False
+
+
+# --------------------------------------------------------------------------- #
+# S1 closeout (2026-11-20): documented gap — double-lot root cause
+# --------------------------------------------------------------------------- #
+@pytest.mark.xfail(
+    reason=(
+        "S1 closeout: two POIs producing the same executable order "
+        "(direction/entry/SL/TP) but with non-overlapping (or unknown) zones "
+        "are NOT collapsed by same_cross_book_plan, because identity requires "
+        "zone overlap. The full-year run hit exactly this (E+F long, "
+        "2025-03-06 14:05). Fix requires an Architect ruling on whether to "
+        "drop the zone gate from executable-plan identity (risk: over-dedupe)."
+    ),
+    strict=False,
+)
+def test_s1_double_lot_zone_gap_documented():
+    b = _candidate(trigger="B")
+    # Same executable order, but a zone that does not overlap the first.
+    f = _candidate(
+        trigger="F", entry_price=2500.0, sl_price=2490.0, tp_price=2520.0,
+        zone_low=2600.0, zone_high=2610.0,
+    )
+    assert same_cross_book_plan(cross_book_plan_key(b), cross_book_plan_key(f))

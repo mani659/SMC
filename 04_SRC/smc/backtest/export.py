@@ -142,6 +142,7 @@ def to_json(report: BacktestReport, path) -> None:
         "by_post_exit_class": {key: _group_dict(g)
                                for key, g in report.by_post_exit_class.items()},
         "blocked_by_reason": dict(report.blocked_by_reason),
+        "blocked_by_book": {k: dict(v) for k, v in getattr(report, "blocked_by_book", {}).items()},
         "trades": [
             {
                 "ticket": trade.ticket,

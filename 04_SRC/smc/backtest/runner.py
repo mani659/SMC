@@ -34,6 +34,7 @@ whose SL was already moved does not re-propose (the PureRunner latch).
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -83,7 +84,7 @@ BLOCKED_BY_NEWS = BLOCK_NEWS
 BLOCKED_BY_SESSION = BLOCK_SESSION
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True)
 class CandidateEntry:
     """One externally supplied candidate entry (the M3 test seam).
 
@@ -188,6 +189,30 @@ class BlockedEntry:
     poi_id: str | None = None
     trigger: object | None = None
     route_id: str | None = None
+    # M-4: book attribution for risk blocks (None = unknown/legacy/unstamped).
+    book_id: str | None = None
+
+
+def _candidate_book_id(candidate) -> str | None:
+    """M-4: book attribution from the candidate's menu stamp (None if unknown).
+
+    Reads ``product_menu.book_id`` out of ``signal_data_json``; never reads
+    any decision field. Returns ``None`` for legacy/unstamped candidates.
+    """
+    raw = getattr(candidate, "signal_data_json", None)
+    if not raw:
+        return None
+    try:
+        payload = json.loads(raw)
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    stamp = payload.get("product_menu")
+    if not isinstance(stamp, dict):
+        return None
+    book = stamp.get("book_id")
+    return str(book) if book else None
 
 
 @dataclass(frozen=True, slots=True)
@@ -503,7 +528,8 @@ class BacktestRunner(BarHandler):
                 self.blocked_log.append(
                     BlockedEntry(bar_index=bar_index, now=now, blocked_by=decision.blocked_by or "unknown",
                                  poi_id=candidate.poi_id, trigger=candidate.trigger,
-                                 route_id=candidate.route_id)
+                                 route_id=candidate.route_id,
+                                 book_id=_candidate_book_id(candidate))
                 )
                 continue
             # R7 fill-regime place guard: a risk-accepted candidate whose

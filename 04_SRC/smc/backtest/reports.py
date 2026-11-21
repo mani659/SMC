@@ -236,6 +236,10 @@ class BacktestReport:
     by_trigger: dict[str, GroupMetrics]   # sorted keys — deterministic
     by_poi: dict[str, GroupMetrics]       # sorted keys — deterministic
     blocked_by_reason: dict[str, int]     # reason → count (sorted keys)
+    # M-4: per-book attribution of blocked entries (book_id → reason → count).
+    # None/unknown book ids fold into the "unattributed" bucket. Empty when no
+    # blocked entries carry a book stamp.
+    blocked_by_book: dict[str, dict[str, int]] = field(default_factory=dict)
     # Track-B research breakdowns (harness — always present; unannotated
     # runs fold into the "unknown" / "DATA_GAP" single buckets).
     by_timing_label: dict[str, GroupMetrics] = field(default_factory=dict)
@@ -389,12 +393,24 @@ def build_report(
         net_pnl_after_cost=sum(nets),
     )
     blocked_counts = Counter(entry.blocked_by for entry in result.blocked)
+    # M-4: per-book attribution (book_id → reason → count). Unknown/None book
+    # ids fold into the "unattributed" bucket so nothing is silently dropped.
+    blocked_by_book_counts: dict[str, Counter] = {}
+    for entry in result.blocked:
+        book = getattr(entry, "book_id", None)
+        bucket = book if book else "unattributed"
+        blocked_by_book_counts.setdefault(bucket, Counter())[entry.blocked_by] += 1
+    blocked_by_book = {
+        book: dict(sorted(counter.items()))
+        for book, counter in sorted(blocked_by_book_counts.items())
+    }
     return BacktestReport(
         trades=trades,
         metrics=metrics,
         by_trigger=_group(trades, lambda t: t.trigger or UNATTRIBUTED),
         by_poi=_group(trades, lambda t: t.poi_id or UNATTRIBUTED),
         blocked_by_reason=dict(sorted(blocked_counts.items())),
+        blocked_by_book=blocked_by_book,
         by_timing_label=_group(trades, lambda t: t.f_timing_label or "unknown"),
         by_post_exit_class=_group(
             trades, lambda t: t.post_exit_class or "DATA_GAP"),

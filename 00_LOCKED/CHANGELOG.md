@@ -6,6 +6,14 @@
 
 ---
 
+### 2026-11-20 - S1 CLOSEOUT (PARTIAL) — M-4 DONE, DOUBLE-LOT OPEN (`LOGIC_CHANGED: YES`, attribution only)
+
+- **Deliverable:** `06_RESEARCH/PARALLEL_BOOKS_S1_CLOSEOUT_NOTE.md` — double-lot root cause, 60-fill bucketing, M-4 result, governance.
+- **Double-lot (OPEN):** E+F long 2025-03-06 14:05 — two POIs (poi-004611 E, sweep 10:00; poi-004482 F, sweep 13:45) produced the identical executable order, but `same_cross_book_plan` requires zone overlap, so dedup never fired (0 cross-book skips all year). Fix options: drop the zone gate, add entry_at to identity, or align the harness to the code. Needs an Architect ruling; none applied. Pinned by an `xfail` test (`test_s1_double_lot_zone_gap_documented`).
+- **60 missing fills:** tier 0 (`poi_outside_books = 0`), cross-book dedupe 0; remainder split between one-story-guard displacement and segment tiling (unquantified; per-fill reconciliation pending).
+- **M-4 (PASS):** `runner.BlockedEntry.book_id` (stamped from the candidate's `product_menu` stamp, decision-free); `reports.BacktestReport.blocked_by_book` (book_id → reason → count, unknown → `"unattributed"`); `export` emits it. `blocked_by_reason` byte-identical. Suite 1,555 passed / 7 skipped / 1 xfailed.
+- **Invariance:** no decision logic, threshold, gate, `locked_constants` value or default changed. `parallel_books` still `()`. No re-run.
+
 ### 2026-11-20 - PARALLEL BOOKS FULL-YEAR RESEARCH BT COMPLETE (`LOGIC_CHANGED: NO`, measurement only)
 
 - **Result:** `FAIL` on two structural gates — `EXIT_CODE.txt = 1`, `verdict.pass = false`. (1) `no_cross_book_double_lot` failed: one unwanted double-lot (E+F, long, 2025-03-06 14:05). (2) `no_product_fill_lost` failed: 60 missing product fills across the 24 runs. Passing gates: 24/24 runs, no cross-tag leak, 0 unattributed, `poi_outside_books = 0`, all five books exercised every run.
