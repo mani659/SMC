@@ -305,10 +305,13 @@ def test_cross_book_identity_ignores_the_trigger_letter():
     flipped = _candidate(direction=Direction.SHORT, trigger="F")
     assert not same_cross_book_plan(
         cross_book_plan_key(b), cross_book_plan_key(flipped))
-    # Unknown geometry is never collapsed.
+    # No entry/SL → unprovable key, never collapsed.
     assert cross_book_plan_key(_candidate(sl_price=None)) is None
+    # R1: zone overlap is NOT part of cross-book identity — the same
+    # direction + entry limit is the same executable order even when one
+    # side's zone is unknown (this is the E+F 2025-03-06 14:05 double-lot).
     unknown = _candidate(zone_low=None, zone_high=None)
-    assert not same_cross_book_plan(
+    assert same_cross_book_plan(
         cross_book_plan_key(b), cross_book_plan_key(unknown))
 
 
@@ -692,24 +695,42 @@ def test_m5_multi_book_live_needs_the_explicit_posture_flag(tmp_path):
 
 
 # --------------------------------------------------------------------------- #
-# S1 closeout (2026-11-20): documented gap — double-lot root cause
+# S1b (Architect R1, 2026-11-20): cross-book identity excludes zone overlap
 # --------------------------------------------------------------------------- #
-@pytest.mark.xfail(
-    reason=(
-        "S1 closeout: two POIs producing the same executable order "
-        "(direction/entry/SL/TP) but with non-overlapping (or unknown) zones "
-        "are NOT collapsed by same_cross_book_plan, because identity requires "
-        "zone overlap. The full-year run hit exactly this (E+F long, "
-        "2025-03-06 14:05). Fix requires an Architect ruling on whether to "
-        "drop the zone gate from executable-plan identity (risk: over-dedupe)."
-    ),
-    strict=False,
-)
-def test_s1_double_lot_zone_gap_documented():
-    b = _candidate(trigger="B")
-    # Same executable order, but a zone that does not overlap the first.
-    f = _candidate(
-        trigger="F", entry_price=2500.0, sl_price=2490.0, tp_price=2520.0,
+def test_s1b_double_lot_e_plus_f_non_overlapping_zones_collapses():
+    """Regression for the E+F long 2025-03-06 14:05 double-lot.
+
+    Two POIs (E and F) place the same-direction limit at the same entry but
+    have non-overlapping zone geometry. Under R1 they are one executable
+    order, so the second book is skipped and counted.
+    """
+    way_back = _candidate(trigger="E", poi_id="poi-004611", route_id="poi-004611:E@12")
+    forward = _candidate(
+        trigger="F", poi_id="poi-004482", route_id="poi-004482:F@12",
+        entry_price=way_back.entry_price, sl_price=way_back.sl_price,
+        tp_price=way_back.tp_price, direction=way_back.direction,
         zone_low=2600.0, zone_high=2610.0,
     )
-    assert same_cross_book_plan(cross_book_plan_key(b), cross_book_plan_key(f))
+    assert same_cross_book_plan(
+        cross_book_plan_key(way_back), cross_book_plan_key(forward))
+
+
+def test_s1b_registry_suppresses_second_book_with_a_different_zone():
+    """R1 at the registry seam: zone geometry never blocks the collapse."""
+    from smc.orchestration.parallel_books import CrossBookPlanRegistry
+
+    registry = CrossBookPlanRegistry()
+    e = _candidate(trigger="E", poi_id="poi-004611")
+    f = _candidate(
+        trigger="F", poi_id="poi-004482",
+        entry_price=e.entry_price, sl_price=e.sl_price, tp_price=e.tp_price,
+        zone_low=2600.0, zone_high=2610.0,
+    )
+    registry.remember(cross_book_plan_key(e), book_id="E", poi_id="poi-004611")
+    owner = registry.recall(cross_book_plan_key(f), book_id="F")
+    assert owner is not None and owner["book_id"] == "E"
+    # ...and the owning book still sees its own plan (no self-suppression).
+    assert registry.recall(cross_book_plan_key(e), book_id="E") is None
+    # Release semantics are unchanged: forgetting the owner frees the plan.
+    assert registry.release("E|poi-004611") == 1
+    assert registry.recall(cross_book_plan_key(f), book_id="F") is None

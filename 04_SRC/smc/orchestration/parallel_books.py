@@ -330,25 +330,19 @@ def cross_book_plan_key(candidate) -> CrossBookPlanKey | None:
 def same_cross_book_plan(
     a: CrossBookPlanKey | None, b: CrossBookPlanKey | None
 ) -> bool:
-    """True when both keys are the SAME executable order (exact floats).
+    """True when both keys share cross-book executable identity (R1).
 
-    Same direction, entry, SL and TP; zones must be known and overlap under
-    the one shipped overlap rule. An unprovable key is never collapsed.
+    Architect R1 (binding): two candidates are the same executable order when
+    they share direction and entry limit price (symbol when multi-symbol).
+    Zone overlap is NOT required, and SL/TP are not part of identity — two
+    tags looking at different POIs but placing the same limit at the same
+    direction are one order. An unprovable key (no entry) is never collapsed.
     """
     if a is None or b is None:
         return False
     if a.direction != b.direction:
         return False
-    if a.entry_price != b.entry_price or a.sl != b.sl or a.tp != b.tp:
-        return False
-    if (
-        a.zone_low is None
-        or a.zone_high is None
-        or b.zone_low is None
-        or b.zone_high is None
-    ):
-        return False
-    return zones_overlap(a.zone_high, a.zone_low, b.zone_high, b.zone_low)
+    return a.entry_price == b.entry_price
 
 
 class CrossBookPlanRegistry:
@@ -361,9 +355,10 @@ class CrossBookPlanRegistry:
     candidate. A second book confirming the same executable order after the
     first book's window closed is therefore still one plan.
 
-    Identity is :class:`CrossBookPlanKey` (direction + entry/SL/TP + zone
-    overlap, trigger EXCLUDED). Unknown geometry is never stored, so it can
-    never collapse two orders.
+    Identity is :class:`CrossBookPlanKey` under Architect R1: same direction
+    and same entry limit price (trigger, zone, SL/TP and POI EXCLUDED). An
+    unprovable key (no entry/SL) is never stored, so it can never collapse
+    two orders.
 
     The registry is bookkeeping only: it owns no risk, no sizing and no
     decision besides "has another book already admitted this exact order".

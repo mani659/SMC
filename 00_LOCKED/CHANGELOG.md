@@ -6,6 +6,12 @@
 
 ---
 
+### 2026-11-20 - S1b DOUBLE-LOT FIXED PER ARCHITECT R1 (`LOGIC_CHANGED: YES`, cross-book identity only)
+
+- **R1 implemented:** `same_cross_book_plan` now collapses cross-book plans on **same direction + same entry limit price** only; zone overlap, SL/TP and trigger are excluded from identity. Applies at both seams (`ParallelBookMenu` → `CrossBookPlanRegistry.recall`, and `PipelineAdapter._duplicate_story` C-1 backstop). Release/liveness semantics unchanged; same-book one-story unchanged. An unprovable key (no entry/SL) is still never stored/collapsed.
+- **E+F regression:** unit fixture (poi-004611 E zone 2490–2500 vs poi-004482 F zone 2600–2610, same long entry) now returns `same_cross_book_plan == True`; registry recall suppresses F and `release` frees it. The former `xfail` is replaced by two passing regression tests.
+- **Evidence:** `06_RESEARCH/PARALLEL_BOOKS_S1B_DOUBLE_LOT_NOTE.md`. Suite **1,557 passed / 7 skipped / 0 xfailed**; `locked_constants` diff empty; `parallel_books` default still `()`; no S2 promotion; no full-year re-run.
+
 ### 2026-11-20 - S1 CLOSEOUT (PARTIAL) — M-4 DONE, DOUBLE-LOT OPEN (`LOGIC_CHANGED: YES`, attribution only)
 
 - **Deliverable:** `06_RESEARCH/PARALLEL_BOOKS_S1_CLOSEOUT_NOTE.md` — double-lot root cause, 60-fill bucketing, M-4 result, governance.
