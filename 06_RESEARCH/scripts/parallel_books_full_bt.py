@@ -214,6 +214,8 @@ def _run_checks(summary: dict, fills: list[dict]) -> dict:
         "poi_outside_books": menu_counters.get("poi_outside_books", 0),
         "cross_opposite_direction": cross.get("opposite_direction") or 0,
         "shared_risk_skips": summary.get("blocked_by_reason") or {},
+        # M-4: book_id → reason → count (empty on legacy/unstamped runs).
+        "shared_risk_skips_by_book": summary.get("blocked_by_book") or {},
         "anchor": summary.get("anchor") or {},
     }
 
@@ -325,9 +327,12 @@ def _aggregate(out: Path, books: list[str], segs: list[str],
         r["checks"]["adapter_duplicate_story_cross_book"] for r in runs.values())
     outside = sum(r["checks"]["poi_outside_books"] for r in runs.values())
     risk_skips: Counter = Counter()
+    risk_skips_by_book: dict = {}
     anchors_lost: list = []
     for key, run in runs.items():
         risk_skips.update(run["checks"]["shared_risk_skips"] or {})
+        for book, reasons in (run["checks"].get("shared_risk_skips_by_book") or {}).items():
+            risk_skips_by_book.setdefault(book, Counter()).update(reasons or {})
         anchor = run["checks"]["anchor"] or {}
         if anchor.get("missing_product_fills"):
             anchors_lost.append({
@@ -381,6 +386,8 @@ def _aggregate(out: Path, books: list[str], segs: list[str],
         "adapter_duplicate_story_cross_book": adapter_dupes,
         "poi_outside_books": outside,
         "shared_risk_skips": dict(risk_skips),
+        "shared_risk_skips_by_book": {
+            b: dict(c) for b, c in sorted(risk_skips_by_book.items())},
         "cross_opposite_direction": sum(
             r["checks"]["cross_opposite_direction"] for r in runs.values()),
         "cross_tag_leak": leaks or "NO",

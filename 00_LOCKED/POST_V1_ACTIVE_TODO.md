@@ -2,7 +2,8 @@
 
 ## 2026-11-09 BASELINE: `menu-spine-structural-2026-11-09`
 - **SAFE_TO_RESUME_MENU_RESEARCH: YES** (measurement only; no edge claim). Menu spine structural path proven (register→sweep→confirm→winner→queue). OPT2 deferred | OPT_B default false | W1 context_only.
-- **NEXT = S3 research re-baseline on the S2-admitted set F,B,C,E,A (research harness only), or Architect-named next.** Live default stays `parallel_books=()`; D out; no expectancy.
+- **NEXT = Architect review of S3 → entry representation / OOS / paper as ruled.** Live default stays `parallel_books=()`; D out; no expectancy.
+- **[~] S3 research re-baseline (2026-11-20, PARTIAL):** pre-R1 year verdict recorded (fills 988 by book F353/B241/C185/E156/A53; routes 3771). R1 delta scan = 4 cross-book (direction+entry) collisions, so a full re-run is required; detached post-R1 re-run launched into `results/parallel_books_s3_rerun` (resume-`.done`, same product_1y window). Product gap corrected to **53** (19/24 runs), OPEN. Harness now surfaces M-4 `shared_risk_skips_by_book`. Note `06_RESEARCH/PARALLEL_BOOKS_S3_REBASELINE_NOTE.md`.
 - **S2 ADMISSION (2026-11-20, RECORDED):** research multi-book ADMIT F, B, C, E, A; D out (R-K). Live/installer default `parallel_books=()` unchanged. S3 re-baseline authorized for the research harness only (R-L still gates non-dry-run). Residuals: product-fill gap ≈60 partial; no expectancy. Note `06_RESEARCH/PARALLEL_BOOKS_S2_ADMISSION_RULING.md`.
 - **END-OF-TASK GIT RULE (mandatory):** commit task-scoped code/docs at task end (no secrets/data dumps), push to origin (no force), commit body `TASK=<name>, LOGIC_CHANGED=YES|NO, suite counts`. If nothing to commit: `NO_COMMIT` + reason. Do not start next research step until push succeeds or `NO_COMMIT` explicit.
 

@@ -307,6 +307,8 @@ def _run(seg: str, series: dict, armed: list[dict], truth: dict,
         "detection_tf_mix": dict(Counter(r["detection_tf"] or "?" for r in rows)),
         "pnl_net_sum": round(sum(float(r["pnl_net"]) for r in rows), 6),
         "blocked_by_reason": getattr(report, "blocked_by_reason", {}) or {},
+        # M-4: per-book attribution (book_id → reason → count); {} on legacy.
+        "blocked_by_book": getattr(report, "blocked_by_book", {}) or {},
         "story_counters": adapter.story_counters(),
         "menu_counters": adapter.menu_counters(),
         "cross_book": (

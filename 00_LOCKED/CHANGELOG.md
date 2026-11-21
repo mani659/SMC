@@ -6,6 +6,13 @@
 
 ---
 
+### 2026-11-20 - S3 RESEARCH RE-BASELINE STARTED (docs + research harness only)
+
+- **Baseline note:** `06_RESEARCH/PARALLEL_BOOKS_S3_REBASELINE_NOTE.md` — pre-R1 year verdict recorded as the authoritative reference (fills by book F353/B241/C185/E156/A53, union 988; routes F1132/B840/C795/E646/A358, union 3771), with the post-R1 re-run detached.
+- **R1 delta analysis:** scanning all fills for the R1 identity (direction + exact entry) finds **4** cross-book collision groups, not 1 — so R1 changes more than the flagged double-lot and a full re-run (not arithmetic) is required for authoritative post-R1 numbers.
+- **Product-fill gap corrected:** measured **53** missing fills over 19/24 runs (the earlier “≈60” was an approximation); status OPEN/PARTIAL (tier 0, dedupe 0, remainder one-story/tiling).
+- **Harness:** `parallel_book_spike.py` + `parallel_books_full_bt.py` now surface M-4 `blocked_by_book` as `shared_risk_skips_by_book`; new detached launcher `parallel_books_s3_rerun_launch.ps1` runs the same product_1y window into a fresh `results/parallel_books_s3_rerun` with resume-`.done`. No `04_SRC` change; no default/threshold/locked edit.
+
 ### 2026-11-20 - S2 ADMISSION RULING RECORDED (docs-only, no strategy code)
 
 - **Ruling:** research multi-book **ADMIT F, B, C, E, A; D out** (R-K unchanged). Live/installer default `parallel_books = ()` **unchanged**. **S3 re-baseline authorized for the research harness only** (not live; still R-L gated for non-dry-run).
