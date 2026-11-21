@@ -6,6 +6,12 @@
 
 ---
 
+### 2026-11-20 - S2 ADMISSION RULING RECORDED (docs-only, no strategy code)
+
+- **Ruling:** research multi-book **ADMIT F, B, C, E, A; D out** (R-K unchanged). Live/installer default `parallel_books = ()` **unchanged**. **S3 re-baseline authorized for the research harness only** (not live; still R-L gated for non-dry-run).
+- **Residuals:** product-fill gap ≈60 remains partial (bucketed, not per-fill reconciled); no expectancy claims.
+- **Evidence:** `06_RESEARCH/PARALLEL_BOOKS_S2_ADMISSION_RULING.md`. No `04_SRC` edits (docs-only); suite unchanged at 1,557/7/0 xfail.
+
 ### 2026-11-20 - S1b DOUBLE-LOT FIXED PER ARCHITECT R1 (`LOGIC_CHANGED: YES`, cross-book identity only)
 
 - **R1 implemented:** `same_cross_book_plan` now collapses cross-book plans on **same direction + same entry limit price** only; zone overlap, SL/TP and trigger are excluded from identity. Applies at both seams (`ParallelBookMenu` → `CrossBookPlanRegistry.recall`, and `PipelineAdapter._duplicate_story` C-1 backstop). Release/liveness semantics unchanged; same-book one-story unchanged. An unprovable key (no entry/SL) is still never stored/collapsed.

@@ -2,7 +2,8 @@
 
 ## 2026-11-09 BASELINE: `menu-spine-structural-2026-11-09`
 - **SAFE_TO_RESUME_MENU_RESEARCH: YES** (measurement only; no edge claim). Menu spine structural path proven (register→sweep→confirm→winner→queue). OPT2 deferred | OPT_B default false | W1 context_only.
-- **NEXT = Menu-spine research restart (S2/confirm-lag on menu winners first).**
+- **NEXT = S3 research re-baseline on the S2-admitted set F,B,C,E,A (research harness only), or Architect-named next.** Live default stays `parallel_books=()`; D out; no expectancy.
+- **S2 ADMISSION (2026-11-20, RECORDED):** research multi-book ADMIT F, B, C, E, A; D out (R-K). Live/installer default `parallel_books=()` unchanged. S3 re-baseline authorized for the research harness only (R-L still gates non-dry-run). Residuals: product-fill gap ≈60 partial; no expectancy. Note `06_RESEARCH/PARALLEL_BOOKS_S2_ADMISSION_RULING.md`.
 - **END-OF-TASK GIT RULE (mandatory):** commit task-scoped code/docs at task end (no secrets/data dumps), push to origin (no force), commit body `TASK=<name>, LOGIC_CHANGED=YES|NO, suite counts`. If nothing to commit: `NO_COMMIT` + reason. Do not start next research step until push succeeds or `NO_COMMIT` explicit.
 
 - [x] **Layered Fidelity research plan LOCKED (2026-11-10; docs only, `LOGIC_CHANGED: NO`)** — Binding L1→L2→L3→L4→L5 method restart persisted at `06_RESEARCH/LAYERED_FIDELITY_PLAN.md` (Authority: Lead Architect). No phase starts before prior written PASS/FAIL + required human score gate. Stage-success (9 fills, 1m) retained as plumbing evidence, not idea proof; trade score 0/5/4 demoted from optimization target.
