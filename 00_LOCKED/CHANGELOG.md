@@ -6,6 +6,15 @@
 
 ---
 
+### 2026-11-23 - PRODUCT-FILL GAP RECONCILIATION (read-only; 56/56 explained, gate still OPEN)
+
+- **Per-fill reconciliation of the S3 product gap** (`PARALLEL_BOOKS_PRODUCT_GAP_RECONCILIATION.md`): joins each run's `fills.csv` against the product anchor `product_1y_one_story/run1/<seg>/trades.csv` on the harness' own `fill_key` `(poi_id, trigger, entry_at, entry_price@6dp, direction)` — one product definition, 0 duplicate keys, per-run counts reproduce the verdict. No replay, no re-run.
+- **Result:** 56 run-level rows (= **40 unique product fills**) all classified: **C (R1 identity collapse / re-attribution) 9**, **B (same POI traded under a different trigger) 24**, **F (route emitted, no fill of that trigger) 23**; A 0, E 0, G 0; D not per-fill assignable. Missing mix F46 / A10.
+- **Ruled out per fill:** never-admitted 0 (`poi_outside_books=0`; the single non-routed row was pre-R1 present → C), segment-boundary 0 (all entries inside their month), unjoinable 0.
+- **Co-factors (run level only):** 4,508 winners → 2,588 story drops + 429 risk blocks → 1,508 placed → 1,444 fills (64 placed-but-unfilled). Shared risk (breaker 198 / session 199 / far-from-zone 17 / same-level 15) remains a plausible co-factor inside F but has no per-entry log.
+- **`SUPERSET_FEASIBLE: NO`** — R1 arbitrates on (direction, entry limit), parallel books trade sibling stories on one POI, and the story/risk seam drops plans pre-fill; exact per-key product identity is unattainable without disabling locked behaviour → gate-definition question for the Architect. Product-superset gate remains **OPEN**.
+- Also corrected the S3 note's anchor totals (`414 → 442` product comparisons, `1,230 → 1,327` replayed); per-run rows were always correct. `PROD_DEFAULTS_CHANGED: NO`; no `locked_constants` / `04_SRC` change; diagnostic PnL NOT performance.
+
 ### 2026-11-23 - S3 POST-R1 RE-BASELINE COMPLETE (PARTIAL — isolation PASS, product-superset OPEN)
 
 - **Post-R1 authoritative verdict:** `06_RESEARCH/results/parallel_books_s3_rerun/verdict.json` (24/24 runs, 164,006.6 s, exit 1 = `no_product_fill_lost` only). Fills by book **F351 B241 C185 E156 A53 = 986**; routes **F1129 B840 C795 E646 A355 = 3765**. `CROSS_TAG_LEAK NO`; `unattributed_fills 0`; `poi_outside_books 0`; `all_books_exercised true`.

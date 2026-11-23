@@ -64,7 +64,7 @@ Pre-R1 baseline (24/24 runs, same window/set): fills `{F:353, B:241, C:185, E:15
 
 ## 4. Product-fill gap — OPEN / PARTIAL
 
-`checks.no_product_fill_lost = false`. The post-R1 verdict records **56 missing product fills** across **21 of 24 runs** (414 product fills total in anchor; 1,230 replayed fills compared). Status remains **OPEN / PARTIAL** (product-superset gate not satisfied).
+`checks.no_product_fill_lost = false`. The post-R1 verdict records **56 missing product fills** across **21 of 24 runs** (442 per-run anchor comparisons over 239 unique product fills; 1,327 replayed fills compared in those runs). Status remains **OPEN / PARTIAL** (product-superset gate not satisfied).
 
 Residual by run:
 
@@ -91,7 +91,12 @@ Residual by run:
 | sep25/SHORT | 1 | 18 | 58 |
 | oct25/LONG | 2 | 23 | 69 |
 | oct25/SHORT | 4 | 23 | 68 |
-| **Total** | **56** | **414** | **1,230** |
+| **Total** | **56** | **442** | **1,327** |
+
+> Total correction 2026-11-23: the earlier `414 / 1,230` totals were arithmetic slips; the per-run
+> rows above and in the verdict were always correct. `442` counts each segment's product fills
+> once per hypothesis run (239 unique product fills; 21 loss-runs only, so the three clean runs'
+> 117 replayed fills are outside the `1,327`).
 
 Classification (unchanged from S3 pre-rerun analysis, still not per-fill reconciled):
 
@@ -100,6 +105,13 @@ Classification (unchanged from S3 pre-rerun analysis, still not per-fill reconci
 - Remainder: split between same-book one-story-guard displacement and segment tiling; **not yet per-fill reconciled**.
 
 Closing plan (read-only, no new backtest): per-fill join of each run's `fills.csv` against the product anchor `trades.csv` on `(direction, entry_at/entry_price)`, classify each missing row as (a) same-book one-story suppression, (b) exec-window/warm-up tiling boundary, (c) cross-book R1 dedupe suppression, or (d) unexplained. This remains an artifact-analysis task.
+
+**Reconciliation performed (2026-11-23):** `PARALLEL_BOOKS_PRODUCT_GAP_RECONCILIATION.md` —
+join key `(poi_id, trigger, entry_at, entry_price@6dp, direction)`; **56/56 rows bucketed**, 0
+unexplained: **C (R1 identity / re-attribution) 9, B (same POI traded under another trigger) 24,
+F (route emitted, no fill) 23**; A/E/G 0; D not per-fill assignable (run-level co-factor only).
+Run-level 56 = 40 unique product fills. Product-superset feasibility: **NO** under the locked
+design (see that note §7). Nothing above is superseded; the gate stays OPEN.
 
 ---
 
