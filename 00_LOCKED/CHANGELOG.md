@@ -6,6 +6,15 @@
 
 ---
 
+### 2026-11-23 - ENTRY QUALITY + FLOWCHART MATCH — F AND B (read-only study, sample awaiting Architect)
+
+- **Frame:** post-R1 union of books F and B, deduped by `fill_key` — **592 fills (F 351 / B 241)** = the S3 per-book union. Read-only analysis of exported records + canonical M1 for charts; no replay.
+- **Checklist (7 checks from the exported menu stamp):** POI armed before interaction, sweep→confirm inside window, locked child confirmation TF, entry inside POI zone, entry not at the zone chase edge, fill within 0.25 ATR of the confirmation close, structural TP. `STRONG 7/7 · PARTIAL 6/7 · WEAK ≤5/7` (agent draft).
+- **Result:** structure is on-story in both books — F 100 % on confirmation/window/in-zone, B 95.4 % window and 96.7 % in-zone, both 100 % on the locked confirmation TF. Draft mix **F 164 STRONG / 113 PARTIAL / 74 WEAK**, **B 110 / 104 / 27**. Wrong structure and noise are not indicated; chase is book-specific.
+- **Top mismatches:** F ATR-fallback TP 129/351 (36.8 %); B stop scale median 2.90 ATR with 114/241 > 3 ATR; B 11 post-window confirmations (7 are 30–39 h late, F has none); B 118/241 fills >0.25 ATR beyond the confirm close (fib-band continuation entry, F at parity); B 8 entries outside the zone (4 rounding-level, 4 by 1.0–2.5); F 12 POI-armed-after-sweep (DAY/H4 stamp convention); 23 F + 16 B chase-edge entries.
+- **Review pack:** 40-fill stratified sample (**20 F + 20 B, all 12 months, both directions**, anomaly-enriched) with charts + JSON sidecars and `sample_index.csv` carrying **blank** `architect_score` / `architect_failure_mode` / `architect_note`. Harness `06_RESEARCH/scripts/entry_quality_f_b.py`; results gitignored `06_RESEARCH/results/entry_quality_f_b/`.
+- **Governance:** no threshold, no trigger, no `04_SRC` change, no default change; no expectancy/PF/edge language; pnl not used to score. Note `06_RESEARCH/ENTRY_QUALITY_F_B_NOTES.md`.
+
 ### 2026-11-23 - PRODUCT-FILL GAP RECONCILIATION (read-only; 56/56 explained, gate still OPEN)
 
 - **Per-fill reconciliation of the S3 product gap** (`PARALLEL_BOOKS_PRODUCT_GAP_RECONCILIATION.md`): joins each run's `fills.csv` against the product anchor `product_1y_one_story/run1/<seg>/trades.csv` on the harness' own `fill_key` `(poi_id, trigger, entry_at, entry_price@6dp, direction)` — one product definition, 0 duplicate keys, per-run counts reproduce the verdict. No replay, no re-run.
