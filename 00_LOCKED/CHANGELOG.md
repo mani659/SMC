@@ -1,10 +1,18 @@
 # CHANGELOG
 
 
-**Last Updated:** 2026-11-18
+**Last Updated:** 2026-11-23
 **Rules:** Every change to the project is recorded here. Format: date, session title, what was added/changed/fixed.
 
 ---
+
+### 2026-11-23 - S3 POST-R1 RE-BASELINE COMPLETE (PARTIAL — isolation PASS, product-superset OPEN)
+
+- **Post-R1 authoritative verdict:** `06_RESEARCH/results/parallel_books_s3_rerun/verdict.json` (24/24 runs, 164,006.6 s, exit 1 = `no_product_fill_lost` only). Fills by book **F351 B241 C185 E156 A53 = 986**; routes **F1129 B840 C795 E646 A355 = 3765**. `CROSS_TAG_LEAK NO`; `unattributed_fills 0`; `poi_outside_books 0`; `all_books_exercised true`.
+- **Isolation PASS:** `DOUBLE_LOT: 0` (`unwanted_double_lots={}`, `no_cross_book_double_lot=true`); `cross_book_duplicate_skips: 8` (R1 dedup firing). Pre-R1 → post-R1: 988→986 fills (-2 F, both long), 3771→3765 routes (-3 F, -3 A), consistent with R1 admission-time collapse of 4 identified direction+entry collision groups.
+- **Product gap OPEN:** `no_product_fill_lost=false`. **56 missing product fills** across 21/24 runs (414 product anchor, 1,230 replayed). Tier 0 ruled out; dedupe small/additive-only (cannot close gap); remainder one-story/tiling, not per-fill reconciled. Residual listed in `06_RESEARCH/PARALLEL_BOOKS_S3_REBASELINE_NOTE.md`.
+- **M-4 attribution surfaced:** post-R1 verdict includes `shared_risk_skips_by_book` (A/B/C/E/F + unattributed `skip_place_far_from_zone=17`); attribution diagnostic only.
+- **Governance:** `PROD_DEFAULTS_CHANGED: NO`; no installer/live multi-book default; no `locked_constants` edit; diagnostic PnL is accounting residue, NOT performance; no expectancy claim. `S3_STATUS: PARTIAL (isolation PASS, product-superset OPEN)`.
 
 ### 2026-11-20 - S3 RESEARCH RE-BASELINE STARTED (docs + research harness only)
 
