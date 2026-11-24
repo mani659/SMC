@@ -6,6 +6,13 @@
 
 ---
 
+### 2026-11-24 - P1 MEASUREMENT HYGIENE + ENTRY-QUALITY SUMMARY GAP (config + harness reporting only)
+
+- **Root pytest hygiene:** a root-level `python -m pytest -q` previously collected the deliberately corrupt recovery fragment `ARCHIVE/RECOVERY_FRAGMENTS_2026-11-08/corrupt_originals/04_SRC/tests/conftest.py` (`SyntaxError`) and could not import `smc` — 2 collection errors, 0 tests. New root `pytest.ini` sets `testpaths = 04_SRC/tests`, `pythonpath = 04_SRC` and `norecursedirs` (pytest defaults + `ARCHIVE 02_KNOWLEDGE_BASE 07_DATA dist logs`). Root run now **1,557 passed / 7 skipped, exit 0, 0 ARCHIVE paths collected**; the canonical `cd 04_SRC && PYTHONPATH=. python -m pytest -q` is unchanged and still green.
+- **Reporting gap closed:** `06_RESEARCH/scripts/entry_quality_f_b.py` now writes a `window_end_source` block into `summary.json` — **bar 570 / open 22** (F 331/20, B 239/2 of 592) — and enforces a fail-loud coverage invariant before writing: `open` ⇔ `sweep_index + MENU_EXPIRY_BARS >= len(segment series)` (the expiry bar is absent from the loaded data, so the engine window has no upper bound), `bar` ⇔ strictly inside with the end matching the shared rule. **592/592 rows checked, 0 violations**; it uses bar counts and the loaded series only, never the stamp's wall-clock `window_end_ts`.
+- **Only the summary moved:** re-export leaves `universe_features.csv` (md5 `f547f405…`) and `sample_index.csv` (md5 `eb8ce68e…`, architect columns still blank) **byte-identical**; draft mix unchanged F 164/113/74, B 115/104/22.
+- **Governance:** `REPO_HYGIENE_CANDIDATES_2026-11-16.md` committed as analysis-only backlog (no delete/archive actioned). No `04_SRC`, `locked_constants`, config, threshold or default change; no O1–O5 reopen; no expectancy. `06_RESEARCH/P1_HYGIENE_NOTE.md`.
+
 ### 2026-11-24 - ENTRY-QUALITY G2 RE-BASED ON THE ENGINE WINDOW (harness + re-export)
 
 - **Change (research harness only):** `06_RESEARCH/scripts/entry_quality_f_b.py` G2 now tests `sweep_ts < completion_ts <= window_end_bar_ts` — the close of the detection bar at `sweep_index + MENU_EXPIRY_BARS` — instead of the stamp's nominal `window_end_ts`. The rule lives once, in the new shared `06_RESEARCH/scripts/lib/menu_window.py`, also used by `menu_window_stamp_recon.py` (refactor verified byte-identical: same CSV/JSON md5 before and after).

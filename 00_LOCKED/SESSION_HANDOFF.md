@@ -1,5 +1,15 @@
 # SESSION HANDOFF - SMC BOT
 
+## 2026-11-24 - P1 MEASUREMENT HYGIENE + SUMMARY GAP (`LOGIC_CHANGED: NO`, no strategy/threshold/O-reopen)
+
+- **P0 RULED (Architect 2026-11-24): `SUPERSET_OPEN_BOOK_SCOPE_ONLY`** — the 56-row / 40-fill product gap stays an open **book-scoped** finding (book findings are never product claims; the superset stays closed as a product question).
+- **Root pytest hygiene fixed.** `python -m pytest -q` at the repo root used to die in collection: 2 errors / 0 tests (the corrupt fragment `ARCHIVE/RECOVERY_FRAGMENTS_2026-11-08/corrupt_originals/04_SRC/tests/conftest.py` = `SyntaxError`, plus `ModuleNotFoundError: No module named 'smc'`). New root `pytest.ini`: `testpaths = 04_SRC/tests`, `pythonpath = 04_SRC`, `norecursedirs` keeping pytest defaults + `ARCHIVE 02_KNOWLEDGE_BASE 07_DATA dist logs`. Now **1,557 passed / 7 skipped, exit 0**, **0 ARCHIVE paths collected**; canonical `cd 04_SRC && PYTHONPATH=. python -m pytest -q` unchanged and green.
+- **Summary reporting gap closed.** `entry_quality_f_b/summary.json` now carries `window_end_source` — **bar 570 / open 22** (F 331/20, B 239/2) — plus a **fail-loud coverage invariant** (`window_coverage()`): `open` is valid iff `sweep_index + MENU_EXPIRY_BARS >= len(segment series)`, `bar` iff strictly inside and its end equals the shared rule. **592/592 checked, 0 violations**; it never compares to the stamp's wall-clock `window_end_ts`.
+- **Re-export is byte-identical where it must be:** `universe_features.csv` md5 `f547f405…` and `sample_index.csv` md5 `eb8ce68e…` unchanged (architect columns still blank); only `summary.json` gained fields. Draft mix unchanged F 164/113/74, B 115/104/22.
+- **`REPO_HYGIENE_CANDIDATES_2026-11-16.md` committed** (previously untracked since 11-16) as analysis-only backlog; nothing from its delete/archive lists was actioned.
+- **Governance:** no `04_SRC`/`locked_constants`/config/threshold change, no `parallel_books` or live default change, no O1–O5 reopen, no stop-reference or F-filter work, no expectancy. Note `06_RESEARCH/P1_HYGIENE_NOTE.md`.
+- **NEXT ACTION (single):** **P2 O-block year re-read** (not P3, not paper).
+
 ## 2026-11-24 - ENTRY-QUALITY HARNESS: G2 ON THE ENGINE WINDOW + RE-EXPORT (`LOGIC_CHANGED: NO`)
 
 - **What changed:** `06_RESEARCH/scripts/entry_quality_f_b.py` G2 now tests `sweep_ts < completion_ts <= window_end_bar_ts` — the close of the detection bar at `sweep_index + MENU_EXPIRY_BARS` — instead of the stamp's nominal `window_end_ts` (the projection that ends early across market closures). The rule lives once in `06_RESEARCH/scripts/lib/menu_window.py` (`window_bounds` / `bar_count_window_end`) and is shared with `menu_window_stamp_recon.py`; the recon refactor was verified **byte-identical** (same CSV/JSON md5 before/after), so the two harnesses cannot drift.

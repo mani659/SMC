@@ -63,7 +63,8 @@ OUT = REPO / "06_RESEARCH" / "results" / "entry_quality_f_b"
 PARQUET = REPO / "07_DATA" / "XAUUSD_M1.parquet"
 
 sys.path.insert(0, str(REPO / "06_RESEARCH" / "scripts"))
-from lib.menu_window import bar_count_window_end  # noqa: E402
+from lib.menu_window import (  # noqa: E402
+    bar_count_window_end, expiry_bars, window_bounds)
 
 SEGMENTS = ("nov24", "dec24", "jan25", "feb25", "mar25", "apr25",
             "may25", "jun25", "jul25", "aug25", "sep25", "oct25")
@@ -241,6 +242,72 @@ def feature_row(row: dict) -> dict:
         "sweep_to_fill_h": round(latency_h, 2),
         "risk_atr": round(risk_atr, 3) if risk_atr is not None else "",
         "zone_pct_of_height": round(zone_pct, 1) if zone_pct is not None else "",
+    }
+
+
+def window_coverage(features: list[dict]) -> dict:
+    """Count ``window_end_source`` and enforce the coverage invariant.
+
+    ``open`` is legitimate ONLY when the window's last detection bar
+    (``sweep_index + MENU_EXPIRY_BARS``) lies at or past the end of the loaded
+    segment series: the bar the engine would expire on is not in the data, so
+    the engine's own ``_route_for`` has no upper bound either. A ``bar``
+    window must have that index strictly inside the series. Anything else
+    means the series was short/truncated and G2 compared against a bound the
+    engine does not share — fail loud instead of scoring it.
+
+    Never asserts against a wall-clock projection (the stamp's
+    ``window_end_ts``); only bar counts and the loaded series are used.
+    """
+    expiry = expiry_bars()
+    by_book = {book: Counter() for book in BOOKS}
+    total: Counter = Counter()
+    violations: list[dict] = []
+    for row in features:
+        stamps, index, end = window_bounds(
+            row["segment"], row["detection_tf"], _dt(row["sweep_ts"]))
+        series_bars = len(stamps)
+        expected_open = index + expiry >= series_bars
+        actual_open = row["window_end_source"] == "open"
+        by_book[row["book"]][row["window_end_source"]] += 1
+        total[row["window_end_source"]] += 1
+        if expected_open != actual_open:
+            violations.append({
+                "id": row["id"], "segment": row["segment"],
+                "detection_tf": row["detection_tf"],
+                "sweep_index": index, "series_bars": series_bars,
+                "expiry_bars": expiry,
+                "window_end_source": row["window_end_source"],
+                "reason": (
+                    "open window although the expiry bar is inside the loaded "
+                    "series" if actual_open else
+                    "bar-bounded window although the expiry bar is past the "
+                    "loaded series"),
+            })
+        elif end is not None and (row["window_end_bar_ts"] or "") != end.isoformat():
+            violations.append({
+                "id": row["id"], "segment": row["segment"],
+                "window_end_bar_ts": row["window_end_bar_ts"],
+                "expected": end.isoformat(),
+                "reason": "bar-counted end disagrees with the shared rule",
+            })
+    if violations:
+        raise SystemExit(
+            "window coverage invariant FAILED on "
+            f"{len(violations)}/{len(features)} row(s): "
+            + json.dumps(violations[:5], default=str))
+    return {
+        "rule": (
+            "bar = bounded by the close of the detection bar at "
+            "sweep_index+MENU_EXPIRY_BARS; open = that bar is at/past the end "
+            "of the loaded segment series, so the engine window has no upper "
+            "bound (never a wall-clock projection)"),
+        "by_book": {book: dict(sorted(by_book[book].items()))
+                    for book in BOOKS},
+        "total": dict(sorted(total.items())),
+        "expiry_bars": expiry,
+        "checked_rows": len(features),
+        "violations": 0,
     }
 
 
@@ -525,6 +592,7 @@ def main() -> int:
     if counts["F"] != 351 or counts["B"] != 241:
         raise SystemExit(f"F/B union mismatch: {dict(counts)}")
     features = [feature_row(r) for r in universe]
+    coverage = window_coverage(features)
 
     sample_features = select_sample(features, args.per_book)
     sample_ids = {r["id"] for r in sample_features}
@@ -610,6 +678,7 @@ def main() -> int:
         "draft_scores": dist("agent_draft_score"),
         "draft_scores_by_book": {b: dist("agent_draft_score", b)
                                  for b in BOOKS},
+        "window_end_source": coverage,
         "failure_modes": failure_modes,
         "tier_mix": dist("tier"),
         "confirm_mix": dist("confirmation_tf"),
@@ -635,6 +704,9 @@ def main() -> int:
     print(f"[f/b] universe {summary['universe']} total {summary['universe_total']}")
     print(f"[f/b] sample {summary['sample']} charts {summary.get('charts', 0)}")
     print(f"[f/b] draft {summary['draft_scores_by_book']}")
+    print(f"[f/b] window end {coverage['total']} "
+          f"coverage {coverage['checked_rows']} rows / "
+          f"{coverage['violations']} violations")
     print(f"[f/b] wrote {out}")
     return 0
 
