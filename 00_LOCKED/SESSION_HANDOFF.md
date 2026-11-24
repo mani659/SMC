@@ -1,5 +1,13 @@
 # SESSION HANDOFF - SMC BOT
 
+## 2026-11-24 - ENTRY-QUALITY HARNESS: G2 ON THE ENGINE WINDOW + RE-EXPORT (`LOGIC_CHANGED: NO`)
+
+- **What changed:** `06_RESEARCH/scripts/entry_quality_f_b.py` G2 now tests `sweep_ts < completion_ts <= window_end_bar_ts` — the close of the detection bar at `sweep_index + MENU_EXPIRY_BARS` — instead of the stamp's nominal `window_end_ts` (the projection that ends early across market closures). The rule lives once in `06_RESEARCH/scripts/lib/menu_window.py` (`window_bounds` / `bar_count_window_end`) and is shared with `menu_window_stamp_recon.py`; the recon refactor was verified **byte-identical** (same CSV/JSON md5 before/after), so the two harnesses cannot drift.
+- **Exports re-generated** (gitignored `06_RESEARCH/results/entry_quality_f_b/`): `universe_features.csv`, `sample_index.csv`, 40 charts + sidecars, `summary.json`; rerun is deterministic (md5 stable across two runs). New fields: `window_end_bar_ts`, `window_end_source` (`bar` / `open`), `confirm_after_stamp`, flag `confirm_after_stamp_window`; charts draw the stamp (dotted) and bar-count (dash-dot) window verticals and the panel prints both; sidecar `sequence` carries `window_end_bar` / `window_end_stamp` / `window_end_source`.
+- **Result:** G2 **F 351/351, B 241/241** (was B 230/241); engine-window breaches **0/592**. Exactly **11** rows scored +1 — the stamp-artefact class (all B, 6→7 ×5, 5→6 ×5, 4→5 ×1) — giving **B draft 115/104/22** (was 110/104/27) and F unchanged 164/113/74. Every other gate/descriptive column is unchanged, and the sample **set** is identical (same 40 ids) with sample draft B 5S/8P/7W.
+- **Governance:** read-only against the S3 artifacts (only `trades.csv` read); no `04_SRC`, `locked_constants`, config, threshold or default change; no expectancy. Note revised `06_RESEARCH/ENTRY_QUALITY_F_B_NOTES.md` (G2 row, §2 mix, §3 dual-window rows, §4.2 item 3, §5 coverage, return block).
+- **NEXT ACTION (single):** **Architect scores the 40-fill sample** from the re-exported `sample_index.csv` (`architect_score` / `architect_failure_mode` / `architect_note` are blank), with B's draft now 115/104/22.
+
 ## 2026-11-24 - MENU WINDOW STAMP RECONCILIATION (`LOGIC_CHANGED: NO`, read-only)
 
 - **Question:** the F/B entry-quality study flagged 11 B fills (F 0) confirming after their own `window_end_ts` — 7 by 30.5–39.4 h. Is the menu window breached, or is the stamp wrong?

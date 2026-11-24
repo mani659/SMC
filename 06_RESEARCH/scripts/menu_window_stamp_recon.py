@@ -42,7 +42,7 @@ from __future__ import annotations
 import csv
 import json
 import sys
-from bisect import bisect_left, bisect_right
+from bisect import bisect_right
 from collections import Counter
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -52,7 +52,7 @@ sys.path.insert(0, str(REPO / "04_SRC"))
 sys.path.insert(0, str(REPO / "06_RESEARCH" / "scripts"))
 
 from entry_quality_f_b import feature_row, load_universe  # noqa: E402
-import r1_pure_tag_books as r1  # noqa: E402
+from lib.menu_window import window_bounds  # noqa: E402
 from smc.orchestration.product_menu_mtf import (  # noqa: E402
     MENU_EXPIRY_BARS,
     PRODUCT_MENU_TIERS,
@@ -60,7 +60,6 @@ from smc.orchestration.product_menu_mtf import (  # noqa: E402
 
 OUT = REPO / "06_RESEARCH" / "results" / "menu_window_stamp_recon"
 MINUTES = {"H1": 60, "H4": 240, "M15": 15, "D1": 1440}
-SERIES_KEY = {"H1": "h1", "H4": "h4", "M15": "m15", "D1": "d1"}
 EXPECTED_POST_STAMP = 11
 
 
@@ -85,7 +84,6 @@ def main() -> int:
     if len(rows) != 592:
         raise SystemExit(f"FAIL LOUD: universe {len(rows)} != 592")
 
-    series_cache: dict[str, dict] = {}
     records: list[dict] = []
     wend_equals_nominal = 0
     confirm_past_bar_window = 0
@@ -99,30 +97,16 @@ def main() -> int:
         tf = row["detection_tf"]
         minutes = MINUTES[tf]
         seg = row["segment"]
-        if seg not in series_cache:
-            lo, hi = r1.SEGMENTS[seg]
-            series_cache[seg] = r1.segment_series(lo, hi)
-        bars = series_cache[seg][SERIES_KEY[tf]]
-        stamps = [bar.timestamp for bar in bars]
-
         sweep = _dt(row["sweep_ts"])
         wend = _dt(row["window_end_ts"])
         confirm = _dt(row["completion_ts"])
         fill = _dt(row["entry_at"])
 
-        index = bisect_left(stamps, sweep)
-        if index >= len(stamps) or stamps[index] != sweep:
-            raise SystemExit(
-                f"FAIL LOUD: {row['id']} sweep {sweep} not on the {tf} series"
-            )
+        # One rule, shared with the entry-quality harness (G2).
+        stamps, index, bar_end = window_bounds(seg, tf, sweep)
         nominal = sweep + timedelta(minutes=minutes * (MENU_EXPIRY_BARS + 1))
         if wend == nominal:
             wend_equals_nominal += 1
-        bar_index = index + MENU_EXPIRY_BARS
-        bar_end = (
-            stamps[bar_index] + timedelta(minutes=minutes)
-            if bar_index < len(stamps) else None
-        )
         # Fully-closed detection bars strictly after the sweep bar, by confirm.
         bars_closed = bisect_right(stamps, confirm - timedelta(minutes=minutes)) - (
             index + 1

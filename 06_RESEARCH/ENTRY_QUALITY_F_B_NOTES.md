@@ -1,6 +1,11 @@
 # ENTRY QUALITY + FLOWCHART MATCH — BOOKS F AND B (post-R1 year) — 2026-11-23
 
 **Status:** `PASS` for the study (frame, checklist, sample, charts, sidecars complete).
+**Revision 2026-11-24:** **G2 now measures the engine's bar-counted window**, not the stamp's
+`window_end_ts` (a wall-clock projection that ends early across market closures —
+`MENU_WINDOW_STAMP_RECONCILIATION.md`). The F/B draft scores, `universe_features.csv`,
+`sample_index.csv`, charts and sidecars were re-exported; 11 B rows gained the point they had
+been losing to the stamp artefact (B draft 110/104/27 → **115/104/22**; F unchanged).
 **Not claimed:** that F/B entries are *good* trades. This note answers one question —
 do these fills look like the intended SMC story (HTF POI → interaction → LTF confirmation →
 entry), or like chase / noise / wrong structure? — and hands a scored sample to the Architect.
@@ -31,12 +36,17 @@ Everything scored is taken from the fill's own exported record: the menu stamp i
 `model_tags`. **No geometry is inferred and nothing is invented**; fields absent from a book
 (F's `entry_anchor` vs B's `fib_band`/`origin_level`/`wave5_index`) are reported as absent.
 
+The window is carried twice, on purpose: `window_end_bar_ts` is the **engine** bound (close of
+the detection bar at `sweep_index + MENU_EXPIRY_BARS`, `window_end_source` = `bar`/`open`) and is
+what **G2** tests; `window_end_ts` is the stamp's nominal projection, kept for traceability and
+reported as the descriptive flag `confirm_after_stamp_window` (never scored).
+
 ### 1.1 Checklist (mechanical, no judgement)
 
 | Check | Test | Meaning |
 |---|---|---|
 | **G1** | `armed_ts <= sweep_ts` | POI existed before the interaction |
-| **G2** | `sweep_ts < completion_ts <= window_end_ts` | interaction → LTF confirmation inside the window |
+| **G2** | `sweep_ts < completion_ts <= window_end_bar_ts` (engine: close of the detection bar at `sweep_index + 20`; `open` when that bar is past the loaded segment) | interaction → LTF confirmation inside the window |
 | **G3** | confirmation TF is the locked child of the detection tier (D1→H1, H4→M5/M15, H1→M1/M5, M15→M1) | LTF confirmation is the intended one |
 | **G4** | `zone_low <= entry <= zone_high` | limit entry inside the POI zone |
 | **Q4** | zone position ≤ 92 % (long) / ≥ 8 % (short) | entry not pinned at the zone's chase edge |
@@ -55,7 +65,7 @@ ATR buffer and may legitimately sit inside the HTF zone).
 | Check | F (351) | B (241) |
 |---|---:|---:|
 | G1 POI before interaction | 339 (96.6 %) | 235 (97.5 %) |
-| G2 confirmation inside window | **351 (100 %)** | 230 (95.4 %) |
+| G2 confirmation inside window (engine) | **351 (100 %)** | **241 (100 %)** |
 | G3 confirmation TF locked | **351 (100 %)** | **241 (100 %)** |
 | G4 entry inside POI zone | **351 (100 %)** | 233 (96.7 %) |
 | Q4 not at chase edge | 328 (93.4 %) | 225 (93.4 %) |
@@ -67,12 +77,12 @@ ATR buffer and may legitimately sit inside the HTF zone).
 | Book | STRONG | PARTIAL | WEAK |
 |---|---:|---:|---:|
 | F | 164 (46.7 %) | 113 (32.2 %) | 74 (21.1 %) |
-| B | 110 (45.6 %) | 104 (43.2 %) | 27 (11.2 %) |
+| B | 115 (47.7 %) | 104 (43.2 %) | 22 (9.1 %) |
 
 Reading: the pipeline emits **on-story setups** in both books — POI → interaction → locked LTF
-confirmation → in-zone limit is satisfied for ~100 % of F and ~95 %+ of B. The spread in the
-draft score is driven by the two entry-location proxies and by target representation, not by
-missing structure.
+confirmation → in-zone limit is satisfied for 100 % of both books once the window is measured the
+way the engine measures it (bar count). The spread in the draft score is driven by the two
+entry-location proxies and by target representation, not by missing structure.
 
 ---
 
@@ -89,7 +99,8 @@ missing structure.
 | Sweep → fill > 24 h | 15 (4.3 %) | 21 (8.7 %) |
 | Entry at zone chase edge | 23 (6.6 %) | 16 (6.6 %) |
 | ATR-fallback TP | **129 (36.8 %)** | 9 (3.7 %) |
-| Confirmation after window end | **0** | **11 (4.6 %)** |
+| Confirmation after the **engine** window end | **0** | **0** |
+| Confirmation after the **stamp's nominal** window end (descriptive flag) | **0** | 11 (4.6 %) |
 | Entry outside the POI zone | **0** | **8 (3.3 %)** |
 
 Both books carry full structural context in `signal_data_json`: F always has `bos_index` +
@@ -133,8 +144,10 @@ difference, not a defect.
    is a wall-clock projection (`sweep_close + 20 × detection-bar minutes`) written when the
    engine's bar-counted window has not yet materialised; all 11 confirmations are **inside** the
    real 20-detection-bar window (0/592 past it), and the fills land on their own confirmation bar.
-   G2 as tabulated here reads the stamp and therefore under-reports compliance on windows that
-   cross a market closure. Evidence + exact rows: `06_RESEARCH/MENU_WINDOW_STAMP_RECONCILIATION.md`.
+   **G2 now measures that engine window** (`window_end_bar_ts`), so these rows pass and no longer
+   lose a point; the stamp comparison is retained only as the descriptive flag
+   `confirm_after_stamp_window`. Scores re-exported 2026-11-24 (B 110/104/27 → 115/104/22).
+   Evidence + exact rows: `06_RESEARCH/MENU_WINDOW_STAMP_RECONCILIATION.md`.
 4. **Entry outside the POI zone: 8/241 (3.3 %).** Four are ≤0.44 price units from the edge
    (re-anchored limit at the boundary, rounding-level); the other four are 1.0–2.5 units outside
    (apr25 short `poi-001770` 2.45 below the zone; jul25 longs `poi-019884` 1.03, `poi-001184`
@@ -164,14 +177,15 @@ difference, not a defect.
 1. **Month coverage first** — one row per calendar month, alternating the currently thinner
    direction (median-dated row of the eligible stratum).
 2. **Anomaly enrichment** — earliest + median row of each anomaly class: order inversion,
-   confirmation after window, entry outside zone, entry at chase edge, no pullback ≥ 0.5 ATR,
-   risk > 3 ATR.
+   confirmation after the engine window, confirmation after the stamp's nominal end, entry
+   outside zone, entry at chase edge, no pullback ≥ 0.5 ATR, risk > 3 ATR.
 3. **Round-robin** over (month, direction) strata, then even-spacing top-up, to the cap.
 
 **Coverage achieved:** **F 20** (all 12 months; 9 long / 11 short) and **B 20** (all 12 months;
 9 long / 11 short). Draft mix in the sample is **anomaly-weighted** relative to the universe —
-F 5 STRONG / 6 PARTIAL / 9 WEAK, B 4 STRONG / 8 PARTIAL / 8 WEAK — by design, so the review sees
-the mismatch classes as well as typical rows.
+F 5 STRONG / 6 PARTIAL / 9 WEAK, B 5 STRONG / 8 PARTIAL / 7 WEAK — by design, so the review sees
+the mismatch classes as well as typical rows. The sample **set** is unchanged by the 2026-11-24
+revision (same 40 ids); only B's draft scores moved.
 
 | Artifact | Path |
 |---|---|
@@ -215,17 +229,19 @@ DRAFT LABELS: agent-draft checklist output for Architect override, not a verdict
 
 ```text
 ENTRY_FB_STATUS: PASS (study complete; sample awaiting Architect scores)
-SAMPLE_N: {F:20, B:20} — all 12 months each; F 9L/11S, B 9L/11S (draft 5S/6P/9W and 4S/8P/8W in sample)
-UNIVERSE_N: {F:351, B:241} = 592 (S3 union); draft STRONG/PARTIAL/WEAK F 164/113/74, B 110/104/27
+G2_BASIS: engine bar-counted window (window_end_bar_ts) — NOT the stamp's nominal window_end_ts
+SAMPLE_N: {F:20, B:20} — all 12 months each; F 9L/11S, B 9L/11S (draft 5S/6P/9W and 5S/8P/7W in sample)
+UNIVERSE_N: {F:351, B:241} = 592 (S3 union); draft STRONG/PARTIAL/WEAK F 164/113/74, B 115/104/22
 CHECK_MIX (pass share): F G1 96.6 / G2 100 / G3 100 / G4 100 / Q4 93.4 / Q5 67.2 / G5 63.2 ;
-                        B G1 97.5 / G2 95.4 / G3 100 / G4 96.7 / Q4 93.4 / Q5 51.0 / G5 96.3
+                        B G1 97.5 / G2 100 / G3 100 / G4 96.7 / Q4 93.4 / Q5 51.0 / G5 96.3
 TOP_MISMATCHES: 1) F ATR-fallback TP 129/351 (36.8%) 2) B stop scale 2.90 ATR median, 114/241 >3 ATR
-  3) B 11 post-window confirmations (7 >30h late; F has 0) 4) B 49% fills >0.25 ATR beyond confirm close
-  (fib-band continuation entry; F at parity) 5) B 8 entries outside zone (4 rounding-level, 4 by 1.0-2.5)
-  6) F 12 POI-armed-after-sweep (DAY/H4 convention) + 23 chase-edge entries per book
+  3) B 11 confirmations after the stamp's NOMINAL window only (0 after the engine window; 7 >30h; F 0)
+  4) B 49% fills >0.25 ATR beyond confirm close (fib-band continuation entry; F at parity)
+  5) B 8 entries outside zone (4 rounding-level, 4 by 1.0-2.5)
+  6) F 12 POI-armed-after-sweep (DAY/H4 convention) + 23 F / 16 B chase-edge entries
 VERDICT_SHAPE: structure on-story in both books (wrong structure / noise not indicated); chase is
   book-specific and material only for B (geometry, not bad rows); real gaps are target representation (F)
-  and stop scale + post-window timing (B)
+  and stop scale + stamp-window timing (B)
 NOTE_PATH: 06_RESEARCH/ENTRY_QUALITY_F_B_NOTES.md
 HANDOFF_UPDATED: YES
 NEXT_READY: Architect review of F/B entry quality (score sample_index.csv / charts)

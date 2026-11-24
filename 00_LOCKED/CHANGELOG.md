@@ -6,6 +6,13 @@
 
 ---
 
+### 2026-11-24 - ENTRY-QUALITY G2 RE-BASED ON THE ENGINE WINDOW (harness + re-export)
+
+- **Change (research harness only):** `06_RESEARCH/scripts/entry_quality_f_b.py` G2 now tests `sweep_ts < completion_ts <= window_end_bar_ts` — the close of the detection bar at `sweep_index + MENU_EXPIRY_BARS` — instead of the stamp's nominal `window_end_ts`. The rule lives once, in the new shared `06_RESEARCH/scripts/lib/menu_window.py`, also used by `menu_window_stamp_recon.py` (refactor verified byte-identical: same CSV/JSON md5 before and after).
+- **New columns:** `window_end_bar_ts`, `window_end_source` (`bar`/`open` = window's 21st detection bar past the loaded segment, engine has no upper bound), `confirm_after_stamp`; flag `confirm_after_stamp_window`. The stamp comparison is descriptive only and costs no point. Charts draw both verticals (stamp dotted, bar-count dash-dot) and the panel prints both; sidecars carry `window_end_bar` / `window_end_stamp` / `window_end_source`.
+- **Re-export (592 fills):** G2 **F 351/351, B 241/241** (was B 230/241), engine-window breaches **0/592**. Exactly **11** rows scored +1 (the stamp-artefact class, all B); **B draft 110/104/27 → 115/104/22**, F unchanged 164/113/74. All other gates and descriptive columns bit-identical; sample set unchanged (same 40 ids), sample draft B 4S/8P/8W → 5S/8P/7W.
+- **Governance:** no `04_SRC`, `locked_constants`, config, threshold or S3 artifact change; the S3 union is read exactly as before. Note `06_RESEARCH/ENTRY_QUALITY_F_B_NOTES.md` revised (G2 row, §2 mix, §3 dual window rows, §4.2, §5, return block); mechanism `06_RESEARCH/MENU_WINDOW_STAMP_RECONCILIATION.md`.
+
 ### 2026-11-24 - MENU WINDOW STAMP RECONCILIATION (read-only; 11 B "post-window" fills are stamp artefacts)
 
 - **Question:** the entry-quality study flagged 11 B fills (F 0) confirming after their own `window_end_ts` (7 by 30.5–39.4 h). Mechanism hunt in the menu stamp, the F7 resubmission clock and the R8 resting/expiry path.

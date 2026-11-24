@@ -19,7 +19,10 @@ Scoring is a mechanical CHECKLIST over facts the export already carries
 agent-draft labels for the Architect, not conclusions:
 
     G1 POI existed before interaction       armed_ts <= sweep_ts
-    G2 interaction -> confirmation in window sweep_ts < completion_ts <= window_end_ts
+    G2 interaction -> confirmation in window sweep_ts < completion_ts <= ENGINE window end
+       (bar-counted: close of the detection bar at sweep_index + MENU_EXPIRY_BARS;
+        NOT the stamp's `window_end_ts`, which is a wall-clock projection that
+        ends early across market closures — see MENU_WINDOW_STAMP_RECONCILIATION.md)
     G3 LTF confirmation is the locked child  detect D1->H1 / H4->M5,M15 / H1->M1,M5 / M15->M1
     G4 entry limit inside the POI zone       zone_low <= entry <= zone_high
     Q4 entry not at the zone's chase edge    zone position <=92% (long) / >=8% (short)
@@ -30,6 +33,12 @@ agent-draft labels for the Architect, not conclusions:
 
 Q4/Q5 are agent-draft entry-location proxies, NOT locked rules and not a
 performance statement; the Architect may score any row differently.
+
+The two window columns are kept apart on purpose:
+    `window_end_bar_ts`  engine bound used by G2 (`window_end_source` = bar|open)
+    `window_end_ts`      the stamp's nominal projection (audit/traceability only)
+    `confirm_after_stamp` descriptive flag for a confirmation past the stamp;
+                        it is NOT a gate and costs no point.
 
 Descriptive only (never scored, because the locked stop is an ATR buffer
 that may legitimately sit inside the HTF zone): stop beyond the zone's far
@@ -42,6 +51,7 @@ import argparse
 import csv
 import json
 import random
+import sys
 from bisect import bisect_left
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta
@@ -51,6 +61,9 @@ REPO = Path(__file__).resolve().parents[2]
 S3 = REPO / "06_RESEARCH" / "results" / "parallel_books_s3_rerun"
 OUT = REPO / "06_RESEARCH" / "results" / "entry_quality_f_b"
 PARQUET = REPO / "07_DATA" / "XAUUSD_M1.parquet"
+
+sys.path.insert(0, str(REPO / "06_RESEARCH" / "scripts"))
+from lib.menu_window import bar_count_window_end  # noqa: E402
 
 SEGMENTS = ("nov24", "dec24", "jan25", "feb25", "mar25", "apr25",
             "may25", "jun25", "jul25", "aug25", "sep25", "oct25")
@@ -113,8 +126,17 @@ def feature_row(row: dict) -> dict:
     confirm, wend = _dt(pm["completion_ts"]), _dt(pm["window_end_ts"])
     fill = _dt(row["entry_at"])
 
+    # G2 uses the ENGINE's window: close of the detection bar at
+    # sweep_index + MENU_EXPIRY_BARS (None = that bar is beyond the loaded
+    # segment, so the engine's own window has no upper bound — treated as open).
+    # The stamp's ``window_end_ts`` is a wall-clock projection and is NOT used
+    # for the gate (MENU_WINDOW_STAMP_RECONCILIATION.md).
+    window_end_bar = bar_count_window_end(row["segment"], pm["detection_tf"], sweep)
+    window_end_source = "bar" if window_end_bar is not None else "open"
+
     g1 = armed <= sweep
-    g2 = sweep < confirm <= wend
+    g2 = (sweep < confirm <= window_end_bar if window_end_bar is not None
+          else sweep < confirm)
     g3 = pm["confirmation_tf"] in CONFIRM_OK.get(pm["detection_tf"], set())
     g4 = lo <= entry <= hi
     g5 = row["tp_source"] == "structural_swing"
@@ -125,7 +147,11 @@ def feature_row(row: dict) -> dict:
     if retrace is not None and not long:
         retrace = -retrace
     no_pullback = retrace is not None and retrace <= -0.5
-    confirm_after_window = confirm > wend
+    # Bar-counted breach (a real one) vs the stamp's nominal projection (the
+    # artefact class). Only the former is a gate failure.
+    confirm_after_window = (window_end_bar is not None
+                            and confirm > window_end_bar)
+    confirm_after_stamp = confirm > wend
     latency_h = (fill - sweep).total_seconds() / 3600.0
     risk = abs(entry - sl)
     risk_atr = (risk / atr) if atr else None
@@ -147,6 +173,8 @@ def feature_row(row: dict) -> dict:
         flags.append("order_inversion_armed_after_sweep")
     if not g2:
         flags.append("confirm_outside_window")
+    if confirm_after_stamp:
+        flags.append("confirm_after_stamp_window")
     if not g3:
         flags.append("confirm_tf_off_locked_map")
     if not g4:
@@ -189,6 +217,9 @@ def feature_row(row: dict) -> dict:
         "sweep_ts": pm["sweep_ts"],
         "completion_ts": pm["completion_ts"],
         "window_end_ts": pm["window_end_ts"],
+        "window_end_bar_ts": (window_end_bar.isoformat()
+                              if window_end_bar is not None else ""),
+        "window_end_source": window_end_source,
         "tp_source": row["tp_source"],
         "entry_anchor": row.get("entry_anchor") or "",
         "model_tags": row.get("model_tags") or "",
@@ -203,6 +234,7 @@ def feature_row(row: dict) -> dict:
         "agent_draft_score": draft,
         "flags": ";".join(flags),
         "confirm_after_window": confirm_after_window,
+        "confirm_after_stamp": confirm_after_stamp,
         "retrace_at_confirm_atr": (round(retrace, 3)
                                    if retrace is not None else ""),
         "no_pullback_0p5atr": no_pullback,
@@ -259,6 +291,7 @@ def select_sample(rows: list[dict], per_book: int = SAMPLE_PER_BOOK,
         anomaly_classes = [
             ("order_inversion", lambda r: not r["g1_poi_before_sweep"]),
             ("confirm_after_window", lambda r: r["confirm_after_window"]),
+            ("confirm_after_stamp", lambda r: r["confirm_after_stamp"]),
             ("entry_outside_zone", lambda r: not r["g4_entry_in_zone"]),
             ("entry_at_chase_edge",
              lambda r: not r["q4_entry_not_at_chase_edge"]),
@@ -375,7 +408,11 @@ def render(row: dict, m1, out_dir: Path, *, pad_hours: int = 12) -> dict:
     ax.axvline(x_of(confirm), color="teal", linestyle="--", linewidth=1.1,
                label="LTF confirm")
     ax.axvline(x_of(_dt(pm["window_end_ts"])), color="black",
-               linestyle=":", linewidth=0.9, label="window end")
+               linestyle=":", linewidth=0.9, label="window end (stamp)")
+    if row.get("window_end_bar_ts"):
+        ax.axvline(x_of(_dt(row["window_end_bar_ts"])), color="black",
+                   linestyle="-.", linewidth=0.9,
+                   label="window end (bar count)")
     ax.plot(x_of(fill), float(row["entry_price"]), marker="^", markersize=11,
             color="blue", label="fill")
     ax.plot(x_of(exit_at), float(row["exit_price"]), marker="x", markersize=10,
@@ -409,7 +446,8 @@ def render(row: dict, m1, out_dir: Path, *, pad_hours: int = 12) -> dict:
         f"tier {pm['tier']} det {pm['detection_tf']} "
         f"confirm {pm['confirmation_tf']}  label {pm['label_at_confirm']}",
         f"armed {pm['armed_ts']}  sweep {pm['sweep_ts']}",
-        f"confirm {pm['completion_ts']}  window end {pm['window_end_ts']}",
+        f"confirm {pm['completion_ts']}  window end stamp {pm['window_end_ts']} "
+        f"({row['window_end_source']}: {row['window_end_bar_ts'] or 'open'})",
         f"fill {row['entry_at']}  exit {row['exit_at']}  "
         f"({row['close_kind']})  hold {row['bars_held']} bars",
         f"entry {row['entry_price']}  zone [{zone_lo}, {zone_hi}]  "
@@ -447,7 +485,9 @@ def render(row: dict, m1, out_dir: Path, *, pad_hours: int = 12) -> dict:
         "label_at_confirm": pm["label_at_confirm"],
         "sequence": {"armed": pm["armed_ts"], "sweep": pm["sweep_ts"],
                      "confirm": pm["completion_ts"],
-                     "window_end": pm["window_end_ts"]},
+                     "window_end_bar": row["window_end_bar_ts"],
+                     "window_end_stamp": pm["window_end_ts"],
+                     "window_end_source": row["window_end_source"]},
         "checks": {label: bool(row[key]) for key, label in gate_keys},
         "checks_passed": row["checks_passed"],
         "agent_draft_score": row["agent_draft_score"],
@@ -520,6 +560,8 @@ def main() -> int:
             "n": len(rows),
             "order_inversion": sum(1 for r in rows if not r["g1_poi_before_sweep"]),
             "confirm_after_window": sum(1 for r in rows if r["confirm_after_window"]),
+            "confirm_after_stamp_window": sum(
+                1 for r in rows if r["confirm_after_stamp"]),
             "entry_outside_zone": sum(1 for r in rows if not r["g4_entry_in_zone"]),
             "atr_fallback_tp": sum(1 for r in rows if not r["g5_structural_tp"]),
             "stop_inside_zone": sum(1 for r in rows if not r["sl_beyond_zone"]),
@@ -546,13 +588,16 @@ def main() -> int:
                    for b in BOOKS},
         "selection_rule": (
             "per book: earliest+median row of each anomaly class (order "
-            "inversion, confirm after window, entry outside zone, no pullback "
+            "inversion, confirm after window, confirm after the stamp's "
+            "nominal projection, entry outside zone, no pullback "
             ">=0.5 ATR), then round-robin over (month, direction) strata in "
             "month order picking the median-dated untouched row, then even "
             "spacing top-up; deterministic (seed 20261123)"),
         "checks": {
             "G1": "POI armed before interaction (armed_ts<=sweep_ts)",
-            "G2": "sweep<confirm<=window_end",
+            "G2": ("sweep<confirm<=engine window end (close of the detection "
+                   "bar at sweep_index+MENU_EXPIRY_BARS; the stamp's "
+                   "window_end_ts is a nominal projection and is not gated)"),
             "G3": "confirmation TF is the locked child tier",
             "G4": "entry limit inside POI zone",
             "Q4": "entry not pinned at the zone's chase edge (last 8%)",
