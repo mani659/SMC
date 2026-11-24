@@ -6,6 +6,17 @@
 
 ---
 
+### 2026-11-24 - P2 O-BLOCK YEAR RE-READ (read-only; 2 INPUTS_CHANGED, 3 UNDERDETERMINED)
+
+- **What:** each of O1–O5 was re-read at year scale using **its own original pre-registered definition**, on the post-R1 S3 census (**986 fills / 3,765 routes**, 12 adjacent month segments) with the product_1y census (**239 fills**) as a labelled secondary. Pre-registration (definitions, artifact columns, materiality rule) was written into the note before any table was computed.
+- **O1 `UNDERDETERMINED`:** no year-scale per-reject ledger (zone bounds + completion close + ATR). S3 exports fills and route *counts*; the 2,779 route-minus-fill identities also contain risk/story/quality drops, so subtraction would invent the denominator. No proxy distance computed.
+- **O2 `UNDERDETERMINED`:** the year armed ledger (3,731 rows / 12 segments, not summable) has zone bounds, `detection_tf`, `routed`, `entry` — but no direction and no arm timestamp, the two keys J1 is defined by.
+- **O3 `UNDERDETERMINED`:** same ledger, no direction; the ruled overlap relation (opposite-direction intersect OR same-direction ≥50 % overlap) branches on it, so applying it would substitute a different rule.
+- **O4 `INPUTS_CHANGED`:** median SL **71.4 → 21.5 pips (all books) / 20.4 (product path) / 19.6 (F)**; SL ≤ 30 pips **0/11 → 63.2 % / 66.5 % / 68.9 %**; MAE ≤ 30 pips **9.1 % → 54–63 %**. Median MAE ÷ SL **1.13 / 1.25 / 1.30 vs ruled 1.18**, and 566/644 (87.9 %) of stop-outs exit at the placement stop ⇒ the ATR-buffer geometry is preserved; the absolute-pip statistic is what moved (price levels ~2,600–4,000 across the year vs ~4,000 in October).
+- **O5 `INPUTS_CHANGED`:** fallback share **27.3 % → 36.8 % (F 129/351)**, **35.1 % (product 84/239)**, above the pre-registered ≥25 % relative materiality bar; per-book spread F 36.8 / E 30.1 / A 62.3 / B 3.7 / C 2.2 %. The ruled shape reproduces: structural TP ÷ R 0.85 vs 0.91, hit 38.7 % vs 37.5 %; fallback 3.16 R / 3.9 % hit vs 3.52 / 0 %.
+- **Measurement correction (before publication):** trade stamps are M5 bucket opens, so an intrabar exit must include the whole exit bar `[exit_at, +5 min)`; the uncorrected pass showed MAE below the stop on 87.9 % of clean stop-outs. Fixed and validated (0/566 below stop; F ATR multiple 1.16 matches the audit).
+- **Governance:** book-scoped (P0); product-superset still OPEN; no O1–O5 reopen, no label re-ruled, no design proposed, no threshold added, no `04_SRC`/`locked_constants`/config/default change; no expectancy. Note `06_RESEARCH/O_BLOCK_YEAR_READ.md`; script `06_RESEARCH/scripts/o_block_year_read.py`; results gitignored.
+
 ### 2026-11-24 - P1 MEASUREMENT HYGIENE + ENTRY-QUALITY SUMMARY GAP (config + harness reporting only)
 
 - **Root pytest hygiene:** a root-level `python -m pytest -q` previously collected the deliberately corrupt recovery fragment `ARCHIVE/RECOVERY_FRAGMENTS_2026-11-08/corrupt_originals/04_SRC/tests/conftest.py` (`SyntaxError`) and could not import `smc` — 2 collection errors, 0 tests. New root `pytest.ini` sets `testpaths = 04_SRC/tests`, `pythonpath = 04_SRC` and `norecursedirs` (pytest defaults + `ARCHIVE 02_KNOWLEDGE_BASE 07_DATA dist logs`). Root run now **1,557 passed / 7 skipped, exit 0, 0 ARCHIVE paths collected**; the canonical `cd 04_SRC && PYTHONPATH=. python -m pytest -q` is unchanged and still green.
