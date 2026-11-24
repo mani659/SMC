@@ -6,6 +6,16 @@
 
 ---
 
+### 2026-11-24 - P3A STOP-REFERENCE DEFINITION (draft; awaiting Architect; no measurement)
+
+- **What:** `00_LOCKED/STOP_REFERENCE_DESIGN.md` — the P3 definition document only. Phase order is binding, so **no counterfactual was run**.
+- **Code-cited current behaviour:** classic F stop = origin **OB distal edge**; a detached OB re-anchors the entry and the stop moves to the **routed zone distal edge**; `0.3 × ATR` (`FR2_SL_BUFFER_ATR`, interim, not a locked constant) is applied once in `structural_sl` and never re-applied downstream; `original_sl` = the buffered placement stop.
+- **What the locked text actually says:** `SL (product) = the existing ATR-buffer path (structural extreme ± buffer)`, with 30-pip and 2–5-pip stops as **benchmarks only**. **No zone-clearance ("never inside POI") clause exists**; the closest item is an open question in `ENTRY_REPRESENTATION_DESIGN.md:293-295`. The draft states this explicitly rather than presenting a new rule as already-locked.
+- **Why inside is normal:** the OB distal edge is a sub-zone edge; routed zones are p50 **12.2 ATR** tall vs F risk p50 **1.16 ATR**. On disk: F **246/351 (70.1 %)** inside, all `ob_proximal`; re-anchored **0/19** inside; depth p50 1.44 ATR. B 137/241, observer only.
+- **Options enumerated, none chosen:** A KEEP · B REPLACE (zone far edge ± buffer, may tighten) · C FLOOR (more adverse of current and far edge; widen-only; 283 rows, risk 1.16 → ≈2.7 ATR by geometry) · D DEFER.
+- **Pre-registered:** population F 351 (B 241 observer, never pooled), per-option rule, path convention (M5 exit bar inclusive, P2 parity), metrics (moved_n, stop-out rate, risk ATR, inside share, TP÷R; fill rate invariant by construction), kill criterion (`moved_n < 30` OR moved median risk > 2.0 ATR OR > 60 % of fills), `DIAGNOSTIC_PNL: NOT PERFORMANCE`.
+- **Governance:** no `04_SRC` change, no `locked_constants` change, no threshold, no B primary, no promotion. Book-scoped under P0.
+
 ### 2026-11-24 - P2 O-BLOCK YEAR RE-READ (read-only; 2 INPUTS_CHANGED, 3 UNDERDETERMINED)
 
 - **What:** each of O1–O5 was re-read at year scale using **its own original pre-registered definition**, on the post-R1 S3 census (**986 fills / 3,765 routes**, 12 adjacent month segments) with the product_1y census (**239 fills**) as a labelled secondary. Pre-registration (definitions, artifact columns, materiality rule) was written into the note before any table was computed.

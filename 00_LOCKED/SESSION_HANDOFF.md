@@ -1,5 +1,16 @@
 # SESSION HANDOFF - SMC BOT
 
+## 2026-11-24 - P3A STOP-REFERENCE DEFINITION DRAFTED (AWAITING ARCHITECT; `LOGIC_CHANGED: NO`)
+
+- **Delivered:** `00_LOCKED/STOP_REFERENCE_DESIGN.md` — definition-only draft. Code facts, vocabulary, four options, non-goals and a pre-registered measurement contract. **No counterfactual was run**, by phase order (definition → Architect ACCEPT + option letter → measure).
+- **Code facts:** classic F sets `stop_reference` = **origin OB distal edge** (`trigger_f_bos_ob.py:93/97`); a detached OB re-anchors the entry to the zone's proximal edge and moves the stop to the **routed zone distal edge**. The buffer is `FR2_SL_BUFFER_ATR = 0.3` × ATR applied once in `structural_sl` (`base_trigger.py:44,96-110`) and passed through unbuffered downstream (`pipeline_bridge.py:272,290`; `engine.py:121-124`). `original_sl` is the buffered placement stop by construction.
+- **Locked text quoted:** `EXPERT_MASTER_CARD.md:96` (`SL (product) | existing ATR-buffer path`) and `:140` (`SL_PRODUCT: atr_buffer`); `LOCKED_DECISIONS.md:604-606` (§21b: *structural extreme ± buffer*; 30-pip and 2–5 pip are benchmarks only). **No "outside POI" / zone-clearance clause exists anywhere** — the nearest text is an *open question* (`ENTRY_REPRESENTATION_DESIGN.md:293-295`, OB distal vs zone distal). So "never inside POI" is a **proposed rule**, not a restatement of the card.
+- **Definition question made explicit:** the OB distal edge is a **sub-zone** edge inside the routed HTF zone, and the zone is p50 **12.2 ATR** tall vs F risk p50 **1.16 ATR** — which is why the stop sits inside it.
+- **Current facts (disk, re-read):** F **246/351 (70.1 %)** stops inside the routed zone, **all `ob_proximal`**; the 19 re-anchored rows are **0/19** inside (code already moves them to the zone distal edge). Depth inside p50 **1.44 ATR** (p25 0.61 / p75 2.73). B 137/241 (56.8 %) — observer only, different reference (Wave-1 origin).
+- **Options (none picked):** A KEEP (today) · B REPLACE with zone far edge ± buffer (can tighten) · C FLOOR = more adverse of {current, far edge ± buffer} (widen-only; 283 F rows would move; risk p50 1.16 → ≈2.7 ATR by geometry) · D DEFER (no fourth rule in locked text).
+- **Pre-registered kill criterion:** reject for now if `moved_n < 30`, or median risk of moved rows > **2.0 ATR**, or the option moves > **60 %** of F fills — measurement gates, not product thresholds.
+- **NEXT ACTION (single):** **Architect writes `ACCEPT` + option letter** (A/B/C/D) in the §6 template; only then P3B measure (`06_RESEARCH/STOP_REFERENCE_MEASURE.md`). No `04_SRC`/locked-constant change.
+
 ## 2026-11-24 - P2 O-BLOCK YEAR RE-READ (`LOGIC_CHANGED: NO`, measurement only)
 
 - **Question:** do the 2026-11-14 O1–O5 rulings still hold when each decision's **own original rule** is re-applied to the year census instead of the n=11 October window? Labels only: `STANDS` / `INPUTS_CHANGED` / `UNDERDETERMINED`.
