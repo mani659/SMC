@@ -1,5 +1,15 @@
 # SESSION HANDOFF - SMC BOT
 
+## 2026-11-24 - MENU WINDOW STAMP RECONCILIATION (`LOGIC_CHANGED: NO`, read-only)
+
+- **Question:** the F/B entry-quality study flagged 11 B fills (F 0) confirming after their own `window_end_ts` — 7 by 30.5–39.4 h. Is the menu window breached, or is the stamp wrong?
+- **Answer `WINDOW_BREACH: NO` — stamp artefact.** `window_end_ts` is written by `_win` (`04_SRC/smc/orchestration/product_menu_mtf.py:895-903`) as the **nominal projection** `sweep_close + MENU_EXPIRY_BARS(20) × detection-minutes` whenever `_window_end_ts` (`:788-802`) is `None`, i.e. the 21st detection bar has not closed. Actual eligibility is **bar-counted**: `_expire` (`:635`), `_route_for`'s `upper` bound (`:840-841`, absent while `end_ts is None`), window-open guard (`:685`). Because the M1 feed has no Saturday bars, 20 H1 bars span 3 calendar days, so the projection lands inside a closure and reads early.
+- **Measured (592 F/B fills, post-R1 S3 artifacts + segment-exact detection series):** `592/592` stamps equal the nominal projection; `11/11` late confirmations inside the bar-counted window; `0/592` past it; `0` fills after the stamp with an in-window confirmation. Gap-spanning windows `183` (F 106 / B 77; H1 49 h ×22, H4 44 h ×38, 1 h holes ×113). Latency by tier: H1 7, H4 2, M15 2. Max fill lag vs confirmation 4 min.
+- **Why B not F:** confirmation depth in the 20-bar window — F p50 0 / p90 4 / max 18 vs B p50 5 / p90 15 / max 20 (leading diagonal completes late). Same stamp code on both books.
+- **Other clocks audited (both non-causal here):** F7 `_menu_deadline` (`pipeline_adapter.py:569-600`) reads the same nominal stamp, so on a gap window resubmission stops up to 49 h (H1) / 44 h (H4) before the menu's window closes — latent, 0 of the 11 (all accepted on their confirmation bar). R8 life is `bars_open` from placement (`fill_regime_policy.py:152-180` → H1 36 / H4 48 M5 bars; `orders.py:181-231`) and is never compared to `window_end_ts`; it extended **0** fills. 22 fills (F 20 / B 2) have windows truncated at the month-tiled segment end.
+- **Artefacts:** note `06_RESEARCH/MENU_WINDOW_STAMP_RECONCILIATION.md`; harness `06_RESEARCH/scripts/menu_window_stamp_recon.py` (deterministic, fail-loud assertions); results gitignored `06_RESEARCH/results/menu_window_stamp_recon/` (`post_window_fills.csv` = the 11, `window_bounds_all_rows.csv` = all 592, `summary.json`). `ENTRY_QUALITY_F_B_NOTES.md` §4.2/§4.3 corrected (G2 reads the stamp). No `04_SRC`, `locked_constants`, config, threshold or S3 artifact change.
+- **NEXT ACTION (single):** **Architect ruling on the stamp** — carry the real bar close, or rename it `window_end_nominal_ts` and keep F7 on the nominal clock; then proceed with the previously ruled entry-quality / superset-gate review.
+
 ## 2026-11-18 - PARALLEL BOOKS — FULL-YEAR RESEARCH BT **IN FLIGHT** (detached, `PROD_DEFAULTS_CHANGED: NO`)
 
 - **PROGRESS 2026-11-19T07:53Z: 12/24 runs done** (nov24→apr25 complete, both hypotheses; may25 LONG in progress), PID alive, `stderr.log` empty, 0 dupes on every finished run. Pace ≈1.5 h/run over 18.4 h wall → remaining ≈18 h (honest estimate, not a promise).

@@ -112,7 +112,8 @@ difference, not a defect.
 3. **Entry at the zone chase edge, 23/351 (6.6 %)** — limit pinned in the last 8 % of the zone
    in the trade direction (M15 15, H4 5, H1 2, DAY 1).
 4. **Slow fills, 15/351 > 24 h** after the sweep (median 1.1 h overall).
-5. F has **no** post-window confirmations and **no** out-of-zone entries.
+5. F confirms on the bar immediately after the interaction (depth p50 0, p90 4 bars) and so never
+   reaches the window tail: **no** post-stamp confirmations and **no** out-of-zone entries.
 
 ### 4.2 B — "structure yes, scale and timing edges"
 
@@ -124,11 +125,16 @@ difference, not a defect.
    close** (median -0.25 ATR), versus F at parity (median -0.03). B's limit sits at the near edge
    of its fib band, so the fill waits for price to trade *through* the confirmation level rather
    than back into it. Whether that is intended for a leading-diagonal book is an Architect call.
-3. **Confirmation/order life past the menu window: 11/241 (4.6 %), F zero.** Three confirm within
+3. **Confirmation after the *stamped* menu window: 11/241 (4.6 %), F zero.** Three confirm within
    1 h of `window_end`, one within 7 h, and **seven are 30.5–39.4 h late**: nov24 `poi-000925`
    +33.7 h; feb25 `poi-009519` +30.5 h and `poi-006053`/`poi-005511`/`poi-005104` +37.0…+38.8 h;
-   jul25 `poi-004236` +39.4 h; oct25 `poi-010051` +32.2 h. The order rests beyond the menu window
-   and still fills, so "confirmation inside the window" is nominal on those rows.
+   jul25 `poi-004236` +39.4 h; oct25 `poi-010051` +32.2 h.
+   **Correction (2026-11-24): these are stamp artefacts, not window breaches.** `window_end_ts`
+   is a wall-clock projection (`sweep_close + 20 × detection-bar minutes`) written when the
+   engine's bar-counted window has not yet materialised; all 11 confirmations are **inside** the
+   real 20-detection-bar window (0/592 past it), and the fills land on their own confirmation bar.
+   G2 as tabulated here reads the stamp and therefore under-reports compliance on windows that
+   cross a market closure. Evidence + exact rows: `06_RESEARCH/MENU_WINDOW_STAMP_RECONCILIATION.md`.
 4. **Entry outside the POI zone: 8/241 (3.3 %).** Four are ≤0.44 price units from the edge
    (re-anchored limit at the boundary, rounding-level); the other four are 1.0–2.5 units outside
    (apr25 short `poi-001770` 2.45 below the zone; jul25 longs `poi-019884` 1.03, `poi-001184`
@@ -147,7 +153,8 @@ difference, not a defect.
   (continuation entry) rather than of individual bad rows. F fills essentially at the
   confirmation price.
 - **The real mismatches are representational, not structural:** F's missing structural target
-  (36.8 %) and B's stop scale (47.3 % > 3 ATR) + 11 post-window confirmations.
+  (36.8 %) and B's stop scale (47.3 % > 3 ATR) + 11 confirmations after the projected window end
+  (0 after the real one — see `MENU_WINDOW_STAMP_RECONCILIATION.md`).
 
 ---
 

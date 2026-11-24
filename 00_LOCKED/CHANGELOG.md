@@ -1,10 +1,20 @@
 # CHANGELOG
 
 
-**Last Updated:** 2026-11-23
+**Last Updated:** 2026-11-24
 **Rules:** Every change to the project is recorded here. Format: date, session title, what was added/changed/fixed.
 
 ---
+
+### 2026-11-24 - MENU WINDOW STAMP RECONCILIATION (read-only; 11 B "post-window" fills are stamp artefacts)
+
+- **Question:** the entry-quality study flagged 11 B fills (F 0) confirming after their own `window_end_ts` (7 by 30.5–39.4 h). Mechanism hunt in the menu stamp, the F7 resubmission clock and the R8 resting/expiry path.
+- **Answer — `WINDOW_BREACH: NO`.** `window_end_ts` is a **wall-clock projection**: `_win` (`product_menu_mtf.py:895-903`) stamps `sweep_close + MENU_EXPIRY_BARS(20) × det_minutes` when `_window_end_ts` (`:788-802`) returns `None` because the 21st detection bar has not closed. Eligibility is **bar-counted** (`_expire :635`, `_route_for :840-841`). Verified: **592/592** stamps equal the nominal projection; **11/11** late confirmations are inside the bar-counted window; **0/592** past it.
+- **Why:** the M1 base has no Saturday bars (weekday census + 25,475 Sunday bars), so 20 H1 bars span 3 calendar days. **183** of 592 fills (F 106 / B 77) have gap-spanning windows: H1 49 h ×22, H4 44 h ×38, M15/H1 1 h ×113. Seven late rows are weekend windows; four are 1 h data holes.
+- **Why B not F:** confirmation depth in the 20-bar window — F p50 0 / p90 4 / max 18, B p50 5 / p90 15 / max 20. Same stamp code; B's leading diagonal completes late.
+- **Other two clocks audited:** F7 `_menu_deadline` (`pipeline_adapter.py:569-600`) reads the same nominal stamp and expires resubmission up to 49 h (H1) / 44 h (H4) before the menu's own window closes — **latent**, causal for 0 of the 11 (all accepted on their confirmation bar, fill lag 0–4 min). R8/§23 order life is `bars_open` from placement (`fill_regime_policy.py:152-180`, `orders.py:181-231`) and never compared to `window_end_ts`; **0** fills were extended past the window by it. 22 fills (F 20 / B 2) carry windows truncated at the month-tiled segment end (stamp is then the only bound) — all confirmed inside the nominal stamp.
+- **Correction recorded** in `ENTRY_QUALITY_F_B_NOTES.md` §4.2/§4.3: G2 reads the stamp, so "11 post-window confirmations" = 11 after the *projected* end, 0 after the real one.
+- **Governance:** no `04_SRC`, `locked_constants`, config or S3 artifact change; no threshold work; diagnostic PnL not used. Harness `06_RESEARCH/scripts/menu_window_stamp_recon.py` (deterministic, fail-loud assertions); results gitignored `06_RESEARCH/results/menu_window_stamp_recon/`. Note `06_RESEARCH/MENU_WINDOW_STAMP_RECONCILIATION.md`.
 
 ### 2026-11-23 - ENTRY QUALITY + FLOWCHART MATCH — F AND B (read-only study, sample awaiting Architect)
 
