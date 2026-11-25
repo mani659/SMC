@@ -1,5 +1,17 @@
 # SESSION HANDOFF - SMC BOT
 
+## 2026-11-25 - PRODUCT BRANCH LIVENESS AUDIT COMPLETE (`LOGIC_CHANGED: NO`; measurement only)
+
+- **Question answered:** on the PRODUCT menu path, can each Stage-3 trigger A–F complete the funnel? **No** — one branch fills, one routes, one signals only, two are dark, one is off by design.
+- **Entrypoint:** `06_RESEARCH/scripts/product_branch_liveness.py` (PRODUCT-SHAPED, reuses the frozen `menu_trade_funnel.MenuCycle`; no strategy fork). Stack: detection D1/H4/H1/M15, exec M5, confirm H1 (DAY) / M5+M15 (H4) / M5+M1 (H1) / M1 (M15); `default_triggers()` = all six, tier subsets DAY = A–F and H4/H1/M15 = A,D,F (`product_menu_mtf.py:239-254`). W1 not provisioned (optional M8 context); D1/H4 forwarded to M8.
+- **Window (declared before counts):** exec **2025-09-01 → 2025-11-30** (M5, 17,840 bars), warm-up 2025-08-01, 124 batches — the LOCKED Phase-4 product calendar. Single continuous run, 76.6 min, `BATCH_ERRORS=0`, `MENU_ERRORS=0`, super-linear slowdown reproduced (284 → 3.5 bars/s).
+- **Funnel:** armed **160** (D1 68 / H4 29 / H1 18 / M15 45; 116 live at end), episodes 82 (41 expired, 39 won, 2 active), confirm bars evaluated 21,952, **routes 39**, submitted 32, **placed 24**, **fills 21**, closed 21 (SL 16 / TP 5), blocked 10 (`session` 8, `skip_place_far_from_zone` 2), §23 expired 3, withdrawn 2.
+- **Per trigger:** **F LIVE** (67 completions / 43 POIs, 36 routes, 24 placed, 21 fills); **A ROUTED_ONLY** (9 completions, 3 H4/M5 routes, 0 placed — 2 session blocks + 1 ONE-STORY duplicate); **B SIGNAL_ONLY** (5 completions, all on one H1 bar 2025-11-13 across 5 D1 POIs, 0 routes — every one killed by the C3 in-between gate); **C DARK** (0 completions, DAY tier only); **D OFF_BY_DESIGN** (code needs `engulfer.volume < engulfed.volume`; the feed is 0-volume on 1,768,123/1,768,123 bars — A5); **E DARK** (0 completions, DAY tier only).
+- **Simultaneity:** fills by trigger = **F 100.0 %** → `MULTI_BRANCH_FILLS: NO`; routes = A 3 + F 36 → `MULTI_BRANCH_ROUTES: YES`. The “all branches producing trades” claim is **not** met; “all branches routing” is not met either.
+- **Deliverable:** `06_RESEARCH/PRODUCT_BRANCH_LIVENESS_REPORT.md` (8 sections) + harness + `results/product_branch_liveness/` (gitignored). P0 honesty recorded: product path ≠ full research superset (B/C/E confirmable only on the DAY tier); parallel-book B/C/E fills remain book-scoped and were **not** used as liveness proof.
+- **Governance:** `LOGIC_CHANGED: NO`; no `04_SRC` edit; `locked_constants.py` diff empty; no threshold/tier/trigger/TP/age/rank change; no D proxy; single run — **no byte-identity claim**. Suite **1,557 passed / 7 skipped**.
+- **Current phase:** liveness measured, no branch rewired. **NEXT = Architect liveness rulings** (A session/dedupe reading, B C3 gating, C/E DAY-tier rarity, D documented OFF, multi-branch claim restated) — “enable / document OFF / wire gap”, one ruling per branch. **No implementation is authorised.**
+
 ## 2026-11-25 - TP AGE-CAP ACCEPTED: PRODUCTION = A (`LOGIC_CHANGED: NO`; docs only)
 
 - **Architect ruling executed:** production **KEEP = option A** — `max_age_bars = poi_give_up_bars()` (= `TRIGGER_A_EXPIRY = 20`) at both call sites, unchanged. **`None` REJECTED for product** (K2 fail + 0.274 ATR target quality). **`age100` NOT APPROVED** (real recovery, but 48.17 % re-pricing of the existing structural book). **`b1` sensitivity only**, not a C candidate. P3 `A_KEEP` and P0 `SUPERSET_OPEN_BOOK_SCOPE_ONLY` unchanged.

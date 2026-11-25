@@ -6,6 +6,15 @@
 
 ---
 
+### 2026-11-25 - PRODUCT BRANCH LIVENESS AUDIT (measurement only; `LOGIC_CHANGED: NO`)
+
+- **What:** measured, per Stage-3 trigger A–F, whether the PRODUCT menu path can complete the funnel (completion → route → placement → fill) in one declared window. Report `06_RESEARCH/PRODUCT_BRANCH_LIVENESS_REPORT.md`; harness `06_RESEARCH/scripts/product_branch_liveness.py`; artifacts `results/product_branch_liveness/` (gitignored).
+- **Composition surveyed:** detection D1/H4/H1/M15, execution M5, confirmation H1 (DAY) / M5+M15 (H4) / M5+M1 (H1) / M1 (M15); `default_triggers()` registers all six A–F, tiers filter to DAY = A–F and H4/H1/M15 = A,D,F (`product_menu_mtf.py:239-254`). W1 is optional M8 context and was not provisioned; D1/H4 go to M8 (`supply_d1_to_m8=True`). Product path ≠ full research superset (P0 honesty recorded).
+- **Window:** exec 2025-09-01 → 2025-11-30 (17,840 M5 bars), warm-up 2025-08-01, 124 detection batches — the LOCKED Phase-4 product calendar. Single continuous run, 76.6 min, 0 batch/menu errors.
+- **Counts:** armed 160 (D1 68 / H4 29 / H1 18 / M15 45), episodes 82, routes 39, placed 24, fills 21, closed 21 (SL 16 / TP 5), blocked 10 (`session` 8, `skip_place_far_from_zone` 2), §23 expired 3, withdrawn 2.
+- **Verdicts:** F **LIVE** (36 routes / 21 fills); A **ROUTED_ONLY** (3 routes, 0 placed — 2 session blocks + 1 ONE-STORY duplicate); B **SIGNAL_ONLY** (5 completions on one H1 bar across 5 D1 POIs, all C3-rejected); C **DARK** and E **DARK** (0 completions, DAY tier only); D **OFF_BY_DESIGN** (volume gate vs a 0-volume feed, every bar). `MULTI_BRANCH_FILLS: NO` (F 100 %), `MULTI_BRANCH_ROUTES: YES` (A 3 + F 36).
+- **Governance:** `LOGIC_CHANGED: NO`; no `04_SRC` edit; `locked_constants.py` diff empty; no threshold/tier/trigger/TP/age/rank change; no price-only D proxy; single run — no byte-identity claim. Suite **1,557 passed / 7 skipped**.
+
 ### 2026-11-25 - TP AGE-CAP ACCEPTANCE (docs only; production = A; `LOGIC_CHANGED: NO`)
 
 - **What:** `00_LOCKED/STRUCTURAL_TP_AGE_CAP_ACCEPTANCE.md` — records the issued Architect ruling so the age-cap work is closed with its reasoning, not just its numbers.
