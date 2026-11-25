@@ -1,10 +1,19 @@
 # CHANGELOG
 
 
-**Last Updated:** 2026-11-24
+**Last Updated:** 2026-11-25
 **Rules:** Every change to the project is recorded here. Format: date, session title, what was added/changed/fixed.
 
 ---
+
+### 2026-11-25 - TP AGE-CAP ACCEPTANCE (docs only; production = A; `LOGIC_CHANGED: NO`)
+
+- **What:** `00_LOCKED/STRUCTURAL_TP_AGE_CAP_ACCEPTANCE.md` — records the issued Architect ruling so the age-cap work is closed with its reasoning, not just its numbers.
+- **Ruling:** production **KEEP = option A** — `max_age_bars = poi_give_up_bars()` (`TRIGGER_A_EXPIRY = 20`) unchanged at both call sites. **`None` rejected for product** (K2 stale-caution fail: 78.2 % newly-selected > 24 h, 57 > 7 days; plus recovered `tp_dist` p50 0.274 ATR against the 0.25 noise floor). **`age100` not approved** (real recovery 92/133 and 0.585 ATR targets, but 105/218 = 48.17 % of existing structural fills re-priced — a selection change, not a coverage fix). **`b1` sensitivity only** (M1-only by construction; tightens M15/H1).
+- **Facts cited:** 351 fills / 218 baseline structural / 133 baseline fallback, with P4's 129 a strict subset; recovery, `tp_dist` p50, churn and age p50/p90 for `age20` / `age100` / `none` / `b1`; K2 fail on `none`, K3 fail on all three widened probes, K1 no overall trigger (`b1` NULL above M1), K4 honoured, K5 pass.
+- **Method notes retained:** prefix-only swing detection is mandatory (full-series leaks: 2953.348 vs 2944.648); `(dist, -candle_index)` ranking explains both the churn and `none`'s 0.25 ATR pile-up, so any future report that shows only recovery is incomplete.
+- **Preconditions for a future C lock:** (i) named constant **with explicit unit** (confirmation-TF bars on the menu path); (ii) **finite** age — `None` disqualified; (iii) accept and re-read the churn set, **or** change the rank rule in the same design; (iv) book-scoped measure first, never a product default flip from a single probe.
+- **Governance:** `LOGIC_CHANGED: NO`; no `04_SRC` edit; `locked_constants.py` diff empty; no Phase B re-run; no `product_menu_mtf`/`pipeline_bridge` wiring; no charts; P3 `A_KEEP` and P0 `SUPERSET_OPEN_BOOK_SCOPE_ONLY` unchanged. Design note received an Acceptance pointer only (§3 history untouched).
 
 ### 2026-11-25 - TP AGE-CAP PHASE B MEASUREMENT (Option C path; `LOGIC_CHANGED: NO`; no lock)
 

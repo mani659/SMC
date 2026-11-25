@@ -1,5 +1,13 @@
 # SESSION HANDOFF - SMC BOT
 
+## 2026-11-25 - TP AGE-CAP ACCEPTED: PRODUCTION = A (`LOGIC_CHANGED: NO`; docs only)
+
+- **Architect ruling executed:** production **KEEP = option A** — `max_age_bars = poi_give_up_bars()` (= `TRIGGER_A_EXPIRY = 20`) at both call sites, unchanged. **`None` REJECTED for product** (K2 fail + 0.274 ATR target quality). **`age100` NOT APPROVED** (real recovery, but 48.17 % re-pricing of the existing structural book). **`b1` sensitivity only**, not a C candidate. P3 `A_KEEP` and P0 `SUPERSET_OPEN_BOOK_SCOPE_ONLY` unchanged.
+- **Deliverable:** `00_LOCKED/STRUCTURAL_TP_AGE_CAP_ACCEPTANCE.md` — ruling table, Phase B facts cited (351 / 218 / 133 with P4's 129 ⊂ 133; recovery, `tp_dist` p50, churn and age p50/p90 for `age20` / `age100` / `none` / `b1`; K2 fail on `none`, K3 fail on all three widened probes), retained method notes (prefix detection mandatory — full-series leaks; `(dist, -candle_index)` explains both churn and `none`'s 0.25 ATR pile-up), the four preconditions for any future C lock, and the explicit non-claims (no expectancy, no product-superset, no stop change).
+- **Design note patched with a pointer only:** `00_LOCKED/STRUCTURAL_TP_AGE_CAP_DESIGN.md` now carries an **Acceptance (2026-11-25)** blurb at the top pointing at the acceptance file and production = A; the §3 option history is untouched.
+- **Governance:** `LOGIC_CHANGED: NO`; no `04_SRC` edit; `locked_constants.py` diff empty; no Phase B re-run; no wiring of `product_menu_mtf` / `pipeline_bridge`; no charts; no P5/P6 work.
+- **Current phase:** TP age-cap measured and accepted; **production remains A**. **NEXT = selection-v2 design note** (rank rule + finite, unit-bearing age) **OR Architect other directive** — no implementation is authorised.
+
 ## 2026-11-25 - TP AGE-CAP PHASE B MEASURED (`LOGIC_CHANGED: NO`; Option C path; no lock, no wiring)
 
 - **Ruling executed:** OPTION C (separate constant), **measure only** — probes `{20, 100, None}` on the confirmation-TF index plus the pre-declared `b1` sensitivity column. No production wiring, `locked_constants.py` untouched, no default changed, Book F only.

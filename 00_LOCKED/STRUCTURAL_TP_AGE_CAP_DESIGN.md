@@ -6,6 +6,8 @@
 **Status:** **DRAFTED — AWAITING ARCHITECT OPTION LETTER** (`A` / `B` / `C` / `D`)
 **Mode:** `LOGIC_CHANGED: NO` — no code path changed, no constant written, no default flipped, no bulk run
 
+> **Acceptance (2026-11-25):** this design is closed. Phase B was measured (`06_RESEARCH/STRUCTURAL_TP_AGE_CAP_MEASURE.md`) and the Architect ruled production **= A** (`max_age_bars = 20` via the current `poi_give_up_bars()` path), `None` **rejected for product**, `age100` **not approved**, `b1` **sensitivity only**. See `00_LOCKED/STRUCTURAL_TP_AGE_CAP_ACCEPTANCE.md` for the ruling, the cited figures and the preconditions for any future C lock. The §3 option history below is preserved as written; nothing in it was re-ruled by this pointer.
+
 **Evidence base**
 - `06_RESEARCH/F_TP_REPRESENTATION_DIAGNOSIS.md` (P4, 2026-11-24) + `06_RESEARCH/results/f_tp_representation/{fallback_inventory.csv,summary.json}`
 - `06_RESEARCH/STRUCTURAL_TP_FEED_DESIGN.md` §3b + Architect Addendum (the bound's origin)
