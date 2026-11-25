@@ -6,6 +6,15 @@
 
 ---
 
+### 2026-11-25 - TP AGE-CAP PHASE B MEASUREMENT (Option C path; `LOGIC_CHANGED: NO`; no lock)
+
+- **What:** measured the structural-TP search window on the year Book F population per the pre-registered contract (`00_LOCKED/STRUCTURAL_TP_AGE_CAP_DESIGN.md` §4). Probes `{20, 100, None}` + pre-declared `b1` sensitivity. Harness `06_RESEARCH/scripts/structural_tp_age_cap_measure.py`; note `06_RESEARCH/STRUCTURAL_TP_AGE_CAP_MEASURE.md`; artifacts `results/structural_tp_age_cap/` (gitignored, resumable per segment via `shards/`).
+- **Method finding:** full-series swing detection is **not** equivalent to place-time prefix detection — a swing 1–2 bars before placement can be confirmed before it yet be invisible at place time (measured: 2953.348 vs 2944.648). The engine has the same blind spot; the harness therefore detects on `series[:idx+1]` only.
+- **Baseline:** 218 structural / 133 fallback of 351; P4's 129 is a **strict subset** (4 extra M1 rows where the prefix has no target under a 20-bar cap).
+- **Results:** `age100` 310/351, recovery 92/133 (69.2 %), recovered `tp_dist` p50 0.585 ATR, churn 48.2 %, 0 > 7 d. `none` 351/351, recovery 133/133, but recovered `tp_dist` p50 **0.274 ATR** (noise floor), 78.2 % > 24 h, **57 > 7 d**, churn 94.0 %. `b1` 273/351, recovery 48.1 % confined to M1, churn 38.5 %.
+- **Contract:** K2 FAIL (`none`), K3 FAIL (all three), K1 no overall trigger but `b1` NULL above M1, K4 honoured, K5 pass (shard md5 identical).
+- **Governance:** `LOGIC_CHANGED: NO`; no `04_SRC` edit; `locked_constants.py` diff empty; recommendation is **no auto-lock** — C's shape must be TF-aware and `age100` carries a 48 % selection change that must be ruled, not absorbed.
+
 ### 2026-11-25 - TP AGE-CAP DESIGN (Phase A, draft; awaiting Architect; no measurement, no implementation)
 
 - **What:** `00_LOCKED/STRUCTURAL_TP_AGE_CAP_DESIGN.md` — the age-cap definition note only. P3 recorded as closed (`A_KEEP`); P3B recorded as not applicable.

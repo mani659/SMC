@@ -1,5 +1,15 @@
 # SESSION HANDOFF - SMC BOT
 
+## 2026-11-25 - TP AGE-CAP PHASE B MEASURED (`LOGIC_CHANGED: NO`; Option C path; no lock, no wiring)
+
+- **Ruling executed:** OPTION C (separate constant), **measure only** — probes `{20, 100, None}` on the confirmation-TF index plus the pre-declared `b1` sensitivity column. No production wiring, `locked_constants.py` untouched, no default changed, Book F only.
+- **Deliverables:** `06_RESEARCH/STRUCTURAL_TP_AGE_CAP_MEASURE.md` + harness `06_RESEARCH/scripts/structural_tp_age_cap_measure.py` + `results/structural_tp_age_cap/{per_fill.csv,summary.json,shards/}` (gitignored).
+- **Baseline:** prefix-bounded census is **218 structural / 133 fallback** of 351. **P4's 129 is a strict subset** — the 4 extra rows (all M1) had a target under P4 but none on an honest place-time prefix; direction is consistent with full-series swing detection, which is **demonstrated to leak**: `F_feb25_L_2025-02-25_poi-015315` age20 gives 2953.348 full-series vs 2944.648 prefix (a swing 1–2 bars before placement can be confirmed yet is invisible at place time). Prefix detection is engine-faithful and is the method used.
+- **Results:** `age100` → 310/351 structural, recovery **92/133 (69.2 %)**, recovered `tp_dist` p50 **0.585 ATR**, churn **105/218 (48.2 %)**, 7/92 > 24 h, 0 > 7 d. `none` → **351/351**, recovery 133/133, but recovered `tp_dist` p50 **0.274 ATR** (pinned to the 0.25 noise floor), **104/133 > 24 h**, **57 > 7 d**, churn **94.0 %**. `b1` → 273/351, recovery 64/133 (48.1 %), **M1-only** (M5/M15/H1 = 0 % by construction), churn 38.5 %.
+- **Contract:** K2 **FAIL on `none`** (78.2 % > 24 h, 57 > 7 d); K3 **FAIL on all three** (48.2 / 94.0 / 38.5 %); K1 no trigger overall but `b1` is NULL by TF above M1; K4 honoured (probes fixed pre-run); K5 pass (nov24 shard md5 `85ec2d8a…` byte-identical on regeneration).
+- **Recommendation (no auto-lock):** `none` disqualified on both pre-registered staleness and target quality; `b1` is a tightening on M15/H1 and not a reading of C; `age100` is the only probe surviving on target quality but is a **selection change on 48 % of the existing structural book**. C's shape must be TF-aware; the live lever, if any, is the `(dist, -candle_index)` ranking, which is flagged not proposed.
+- **NEXT ACTION (single):** Architect `TP_AGE_CAP` ruling on the measured options (lock value + TF handling, or rule that ranking is the next question). No implementation has been authorised.
+
 ## 2026-11-25 - P4 CLOSED; TP AGE-CAP DESIGN DRAFTED (`LOGIC_CHANGED: NO`, awaiting Architect option letter)
 
 - **P3 closed by ruling:** `STOP_REFERENCE: A_KEEP` — OB distal edge stays the F stop reference, `0.3 × ATR` unchanged, inside-POI stops are expected behaviour. **P3B is not applicable** (nothing moves). Recorded cost of the alternative, for the future: option C would move 283/351 F fills and take median risk 1.16 → 2.32 ATR, halving the median structural TP:R from 0.85 to ≈0.42 because the target is chosen off the entry and is independent of the stop — so any clearance ruling must be coupled stop+target work, not a definition change.
