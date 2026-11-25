@@ -1,5 +1,24 @@
 # SESSION HANDOFF - SMC BOT
 
+## 2026-11-25 - P4 CLOSED; TP AGE-CAP DESIGN DRAFTED (`LOGIC_CHANGED: NO`, awaiting Architect option letter)
+
+- **P3 closed by ruling:** `STOP_REFERENCE: A_KEEP` — OB distal edge stays the F stop reference, `0.3 × ATR` unchanged, inside-POI stops are expected behaviour. **P3B is not applicable** (nothing moves). Recorded cost of the alternative, for the future: option C would move 283/351 F fills and take median risk 1.16 → 2.32 ATR, halving the median structural TP:R from 0.85 to ≈0.42 because the target is chosen off the entry and is independent of the stop — so any clearance ruling must be coupled stop+target work, not a definition change.
+- **P4 closed:** 129/351 (36.75 %) F fallbacks, **129/129 `SUPPRESSED_POLICY`** by `max_age_bars = poi_give_up_bars() = 20`, **0/129 feed-unavailable**.
+- **Delivered (Phase A only):** `00_LOCKED/STRUCTURAL_TP_AGE_CAP_DESIGN.md` — code-cited current behaviour, non-rhetorical problem statement, five options (A KEEP / B1 100-minute parity / B2 single ruled horizon / C separate named constant / D no cap), pre-registered measurement contract with kill flags, non-goals, Architect template. **Nothing implemented; `locked_constants.py` untouched.**
+- **Code facts that drive the options:** the age filter is `pipeline_bridge.py:162-163` and is the only one; the number is `TRIGGER_A_EXPIRY = 20` (`locked_constants.py:173`) reached via `poi_give_up_bars()` (`trigger_expiry.py:57-63`) — a **§24 trigger give-up clock**, not a TP constant; only two call sites exist (`product_menu_mtf.py:1023`, `pipeline_adapter.py:766`). On the menu path, swings come from `_swings_for(tf)`/`detect_swings(confirm series, ctf)`, so the same integer `20` means **20 min (M1) / 100 min (M5) / 300 min (M15) / 1,200 min (H1)**; on the seek path it is genuinely M5 and therefore coherent.
+- **Two consequences the options must carry:** (1) B1 is not a pure recovery option — it leaves M5 at 20 and *tightens* M15 (7) and H1 (2), so recovery is arithmetically confined to M1; (2) ranking is `(dist, -candle_index)`, i.e. nearest-in-price with recency only as a tie-break, so loosening can replace a recent farther target with an older nearer one (churn, not pure recovery).
+- **NEXT ACTION (single):** Architect `TP_AGE_CAP` letter (A/B1/B2/C/D + SCOPE; if C then UNITS + HOME) → pre-registered representation census. P5 zone-quality remains the alternative branch.
+
+## 2026-11-24 - P4 F TARGET-REPRESENTATION DIAGNOSIS COMPLETED (`LOGIC_CHANGED: NO`, read-only audit)
+
+- **Authority:** Lead Architect P4 instruction. Forensic diagnosis of the 129 Book F fills with `tp_source = "atr_fallback"` (129/351, 36.8%) in the post-R1 full-year backtest.
+- **Verdict:** **`SUPPRESSED_POLICY` (129 / 129, 100.0%)**. Dominant specific cause: **`SUPPRESSED_AGE_CAP_GT_20_BARS` (129 / 129, 100.0%)**. Feed unavailability (`UNAVAILABLE_FEED`): **0 / 129 (0.0%)**.
+- **Core finding:** In 100% of the 129 fallback fills, an opposing §19-confirmed structural swing of the correct polarity was present on the place-time prefix and on the favorable side of entry (passing the `0.25 × ATR` noise guard), but was excluded solely because its base candle index was older than the 20-bar bound (`placement_bar - candle_index > 20`).
+- **Mechanism:** In `STRUCTURAL_TP_FEED_DESIGN.md` §3b, `poi_give_up_bars()` (20 M5 bars) was accepted as an interim CPU/age bound (`max_age_bars`). When passed to multi-TF confirmation via PFE-1.5 (`product_menu_mtf.py`), `max_age_bars` was hardcoded to 20 bars across all confirmation TFs. On M1 (73.6% of fallbacks), 20 bars is only 20 minutes; on M5 (17.8%), 100 minutes. Because structural swings require $N=3$ bars per side plus base-candle break confirmation, opposing swing highs/lows from earlier structure or previous swing legs frequently sit 25–100 bars in the past. When unbounded (`max_age_bars = None`), 129/129 resolve to a valid structural target.
+- **Artifacts:** `06_RESEARCH/F_TP_REPRESENTATION_DIAGNOSIS.md`, `06_RESEARCH/results/f_tp_representation/` (`fallback_inventory.csv`, `summary.json`).
+- **Governance:** `LOGIC_CHANGED: NO`. `locked_constants.py` diff: empty. 27/27 structural TP unit tests pass.
+- **NEXT ACTION (single):** **P5 zone-quality definition (docs) or Architect branch.**
+
 ## 2026-11-24 - P3A STOP-REFERENCE DEFINITION DRAFTED (AWAITING ARCHITECT; `LOGIC_CHANGED: NO`)
 
 - **Delivered:** `00_LOCKED/STOP_REFERENCE_DESIGN.md` — definition-only draft. Code facts, vocabulary, four options, non-goals and a pre-registered measurement contract. **No counterfactual was run**, by phase order (definition → Architect ACCEPT + option letter → measure).

@@ -6,6 +6,23 @@
 
 ---
 
+### 2026-11-25 - TP AGE-CAP DESIGN (Phase A, draft; awaiting Architect; no measurement, no implementation)
+
+- **What:** `00_LOCKED/STRUCTURAL_TP_AGE_CAP_DESIGN.md` — the age-cap definition note only. P3 recorded as closed (`A_KEEP`); P3B recorded as not applicable.
+- **Code-cited current behaviour:** `structural_tp_target` skips a swing when `candle_index < placement_bar - max_age_bars` (`pipeline_bridge.py:162-163`); the value comes from `poi_give_up_bars()` (`trigger_expiry.py:57-63`) → `TRIGGER_A_EXPIRY = 20` (`locked_constants.py:173`), a **§24 trigger give-up clock** reused as an interim TP search bound, not a TP constant. Only two callers pass it: `product_menu_mtf.py:1023` and `pipeline_adapter.py:766`.
+- **Root defect documented:** the integer is TF-blind. Menu swings come from the confirmation series (`_swings_for(tf)` → `detect_swings(confirm series, ctf)`), so `20` bars is 20 min on M1, 100 min on M5, 300 min on M15 and 1,200 min on H1; the seek path is M5 by construction and coherent.
+- **Selection fact documented:** the selector ranks `(dist, -candle_index)` — nearest in price, recency only as tie-break — so an age change alters *which* target wins, not only *whether* a target exists.
+- **Options (none chosen):** A KEEP · B1 wall-time parity `ceil(20 × 5 / tf_minutes)` (=100/20/7/2 bars; matches the existing `LA_M15_BARS = 7` convention but *tightens* M15/H1) · B2 single ruled horizon `ceil(H / tf_minutes)` · C separate named constant `STRUCTURAL_TP_MAX_AGE_BARS` (**PROPOSED**, value TBD, must carry units or it repeats the defect) · D no cap (`None`) with the P4 staleness evidence (max 12,501 M1 bars ≈ 8.7 days) as the stated risk.
+- **Governance:** measurement contract pre-registered before any run (population 351/222/129; K1 `NULL_RECOVERY` <25 %, K2 `STALE_CAUTION` >20 % older than 24 h or any >7 days, K3 churn ≠ recovery >10 %, K4 no fitting, K5 determinism). `LOGIC_CHANGED: NO`; `locked_constants.py` diff empty; no `04_SRC` edit; suite unchanged.
+
+### 2026-11-24 - P4 F TARGET-REPRESENTATION DIAGNOSIS COMPLETED (read-only audit; `LOGIC_CHANGED: NO`)
+
+- **What:** Reconstructed place-time swing availability for all 129 Book F fills with `tp_source = "atr_fallback"` (129/351, 36.8%) across the post-R1 full-year backtest (12 calendar segments). Pre-registered diagnostic classification taxonomy into note before tabulation.
+- **Verdict:** **`SUPPRESSED_POLICY` (129 / 129, 100.0%)**. Dominant specific cause: **`SUPPRESSED_AGE_CAP_GT_20_BARS` (129 / 129, 100.0%)**. Feed unavailability (`UNAVAILABLE_FEED`): **0 / 129 (0.0%)**.
+- **Finding:** In 100% of fallback cases, an opposing §19-confirmed structural swing of the correct polarity was present on the place-time prefix and on the favorable side of entry (passing the 0.25×ATR noise guard), but was excluded solely because its base candle index was older than the 20-bar bound (`placement_bar - candle_index > 20`).
+- **Mechanism:** In `STRUCTURAL_TP_FEED_DESIGN.md` §3b, `poi_give_up_bars()` (20 M5 bars) was accepted as an interim CPU/age bound (`max_age_bars`). When ported to multi-TF confirmation via PFE-1.5 (`product_menu_mtf.py`), `max_age_bars` was passed verbatim as 20 bars across all confirmation TFs. On M1 (73.6% of fallbacks), 20 bars is only 20 minutes; on M5 (17.8%), 100 minutes. Because structural swings require $N=3$ bars per side plus base-candle break confirmation, opposing swing highs/lows from earlier structure or previous swing legs frequently sit 25–100 bars in the past. When evaluated with `max_age_bars = None`, 129/129 resolve to a valid structural target.
+- **Governance:** `LOGIC_CHANGED: NO`. `locked_constants.py` diff: empty. 27/27 structural TP unit tests pass. Artifacts: `06_RESEARCH/F_TP_REPRESENTATION_DIAGNOSIS.md`, `06_RESEARCH/results/f_tp_representation/`.
+
 ### 2026-11-24 - P3A STOP-REFERENCE DEFINITION (draft; awaiting Architect; no measurement)
 
 - **What:** `00_LOCKED/STOP_REFERENCE_DESIGN.md` — the P3 definition document only. Phase order is binding, so **no counterfactual was run**.
