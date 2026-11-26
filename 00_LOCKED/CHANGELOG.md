@@ -1,10 +1,22 @@
 # CHANGELOG
 
 
-**Last Updated:** 2026-11-25
+**Last Updated:** 2026-11-26
 **Rules:** Every change to the project is recorded here. Format: date, session title, what was added/changed/fixed.
 
 ---
+
+### 2026-11-26 - BRANCH C E2E: UNREACHABLE BY CONSTRUCTION, NO CODE (`LOGIC_CHANGED: NO`, `CODE_CHANGED: NO`)
+
+- **What:** Phase-0 root-cause pack + E2E verdict for Trigger C on the product path. Reports `06_RESEARCH/BRANCH_C_ROOT_CAUSE.md`, `06_RESEARCH/BRANCH_C_E2E_REPORT.md`; harness `06_RESEARCH/scripts/branch_c_geometry.py`; artifacts `06_RESEARCH/results/branch_c_geometry/` (gitignored).
+- **Window:** unchanged — exec 2025-09-01 → 2025-11-30 (M5, 17,840 bars), warm-up 2025-08-01. The arming phase reproduces the liveness census exactly: **68 D1 arms**, 124 batches, `BATCH_ERRORS=0`, `MENU_ERRORS=0`, 117.6 s. No full funnel re-run.
+- **Root cause (one statement):** C is admissible **only** on the DAY tier — D1 detection, **H1** confirmation (`product_menu_mtf.py:239-254`; `_TIER_ADF` excludes C). H1 structural swings need `N_BAR_HTF = 5` bars of right-side confirmation before they exist (`structural_swing_detector.py:59`; `locked_constants.py:167`), while C's frozen §24 window allows the signal only **3** bars after the sweep candle (`trigger_c_ending_diagonal.py:57-62`; `trigger_expiry.py:76`). Required `bar ≤ terminal + 3`, achievable `bar ≥ terminal + 5` — **impossible on every bar**, so `evaluate()` can never return a signal.
+- **Measured:** **361** ending-diagonal observations in the window (235 LONG / 126 SHORT; 247 converging); **minimum terminal age 5 bars**, p10 6, median 12, max 37; **0** observations inside the 3-bar window. The real trigger over **1,489 H1 bars × 68 armed D1 POIs with `from_bar = 0`** (superset of the menu's coverage) returns **0 completions**.
+- **Nearest miss (counterfactual, instrumentation only):** ignoring expiry, **3** signals fire on **2025-11-25 09:00 UTC** (one diagonal, terminal age **6** = 3 bars past the last legal bar; SHORT zones `poi-004989`/`poi-005144`/`poi-007302`; entry 4121.840, stop 4155.585, close 4115.709). **C3 passes** for `poi-005144` and `poi-007302` — pattern, zone context and C3 are all satisfiable; only the expiry blocks them.
+- **Classification:** **(b) unreachable code.** Not (a) — 361 patterns exist; not (c) — C is in `_DAY_TRIGGERS`, all six triggers are registered, the §15 matrix forbids no cell (`compatibility_matrix.py:29-56`), 68 POIs armed; not (d) — a longer calendar window cannot help. **Secondary defect:** expiry is anchored to `Swing.candle_index` (the §18 base candle, one bar before the sweep bar at most), worth ≤1 bar.
+- **Why no code:** the locked text "sweep candle + 3" is implemented exactly, so the constant is **not** mis-wired; the contradiction is between two independently frozen rules. Every repair is a policy act: §24 ≥ N, §27 N ≤ 3 for C, a shorter-N confirmation TF in the frozen DAY tier, or re-anchoring expiry at observability. Engineering does not choose; options are recorded (accept structural-off / defer / observability anchor / C-specific tier / retire C and fix the card's `TRIGGER_C_LIVE` reading).
+- **Secondary comparison (not liveness evidence):** the essence v1 slice confirms **51 ED** setups on native **M1** (N=3), where the 3-bar window is exactly reachable — the arithmetic, not the detector, is the blocker.
+- **Bans honoured:** no FIB/C3/session loosening, no D volume proxy, no expectancy/PF criterion, no threshold/tier/`04_SRC`/`locked_constants.py` edit, no A/B/D/E/F body touched.
 
 ### 2026-11-26 - BRANCH B E2E: STRUCTURALLY BLOCKED BY C3, NO CODE (`LOGIC_CHANGED: NO`, `CODE_CHANGED: NO`)
 
