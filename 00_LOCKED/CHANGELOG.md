@@ -6,6 +6,17 @@
 
 ---
 
+### 2026-11-26 - BRANCH A E2E: POLICY-BLOCKED, NO CODE (`LOGIC_CHANGED: NO`, `CODE_CHANGED: NO`)
+
+- **What:** Phase-0 root-cause pack for Trigger A on the product path, plus the engineering verdict. Reports `06_RESEARCH/BRANCH_A_ROOT_CAUSE.md` and `06_RESEARCH/BRANCH_A_E2E_REPORT.md`. No harness, no re-run, no artifacts (the frozen liveness artifacts were re-read).
+- **Window:** unchanged — exec **2025-09-01 → 2025-11-30** (M5, 17,840 bars), warm-up 2025-08-01. No window re-pick, no second run.
+- **Funnel (A):** 9 completions / 6 POIs → 6 C3 `not_in_between` rejects → 3 routes → 2 session blocks + 1 ONE-STORY drop → **0 placed, 0 fills** (`9 = 6 + 3`, `3 = 2 + 1`).
+- **Root cause:** the two session blocks close at **2025-11-18 20:15** and **2025-11-26 23:10 UTC**, both in the LOCKED §2 **20:00–24:00 no-session gap** (`risk_engine.py:215-218`; `timestamps.py:14-16`; `locked_constants.py:104-109`). The third route (`poi-005169`) is an identical plan to `poi-004984` (same H4 SHORT, entry 4073.375, SL 4083.6034388930066, TP 4055.6624814265797, same confirmation bar) and is retired at intake by the locked ONE-STORY rule (`story_guard.py`; `pipeline_adapter.queue_menu_candidate` → `_duplicate_story` → `_drop_duplicate_poi`).
+- **Why no retry:** F7 pending needs `supports_candidate_outcomes` (`pipeline_adapter.py:565-567`); only `PaperRunner` advertises it (`paper/runner.py:245`). `BacktestRunner` keeps the documented **historical one-submit semantics** (`R0_TRIGGER_ADMISSION_MAP.md:73-76`; `MENU_TRADE_FUNNEL_1M_NOTE.md:75`).
+- **Classification:** all class **(a) intentional policy** — C3 ×6, §2 session ×2, ONE-STORY ×1, one-submit (composition). **No (b) bug; no (c) config defect** (all three sessions already allowed; 20:00–24:00 is `None` in `detect_session`, so no allow-list can admit it).
+- **Verdict:** `DEFER_RECOMMENDED` (factual state BLOCKED). Architect options recorded: accept session-gated `ROUTED_ONLY`; rule F7 backtest parity as a dated lifecycle change (not A-only — changes F's frozen reference); defer A; LOCKED §2 supersession (not proposed).
+- **Bans honoured:** no session widening, no ONE-STORY softening, no TP/SL/age/rank/zone-quality change, no B–F trigger edit, no volume proxy, no `04_SRC` edit, `locked_constants.py` diff empty, no expectancy/PF language.
+
 ### 2026-11-25 - PRODUCT BRANCH LIVENESS AUDIT (measurement only; `LOGIC_CHANGED: NO`)
 
 - **What:** measured, per Stage-3 trigger A–F, whether the PRODUCT menu path can complete the funnel (completion → route → placement → fill) in one declared window. Report `06_RESEARCH/PRODUCT_BRANCH_LIVENESS_REPORT.md`; harness `06_RESEARCH/scripts/product_branch_liveness.py`; artifacts `results/product_branch_liveness/` (gitignored).

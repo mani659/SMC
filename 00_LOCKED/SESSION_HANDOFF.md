@@ -1,5 +1,17 @@
 # SESSION HANDOFF - SMC BOT
 
+## 2026-11-26 - BRANCH A E2E: POLICY-BLOCKED, NO CODE (`LOGIC_CHANGED: NO`, `CODE_CHANGED: NO`)
+
+- **Question answered:** why did Trigger A route 3 times and never place? **Not a wiring defect** — its only three routes in the frozen window died to two intentional product rules, on a composition that submits each confirmation once by documented design.
+- **Window (re-used, not re-picked):** exec **2025-09-01 → 2025-11-30** (M5, 17,840 bars), warm-up 2025-08-01, 124 batches; liveness run 4,594.2 s, `BATCH_ERRORS=0`, `MENU_ERRORS=0`. **No re-run** (nothing changed; no determinism claim).
+- **Phase-0 funnel (re-read of the existing artifacts):** A 9 completions / 6 POIs → **6 C3 `not_in_between` rejects** → **3 routes** → **2 session blocks + 1 ONE-STORY drop** → **0 placed / 0 fills**. `9 = 6 + 3`, `3 = 2 + 1`.
+- **Root cause:** the two session blocks are at confirmation closes **2025-11-18 20:15** and **2025-11-26 23:10 UTC**, both inside the LOCKED §2 **20:00–24:00 no-session gap** (`timestamps.py:14-16`, `locked_constants.py:104-109`; gate `risk_engine.py:215-218`, row emitted by `runner._process_entries`). The third route (`poi-005169`) is an **identical plan** to `poi-004984` (same H4 SHORT, entry 4073.375, SL 4083.6034388930066, TP 4055.6624814265797, same confirmation bar) and was retired at intake by the locked ONE-STORY rule (`pipeline_adapter.queue_menu_candidate` → `_duplicate_story` → `_drop_duplicate_poi`; rule `risk/story_guard.py`).
+- **No retry, and that is as-coded:** F7 pending is created only for outcome-reporting runners (`pipeline_adapter.py:565-567`); only `PaperRunner` advertises `supports_candidate_outcomes` (`paper/runner.py:245`). `BacktestRunner` keeps **historical one-submit semantics**, documented in `R0_TRIGGER_ADMISSION_MAP.md:73-76` and `MENU_TRADE_FUNNEL_1M_NOTE.md:75`. So each block is final for its route.
+- **Classification:** C3 ×6 = (a) policy; session ×2 = (a) LOCKED §2; ONE-STORY ×1 = (a) locked 2026-11-15; one-submit = (a) documented composition. **No (b) bug, no (c) config defect.** Session is *not* config: the harness already allows all three sessions and `is_allowed_session` cannot admit 20:00–24:00 while `detect_session` returns `None`.
+- **Deliverables:** `06_RESEARCH/BRANCH_A_ROOT_CAUSE.md` (per-event reject/code/citation/class) + `06_RESEARCH/BRANCH_A_E2E_REPORT.md` (funnel before/after, verdict, options). No harness, no artifacts, no tests (no behaviour changed).
+- **Verdict: `DEFER_RECOMMENDED`** (factual state BLOCKED). Options for the Architect: (1) accept A as session-gated `ROUTED_ONLY`; (2) rule **F7 backtest parity** as a dated lifecycle change (not A-only — it would also retry the 6 F session blocks and change F's frozen reference); (3) defer A; (4) LOCKED §2 supersession, which engineering does not propose.
+- **Current phase:** A diagnosed, nothing implemented. **NEXT = Architect accept A verdict → Branch B only.** Branches C–E remain frozen; F untouched.
+
 ## 2026-11-25 - PRODUCT BRANCH LIVENESS AUDIT COMPLETE (`LOGIC_CHANGED: NO`; measurement only)
 
 - **Question answered:** on the PRODUCT menu path, can each Stage-3 trigger A–F complete the funnel? **No** — one branch fills, one routes, one signals only, two are dark, one is off by design.
