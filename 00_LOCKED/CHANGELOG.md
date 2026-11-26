@@ -6,6 +6,19 @@
 
 ---
 
+### 2026-11-26 - BRANCH B E2E: STRUCTURALLY BLOCKED BY C3, NO CODE (`LOGIC_CHANGED: NO`, `CODE_CHANGED: NO`)
+
+- **What:** Phase-0 root-cause pack + E2E verdict for Trigger B on the product path. Reports `06_RESEARCH/BRANCH_B_ROOT_CAUSE.md`, `06_RESEARCH/BRANCH_B_E2E_REPORT.md`; harness `06_RESEARCH/scripts/branch_b_geometry.py`; artifacts `06_RESEARCH/results/branch_b_geometry/` (gitignored).
+- **Window:** unchanged — exec 2025-09-01 → 2025-11-30 (M5), warm-up 2025-08-01. No funnel re-run; the Phase-0 harness stops at the audited bar and reproduces it exactly (`RECONSTRUCTION_OK`: 5 B routes, exact 5 POI ids, all C3-rejected; 103 batches, `BATCH_ERRORS=0`, `MENU_ERRORS=0`, 75.3 s).
+- **Method:** same product composition, with `ProductMenuEngine._route_for` real **for the D1 tier only** (B's only confirmable tier) and stubbed elsewhere. Adversarial check: a first attempt returned 11 routes and was rejected by the fail-loud guard because the stub skipped the engine's one-shot consumption of six D1 POIs already traded by F.
+- **Root cause:** B's entry is anchored to a 5-wave impulse (`entry = wave5 ∓ 0.5 × height`, `trigger_b_leading_diagonal.py`; `FIB_MIN/MAX` explicitly UNFROZEN), not to the POI, while locked **C3** (`in_between.py`; `pipeline_bridge.candidate_from_route`) requires the completion CLOSE inside the POI body. One shared B signal: LONG, wave-5 4244.925, origin/stop 4096.845, height **148.080 = 7.02 × H1 ATR14** (21.084), band **4153.412–4170.885**, entry **4170.885**, close **4157.639**.
+- **Geometry:** `poi-004029/-004092/-004154` (zone 3940.685–3995.775) close **+161.864 (+7.68 ATR)**, band entirely 157.637 above ⇒ impossible; `poi-004759` (4024.295–4137.448) close **+20.191 (+0.96 ATR)**, band entirely 15.964 above ⇒ impossible; `poi-004032` (4127.555–4155.075) close **+2.564 (+0.12 ATR)** with a 1.663-unit (0.08 ATR) band/zone sliver ⇒ possible in principle, but B requires the FIRST close into the band and that close landed above the body. Planned entry is outside the body for all five, so an entry-based gate would reject them too.
+- **Classification:** C3 = **(a)** master card §3.4; B entry = **(a)** R1 §7. **No (b) bug, no (c) config mis-wire** — `ZONE_REFINEMENT_ATR` is not on the B path and no flag/tier changes the outcome. The finding is the **interaction of two anchors**.
+- **Mandated clarifications:** C3 is **not** the pre-FR-3.1 far-outside F rule (that was R7 `skip_place_far_from_zone`, an ATR distance band at placement that defers via an R9 intent); and B is **wave-based**, so its fib band sits away from the POI body (4/5 entirely outside).
+- **Verdict:** `DEFER_RECOMMENDED` (factual state BLOCKED — structural). Options: accept `SIGNAL_ONLY`; defer; rule a B-specific entry-anchor change; re-rule C3 scope globally (not proposed). Refused: `ZONE_REFINEMENT_ATR` widening, C3 deletion/loosening, force-routing B.
+- **Precision fix:** liveness H1 bar index 1717 **opens** 2025-11-13 18:00 and **closes 19:00** UTC; `PRODUCT_BRANCH_LIVENESS_REPORT.md` §3.2 now points at the correct instant (same bar, same counts).
+- **Bans honoured:** no A re-open, no F change, no D volume proxy, no expectancy/PF criterion, no threshold/zone-band fishing, no `04_SRC`/`locked_constants.py` edit.
+
 ### 2026-11-26 - BRANCH A E2E: POLICY-BLOCKED, NO CODE (`LOGIC_CHANGED: NO`, `CODE_CHANGED: NO`)
 
 - **What:** Phase-0 root-cause pack for Trigger A on the product path, plus the engineering verdict. Reports `06_RESEARCH/BRANCH_A_ROOT_CAUSE.md` and `06_RESEARCH/BRANCH_A_E2E_REPORT.md`. No harness, no re-run, no artifacts (the frozen liveness artifacts were re-read).

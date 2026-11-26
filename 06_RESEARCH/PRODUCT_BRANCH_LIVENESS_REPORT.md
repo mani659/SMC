@@ -137,7 +137,8 @@ Completion and route shape by tier:
   dedupe does not log a per-winner row) — not by a direct per-winner record. No
   A order was ever placed, so no A fill was possible.
 - **B (5 completions, 0 routes).** All five are **the same H1 bar**
-  (2025-11-13 18:00 UTC) completing B on five different armed **D1** POIs.
+  (H1 series index 1717: opens 2025-11-13 18:00, **closes 19:00 UTC** — see
+  `BRANCH_B_ROOT_CAUSE.md` §1) completing B on five different armed **D1** POIs.
   Every one was rejected by the shared **C3 in-between containment gate**
   (`_candidate → None`, `not_in_between`) — a completion outside the POI body is
   not a valid confirmation. Signal exists; lifecycle stops at the gate.
