@@ -6,6 +6,19 @@
 
 ---
 
+### 2026-11-26 - BRANCH E E2E: PATTERN DARK UNDER THE FROZEN EQH RULE, NO CODE (`LOGIC_CHANGED: NO`, `CODE_CHANGED: NO`)
+
+- **What:** Phase-0 root-cause pack + E2E verdict for Trigger E on the product path. Reports `06_RESEARCH/BRANCH_E_ROOT_CAUSE.md`, `06_RESEARCH/BRANCH_E_E2E_REPORT.md`; harness `06_RESEARCH/scripts/branch_e_geometry.py`; artifacts `06_RESEARCH/results/branch_e_geometry/` (gitignored).
+- **Window:** unchanged — exec 2025-09-01 → 2025-11-30 (M5, 17,840 bars), warm-up 2025-08-01. The arming phase reproduces the liveness census exactly (**68 D1 arms**; 124 batches, `BATCH_ERRORS=0`, `MENU_ERRORS=0`, 120.5 s). No full funnel re-run.
+- **Admission:** E ∈ `_DAY_TRIGGERS`, excluded from `_TIER_ADF` (`product_menu_mtf.py:239-254`) ⇒ confirmable only on D1→**H1**; DAY router registers all six (`:701-712`); the §15 matrix forbids no cell and grades E `structural` at every model (`compatibility_matrix.py:29-56`); 68 D1 POIs armed (62 LONG / 6 SHORT). Admission is not the blocker.
+- **Root cause:** E's double top requires two structural H1 swing highs to be **equal within the frozen §2 EQH tolerance, 4.5 pips = 0.45 price units** (`utils/pips.py:67`; `locked_constants.py:98`; cited in the trigger header). In this window the **nearest adjacent H1 swing-high pair is 0.67 (6.7 pips)** and **0 of 92** adjacent pairs are within tolerance (median 18.41 = 184 pips). The pattern does not exist, so the zone / RSI / neckline gates are never reached.
+- **Measured:** the real `RsiDivergenceTrigger.evaluate` over **101,252** (bar × POI) opportunities with `from_bar=0` returns **0 signals**; the staged funnel agrees exactly — S1 two highs 101,252 → S2 second ≥ first 30,180 → **S3 EQH equality 0** → S4 zone 0 → S5 post-arm 0 → S6 RSI divergence 0 → S7 neckline break 0. Near misses: **179** distinct (POI, peak-pair) rows with the second high at the zone on **36** POIs, **closest 13.93 pips** (3.1× tolerance), median 250.3 pips, **37 already show RSI divergence**.
+- **Classification: (a) pattern absence under a frozen rule.** No (b) — RSI is the production Wilder fold, 37 near-miss rows diverge, staged == real, unit tests green; the two in-tolerance high pairs that exist are non-adjacent so the V1 "two most recent highs" rule is not the binding constraint. No (c) — E is admitted, registered and matrix-eligible on the armed population. No (d) — the nearest adjacent pair in three months is 1.5× the tolerance, so a longer window is not an evidenced remedy.
+- **Secondary note (not the cause):** E emits only on the neckline-break bar, so its 15-bar `expiry_bars` is carried rather than enforced — inert on this path, recorded only.
+- **Secondary comparison (not liveness evidence):** R1 pure-tag books — E book **183 fills / 646 routes** on MID tiers (116 of 183 fills M15-based) while the **D1 tier completed B/C/E in 0 of 270 windows**; S3 post-R1 union E = **156 fills**.
+- **Why no code:** class (a) — retuning the RSI period, the EQH tolerance or the zone band to manufacture a fill is banned. The only available ruling is scope (§2's 4.5-pip tolerance is a liquidity-cluster definition reused as a pattern equality; E is wired only to H1). Options: accept dark on the DAY tier / defer / pattern-specific equality / shorter-N confirmation TF for E / retire E from `_DAY_TRIGGERS`.
+- **Bans honoured:** no expectancy/PF criterion, no D volume proxy, no C3/session/TP-age loosening, no RSI/equality/zone retune, no `04_SRC`/`locked_constants.py` edit, no A/B/C/D/F body touched.
+
 ### 2026-11-26 - BRANCH C E2E: UNREACHABLE BY CONSTRUCTION, NO CODE (`LOGIC_CHANGED: NO`, `CODE_CHANGED: NO`)
 
 - **What:** Phase-0 root-cause pack + E2E verdict for Trigger C on the product path. Reports `06_RESEARCH/BRANCH_C_ROOT_CAUSE.md`, `06_RESEARCH/BRANCH_C_E2E_REPORT.md`; harness `06_RESEARCH/scripts/branch_c_geometry.py`; artifacts `06_RESEARCH/results/branch_c_geometry/` (gitignored).
