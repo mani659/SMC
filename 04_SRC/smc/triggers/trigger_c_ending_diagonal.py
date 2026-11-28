@@ -14,7 +14,11 @@ TRIGGER (R1 §7):
 
 ENTRY: LIMIT at the boundary trendline sweep level.
 STOP: just beyond the Wave 5 extreme wick (the terminal extreme).
-EXPIRY: sweep candle + TRIGGER_C_EXPIRY_EXTRA (3 bars, §24).
+EXPIRY: observable sweep candle + TRIGGER_C_EXPIRY_EXTRA (3 bars, §24).
+  Amendment C1 (2026-11-28): the terminal is a §27 structural swing, so it
+does not exist as data until ``N(confirm_tf)`` bars after its fractal.
+  The window is ``[terminal + N, terminal + N + 3]`` — the frozen 3 bars of
+  life counted from knowability (``trigger_expiry.ending_diagonal_anchor``).
 
 ⚠️ Most subjective (v5 flowchart): manual review recommended; the V1 chain
 rules in ``wave_structure`` are documented approximations to revisit in
@@ -30,7 +34,11 @@ from smc.triggers.base_trigger import (
     TriggerSignal,
     atr_band_half_width,
 )
-from smc.triggers.trigger_expiry import signal_expired, window_bars_for
+from smc.triggers.trigger_expiry import (
+    ending_diagonal_anchor,
+    signal_expired,
+    window_bars_for,
+)
 from smc.triggers.wave_structure import find_ending_diagonal
 
 __all__ = ["EndingDiagonalTrigger"]
@@ -57,8 +65,19 @@ class EndingDiagonalTrigger(Trigger):
             return None
         if diagonal.terminal_index < context.from_bar:
             return None
+        # §24 C (amendment C1): the clock starts when the terminal swing is
+        # OBSERVABLE, i.e. N bars after its fractal. N comes from the swings'
+        # own timeframe — never from ``context.execution_timeframe``, which the
+        # router leaves at its M5 default even on an H1 confirmation series.
+        if not context.swings:  # unreachable: a diagonal needs five swings
+            return None
+        anchor = ending_diagonal_anchor(
+            diagonal.terminal_index, context.swings[-1].timeframe
+        )
+        if bar < anchor:
+            return None  # swing not knowable yet — cannot pre-date the pattern
         if signal_expired(
-            diagonal.terminal_index,
+            anchor,
             window_bars_for(TriggerType.C_ENDING_DIAGONAL),
             bar,
         ):
@@ -112,6 +131,7 @@ class EndingDiagonalTrigger(Trigger):
             ),
             data={
                 "terminal_index": diagonal.terminal_index,
+                "known_at": anchor,
                 "converging": diagonal.converging,
                 "boundary": boundary,
             },

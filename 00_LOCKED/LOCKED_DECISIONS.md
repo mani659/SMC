@@ -24,9 +24,11 @@ amendment block here conflicts with older text, **the dated block is normative**
 | **A8** | POI inventory timeframes = M15, H1, H4, D1 (W1 optional; M1/M5 confirm only) | §4b |
 | **A9** | No dual HTF→LTF confirmation chain; structure TFs give zones/bias, LTF gives the entry | §21c |
 | **A10** | ESSENCE signed page stays a record, its TP/SL rows superseded for product intent | ESSENCE header notice (D0) — no LOCKED body conflict |
+| **A11** | Trigger C's §24 clock starts when its terminal swing is observable (§27 N), keeping the frozen 3-bar life | §24b |
 
 *No numeric constant is changed by any block in this register; `locked_constants.py`
-stays untouched. No runtime behaviour is introduced by this document.*
+stays untouched. A1–A10 introduce no runtime behaviour; **A11** is a dated
+behavioural amendment to the §24 C anchor only (see §24b).*
 
 ---
 
@@ -725,6 +727,40 @@ Each trigger has a maximum validity window. If the trigger does not fire within 
 Trigger C is a **live** trigger in V1 (it was missing from some earlier v1 views);
 the §24 expiry table above already carries its window. Routing remains
 **chronological first-valid** (§12) — no priority hierarchy is introduced.
+
+> **Clarified 2026-11-28 (amendment C1, §24b):** "live" for C means
+> **implemented, routable and reachable** — it may fire on the DAY/H1 wiring
+> once its terminal swing is observable. It is **not** a fill guarantee: on the
+> frozen 2025-09-01→2025-11-30 window C completes but every completion dies at a
+> frozen downstream gate (C3 `not_in_between`, a one-shot episode already won by
+> F, or no sweep window). See `06_RESEARCH/BRANCH_C_C1_IMPLEMENT_NOTE.md`.
+
+---
+
+### 24b. Amended 2026-11-28 — Trigger C expiry anchor (amendment C1)
+
+The §24 C row ("Sweep candle + 3 bars") is unchanged in **number**. Only the
+instant the clock starts is clarified: the "sweep candle" C counts from is a
+§27 structural swing, and a swing does not exist as data until `N` bars after
+its fractal. Counting 3 bars from the terminal on an H1 confirmation series was
+arithmetically unsatisfiable (`bar ≤ terminal + 3` vs `bar ≥ terminal + 5`), so
+C could never fire on the only tier it is admitted to.
+
+| Item | Normative value |
+|---|---|
+| Anchor | `anchor = terminal_index + N(confirm_tf)` — the first bar the terminal swing is observable (`Timeframe.n_bar_confirmation`: 5 for D1/H4/H1/W1, 3 for M30…M1) |
+| Legal bars | `anchor … anchor + TRIGGER_C_EXPIRY_EXTRA` (= 3), inclusive; dead from `anchor + 4` |
+| Before the anchor | C must not fire (the swing is not knowable yet) |
+| Product DAY tier (D1 → H1) | legal terminal ages **5, 6, 7, 8** |
+| Conservative bound | for a swing low the §18 base candle may precede the fractal by one bar, so the anchor can be up to one bar early — it can only shorten C's life, never lengthen it |
+
+**Unchanged:** `TRIGGER_C_EXPIRY_EXTRA = 3`, `N_BAR_HTF = 5`, `N_BAR_LTF = 3`,
+the A–F windows, the DAY/H4/H1/M15 tier table, C3 (`in_between`), sessions,
+EQH, the zone ATR band, and every other trigger. **Lookahead-safe:** the anchor
+is index arithmetic on data at or before the evaluation bar; it only delays
+expiry and never admits a bar the swing series does not contain.
+Design: `06_RESEARCH/BRANCH_C_DESIGN_LOCK.md`. Implementation:
+`06_RESEARCH/BRANCH_C_C1_IMPLEMENT_NOTE.md`.
 
 ---
 

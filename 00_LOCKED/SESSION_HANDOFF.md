@@ -1,5 +1,17 @@
 # SESSION HANDOFF - SMC BOT
 
+## 2026-11-28 - BRANCH C C1 IMPLEMENTED: REACHABLE, NOT LIVE IN THE WINDOW (`LOGIC_CHANGED: YES` — C expiry anchor only)
+
+- **What:** Architect accepted **C1** (§24b). Trigger C's validity clock now starts when the diagonal's terminal swing is **observable**: `anchor = terminal_index + N(confirm_tf)`, legal `anchor … anchor + 3`. `TRIGGER_C_EXPIRY_EXTRA = 3` and `N_BAR_HTF = 5` **unchanged**; N comes from the frozen §27 lookup via `Swing.timeframe`. On DAY/H1 the legal terminal ages are **5, 6, 7, 8** (was the impossible `≤ 3`).
+- **Code (3 files):** `trigger_expiry.py` adds `ending_diagonal_anchor(terminal_index, timeframe)`; `trigger_c_ending_diagonal.py` swaps the expiry call to the anchor form, rejects `bar < anchor`, and exports `known_at` in `signal.data`; `branch_c_geometry.py` updated for the post-C1 world (band check, product funnel, route diagnostics). No `locked_constants.py`, tier-table, `_TIER_ADF`, C3, session, EQH or A/B/D/E/F change.
+- **Trap handled:** `trigger_router.evaluate_at` never populates `TriggerContext.execution_timeframe` (`trigger_router.py:123-129`), so it stays **M5 on an H1 series**. N is read from `context.swings[-1].timeframe`; a dedicated test (`test_n_source_is_swing_timeframe_not_execution_timeframe`) fails if anyone reads the context field (H1 age 3 must be rejected while `execution_timeframe` is M5).
+- **Tests:** 7 new/updated — anchor arithmetic (N=5 HTF / N=3 LTF), legal `anchor…anchor+3`, H1 legal ages **5 and 8**, rejects **4** and **9**, the N-source trap, plus the M5 fixture moved to its first legal bar (25 = 22 + 3). Suite **1,564 passed / 7 skipped** (was 1,557/7).
+- **Re-measure (same frozen window, no re-pick):** harness 1.9 min, 17,840 M5 bars, 124 batches, `BATCH_ERRORS=0`, `MENU_ERRORS=0`, 68 D1 arms reproduced, `ANALYSIS_OK`. **Real `evaluate()` completions = 3** (band 1–3 pre-registered, no fail-loud), all terminal age **6** on **2025-11-25 09:00 UTC** (terminal 1885); expiry-ignored counterfactual also 3 (C1's set is a subset, as required). Census unchanged: 361 diagonals, min age 5, 95 now inside the C1 window vs 0 inside the pre-C1 window.
+- **Routes / fills = 0, and why (all frozen gates, not reachability):** `poi-004989` — DAY episode ACTIVE, C3 `not_in_between` (close 4115.709 vs zone 4161.165–4218.505); `poi-005144` — DAY episode **won by Trigger F at H1 bar 1746**, i.e. 145 bars before C's pattern existed (one-shot, §12); `poi-007302` — **no episode** (armed, never swept). No gate was loosened and no counterfactual fill is claimed.
+- **Verdict: reachable, not live.** C now completes on the product DAY/H1 wiring; it does not route in this window. `TRIGGER_C_LIVE: YES` reads "routable **and reachable**", never "fills" (§24a clarification).
+- **Docs:** `06_RESEARCH/BRANCH_C_C1_IMPLEMENT_NOTE.md`; `LOCKED_DECISIONS` **§24b** + §24a clarification + register row **A11**.
+- **Current phase:** F LIVE · A/B DEFER · **C REACHABLE_NOT_LIVE** · E DARK_IN_WINDOW · D OFF. **NEXT = Architect accept the C verdict → formal D OFF note + full-book engineering scorecard.**
+
 ## 2026-11-28 - BRANCH C DESIGN LOCK: OBSERVABILITY-ANCHORED WINDOW RECOMMENDED (`LOGIC_CHANGED: NO`, `CODE_CHANGED: NO`)
 
 - **Deliverable:** `06_RESEARCH/BRANCH_C_DESIGN_LOCK.md` — design note only. No production code, no test, no constant, no tier-table edit; nothing implemented (the task default is design-only and no "IMPLEMENT Cx" instruction was present).

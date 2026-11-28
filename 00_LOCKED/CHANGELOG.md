@@ -6,6 +6,17 @@
 
 ---
 
+### 2026-11-28 - BRANCH C C1 IMPLEMENTED: REACHABLE, NOT LIVE IN THE WINDOW (`LOGIC_CHANGED: YES` — C expiry anchor only)
+
+- **What:** Architect accepted C1; Trigger C's §24 clock now starts at the terminal swing's **observability**: `anchor = terminal_index + N(confirm_tf)`, legal `anchor … anchor + TRIGGER_C_EXPIRY_EXTRA`, dead at `+4`. `TRIGGER_C_EXPIRY_EXTRA = 3` and `N_BAR_HTF = 5` unchanged; N via `Timeframe.n_bar_confirmation` (frozen §27). DAY/H1 legal terminal ages **5–8** instead of the arithmetically impossible `≤ 3`.
+- **Code:** `04_SRC/smc/triggers/trigger_expiry.py` (`ending_diagonal_anchor`, additive), `04_SRC/smc/triggers/trigger_c_ending_diagonal.py` (anchor form + `bar < anchor` guard + `known_at` in `signal.data`), `06_RESEARCH/scripts/branch_c_geometry.py` (post-C1 band/funnel/route diagnostics). `locked_constants.py`, `product_menu_mtf.py`, `structural_swing_detector.py`, tier table, C3, sessions, EQH, risk/execution, A/B/D/E/F bodies **untouched**.
+- **N source:** `trigger_router.evaluate_at` never passes `execution_timeframe` (`trigger_router.py:123-129`), so it is M5 on an H1 series; N is taken from `context.swings[-1].timeframe` and a regression test pins it (H1 age 3 rejected).
+- **Tests:** 7 new/updated (anchor arithmetic HTF/LTF, legal `anchor…+3`, H1 ages 5 and 8 accepted, 4 and 9 rejected, N-source trap, M5 fixture at its first legal bar). Full suite **1,564 passed / 7 skipped** (was 1,557/7).
+- **Re-measure (same frozen window):** 1.9 min, 17,840 M5 bars, 124 batches, 0 errors, 68 D1 arms reproduced, `ANALYSIS_OK`. **C completions 3** (band 1–3), all terminal age **6**, all on **2025-11-25 09:00 UTC**; counterfactual 3 (subset relation holds). Census: 361 diagonals, min age 5, 95 inside the C1 window.
+- **Product path: 0 routes / 0 placed / 0 fills** — and not because of reachability: `poi-004989` C3 `not_in_between` (close 4115.709 vs zone 4161.165–4218.505); `poi-005144` episode won by **F at H1 bar 1746** (one-shot, 145 bars before C existed); `poi-007302` no sweep episode at all. No gate loosened, no counterfactual fill.
+- **Claim:** C is **reachable, not live** on this window. `TRIGGER_C_LIVE: YES` = routable **and reachable**. Locked record: `LOCKED_DECISIONS` **§24b** + §24a clarification + register **A11**.
+- **Bans honoured:** no tier change (C2), no expiry widening, no C3/session/EQH loosening, no expectancy/PF, no D volume, no sub-bot architecture.
+
 ### 2026-11-28 - BRANCH C DESIGN LOCK: OBSERVABILITY-ANCHORED WINDOW RECOMMENDED (`LOGIC_CHANGED: NO`, `CODE_CHANGED: NO`)
 
 - **What:** design note `06_RESEARCH/BRANCH_C_DESIGN_LOCK.md` selecting **one** disposition for Trigger C's unreachability (audited in `BRANCH_C_ROOT_CAUSE.md` / `BRANCH_C_E2E_REPORT.md`). **No production code, no test, no constant, no tier-table and no `04_SRC` edit** — the design-only default applied and no "IMPLEMENT Cx" instruction was present.

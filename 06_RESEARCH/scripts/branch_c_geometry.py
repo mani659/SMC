@@ -33,9 +33,14 @@ Method (no production edit; every patch restored in ``finally``):
    window the pattern actually becomes observable. This is instrumentation,
    NOT a proposed change.
 
-Expected result (the point of the run): 0 C completions even as a superset,
-and a minimum terminal age of 5 H1 bars against an allowed 3 — an arithmetic
-impossibility, not a window property.
+Post-C1 expectation (amendment accepted 2026-11-28): C's clock now starts at
+the terminal's observability (``terminal + N``, N=5 on H1), so legal terminal
+ages are 5..8. The REAL trigger is therefore expected to complete on the
+frozen window, in the pre-registered band 1..3 (upper bound = the audited
+expiry-ignored counterfactual, of which C1's legal set is a subset). Anything
+outside that band is fail-loud. The product-path funnel is also reported
+(routes → placed → fills) from the same run, because the DAY tier's H1
+confirmation scan is real here.
 
 Artifacts (gitignored): 06_RESEARCH/results/branch_c_geometry/
     c_pattern_census.csv, c_would_fire.csv, summary.json, run.log
@@ -96,7 +101,10 @@ BATCH_EVERY_M15_BARS = 48
 
 #: Liveness census this run must reproduce (fail-loud).
 EXPECTED_D1_ARMS = 68
-EXPECTED_C_COMPLETIONS = 0
+#: C1 pre-registered completion band (see the design lock §7). 3 is the
+#: expiry-ignored counterfactual count; C1's legal set is a strict subset.
+EXPECTED_C_COMPLETIONS_MIN = 1
+EXPECTED_C_COMPLETIONS_MAX = 3
 
 OUT_DIR = ROOT / "06_RESEARCH" / "results" / "branch_c_geometry"
 _run_env = os.environ.get("BRANCH_C_OUT")
@@ -291,7 +299,25 @@ def run() -> int:
         return accepted
 
     original_route_for = menu._route_for
+    original_win = menu._win
+    route_log: list[dict] = []
     scan_calls = 0
+
+    def recording_win(episode, route, ctf):
+        """Read-only: log every menu winner with its trigger identity."""
+        winner = original_win(episode, route, ctf)
+        if winner is not None:
+            route_log.append({
+                "poi_id": winner.poi_id,
+                "trigger": winner.trigger,
+                "route_id": winner.route_id,
+                "confirmation_tf": getattr(ctf, "name", str(ctf)),
+                "completion_index": getattr(
+                    getattr(route, "signal", None), "completion_index", None
+                ),
+                "eval_bar": getattr(route, "bar", None),
+            })
+        return winner
 
     def d1_only_route_for(episode, ctf):
         """Real D1-tier scan; every other tier stubbed (C is inadmissible there)."""
@@ -304,13 +330,15 @@ def run() -> int:
     stats = None
     menu.register_armed = recording_register  # type: ignore[assignment]
     menu._route_for = d1_only_route_for  # type: ignore[assignment]
+    menu._win = recording_win  # type: ignore[assignment]
     try:
         loop = BarLoop(CandleSeries(exec_all, EXEC_TF), cycle)
-        print("arming phase (confirmation scan stubbed)…", flush=True)
+        print("arming phase (non-D1 confirmation tiers stubbed)…", flush=True)
         stats = loop.run(start_timestamp=WINDOW_START, end_timestamp=stop_ts)
     finally:
         menu.register_armed = original_register  # type: ignore[assignment]
         menu._route_for = original_route_for  # type: ignore[assignment]
+        menu._win = original_win  # type: ignore[assignment]
         elapsed = max(time.perf_counter() - started, 1e-9)
         print(
             f"arming done: bars={getattr(stats, 'bars_processed', 'ERR')} "
@@ -322,6 +350,20 @@ def run() -> int:
 
     d1_pois = [armed[k] for k in sorted(armed)]
     is_smoke = bool(_stop_env)
+
+    # ---- product-path C funnel: routes -> placed -> fills --------------- #
+    c_value = str(
+        getattr(cmod.TriggerType.C_ENDING_DIAGONAL, "value", "c_ending_diagonal")
+    )
+    c_routes = [row for row in route_log if row["trigger"] == c_value]
+    c_poi_ids = {row["poi_id"] for row in c_routes}
+    c_placed = [row for row in order_book.records if row["trigger"] == c_value]
+    c_fills = [row for row in positions.fills if row["poi_id"] in c_poi_ids]
+    print(
+        f"product-path C: winners/routes={len(c_routes)} "
+        f"placed={len(c_placed)} fills={len(c_fills)}",
+        flush=True,
+    )
     if not is_smoke and len(d1_pois) != EXPECTED_D1_ARMS:
         raise SystemExit(
             f"RECONSTRUCTION_FAIL: D1 arms {len(d1_pois)} != {EXPECTED_D1_ARMS}"
@@ -476,6 +518,49 @@ def run() -> int:
     real_hits = scan(ignore_expiry=False)
     counterfactual_hits = scan(ignore_expiry=True)
 
+    # ---- why each superset completion did (not) become a product route -- #
+    # The scan uses from_bar=0; the product also needs an ACTIVE episode whose
+    # sweep is at/after the terminal (§24 + from_bar gate) and a C3-clean
+    # completion. Report the episode facts per completion POI (no retuning,
+    # no counterfactual fill).
+    episodes = list(getattr(menu, "_episodes", ()))
+    route_diag: list[dict] = []
+    for row in real_hits:
+        poi_id = row["poi_id"]
+        terminal_ts = _close_ts(h1[row["terminal_index"]])
+        completion_ts = datetime.fromisoformat(row["bar_close_ts"])
+        mine = [e for e in episodes if str(e.poi_id) == poi_id]
+        route_diag.append({
+            "poi_id": poi_id,
+            "completion_ts": completion_ts.isoformat(),
+            "terminal_ts": terminal_ts.isoformat(),
+            "episodes": len(mine),
+            "sweep_blocks_terminal": [
+                bool(
+                    isinstance(getattr(e, "sweep_close_ts", None), datetime)
+                    and e.sweep_close_ts > terminal_ts
+                )
+                for e in mine
+            ],
+            "episode_status": [
+                getattr(getattr(e, "status", None), "name", None) for e in mine
+            ],
+            "episode_decisions": [list(e.decisions) for e in mine],
+            "episode_winners": [
+                row for row in route_log
+                if row["poi_id"] == poi_id and row["trigger"] != c_value
+            ],
+        })
+    for entry in route_diag:
+        print(
+            f"  route-diag {entry['poi_id']}: episodes={entry['episodes']} "
+            f"sweep_after_terminal={entry['sweep_blocks_terminal']} "
+            f"status={entry['episode_status']} "
+            f"decisions={entry['episode_decisions']} "
+            f"other_winners={[(w['trigger'], w['completion_index']) for w in entry['episode_winners']]}",
+            flush=True,
+        )
+
     ages = [row["terminal_age_bars"] for row in census]
     ages_sorted = sorted(ages) if ages else []
     def pct(values, q):
@@ -492,21 +577,30 @@ def run() -> int:
 
     problems: list[str] = []
     if not is_smoke:
-        if len(real_hits) != EXPECTED_C_COMPLETIONS:
+        if not (
+            EXPECTED_C_COMPLETIONS_MIN
+            <= len(real_hits)
+            <= EXPECTED_C_COMPLETIONS_MAX
+        ):
             problems.append(
-                f"C completions {len(real_hits)} != {EXPECTED_C_COMPLETIONS}"
+                f"C completions {len(real_hits)} outside the pre-registered "
+                f"band [{EXPECTED_C_COMPLETIONS_MIN}, "
+                f"{EXPECTED_C_COMPLETIONS_MAX}]"
             )
         if not census:
             problems.append("no ending diagonal detected at all in the window")
-        if ages_sorted and min(ages_sorted) <= C_EXPIRY:
+        if real_hits and min(
+            row["terminal_age_bars"] for row in real_hits
+        ) < N_H1:
             problems.append(
-                f"a diagonal was observable within the {C_EXPIRY}-bar window "
-                f"(min age {min(ages_sorted)}) — reachability claim is wrong"
+                "a completion fired before the terminal was observable "
+                f"(N={N_H1})"
             )
-        if counterfactual_hits and min(
-            row["terminal_age_bars"] for row in counterfactual_hits
-        ) <= C_EXPIRY:
-            problems.append("counterfactual fired inside the frozen window")
+        if counterfactual_hits and len(counterfactual_hits) < len(real_hits):
+            problems.append(
+                "expiry-ignored counterfactual is SMALLER than the real scan — "
+                "C1 must be a subset of ignoring expiry"
+            )
     if problems:
         print("ANALYSIS_FAIL:", flush=True)
         for p in problems:
@@ -514,9 +608,11 @@ def run() -> int:
         # Still write artifacts so the failure is inspectable.
     else:
         print(
-            "ANALYSIS_OK: C is unreachable on the product DAY tier — every "
-            f"terminal is at least {min(ages_sorted) if ages_sorted else 'n/a'} "
-            f"H1 bars old when observable vs a {C_EXPIRY}-bar window",
+            "ANALYSIS_OK: C is reachable under the C1 observability anchor — "
+            f"{len(real_hits)} superset completions, terminal ages "
+            f"{sorted({r['terminal_age_bars'] for r in real_hits})} "
+            f"(legal {N_H1}..{N_H1 + C_EXPIRY}), product winners "
+            f"{len(c_routes)} / placed {len(c_placed)} / fills {len(c_fills)}",
             flush=True,
         )
 
@@ -565,9 +661,25 @@ def run() -> int:
         "DIAGONAL_TERMINAL_AGE_P10": pct(ages_sorted, 0.10),
         "DIAGONAL_TERMINAL_AGE_MEDIAN": pct(ages_sorted, 0.50),
         "DIAGONAL_TERMINAL_AGE_MAX": max(ages) if ages else None,
-        "DIAGONAL_BARS_INSIDE_WINDOW": sum(1 for a in ages if a <= C_EXPIRY),
+        "DIAGONAL_BARS_INSIDE_C1_WINDOW": sum(
+            1 for a in ages if N_H1 <= a <= N_H1 + C_EXPIRY
+        ),
+        "DIAGONAL_BARS_INSIDE_PRE_C1_WINDOW": sum(
+            1 for a in ages if a <= C_EXPIRY
+        ),
+        "C_ANCHOR_RULE": (
+            "anchor = terminal_index + N(confirm_tf); legal "
+            "anchor .. anchor + TRIGGER_C_EXPIRY_EXTRA"
+        ),
         "C_COMPLETIONS_SUPERSET": len(real_hits),
         "C_COMPLETIONS": len(real_hits),
+        "C_COMPLETIONS_BAND": [
+            EXPECTED_C_COMPLETIONS_MIN, EXPECTED_C_COMPLETIONS_MAX
+        ],
+        "C_ROUTE_DIAGNOSTICS": route_diag,
+        "C_PRODUCT_ROUTES": len(c_routes),
+        "C_PRODUCT_PLACED": len(c_placed),
+        "C_PRODUCT_FILLS": len(c_fills),
         "C_COUNTERFACTUAL_IGNORE_EXPIRY": len(counterfactual_hits),
         "C_COUNTERFACTUAL_MIN_AGE": (
             min(r["terminal_age_bars"] for r in counterfactual_hits)
