@@ -6,6 +6,19 @@
 
 ---
 
+### 2026-11-28 - BRANCH B DESIGN LOCK: B1/B2/B3 KILLED BY ARITHMETIC, B4 DEFER RECOMMENDED (`LOGIC_CHANGED: NO`, `CODE_CHANGED: NO`)
+
+- **What:** design note `06_RESEARCH/BRANCH_B_DESIGN_LOCK.md` selects **one** disposition for Trigger B's non-routability (`BRANCH_B_ROOT_CAUSE.md` / `BRANCH_B_E2E_REPORT.md`). Design only — no production code, no test, no constant, no tier edit, no C3 edit.
+- **Problem:** B's plan is impulse-owned (fib 50–61.8 % entry, stop at the wave-1 origin, completion = first close into the band) while C3 validity is POI-owned (completion **close** inside the body). On the frozen window the band sat entirely above the zone for 3 POIs (+157.637), +15.964 for a fourth, 1.663-unit sliver for the fifth → **5 C3 rejects, 0 routes**.
+- **B1 KILLED:** re-anchoring the entry cannot move the completion close C3 samples (4157.639 stays outside) ⇒ 5/5 reject; and with the stop at origin **4096.845** above the zone tops (3995.775), a LONG zone-top entry is **101.07 points below its own stop** (3/5 POIs).
+- **B2 KILLED:** the planned entry is outside the body in **5/5** (+175.110 / +33.437 / +15.810) ⇒ sampling entry instead of close changes nothing; as a global rule it weakens C3 for A/C/E/F.
+- **B3 KILLED as a fix:** the fib-band ∩ zone filter keeps only `poi-004032` (1.663 sliver) and that close still missed by **+2.564** ⇒ 0 routes. Valid as an admission filter inside a future B5, not as routability.
+- **Finding F4 (recorded, not fixed):** `find_impulse` does not verify R1's "impulse forms **out of** the POI" premise; origin 4096.845 is inside only 1 of 5 zones. Class (b), but the repair suppresses signals and cannot route.
+- **Recommended B4 — DEFER product B, no code:** B keeps running unchanged (a genuinely in-body completion may still route); only the **claim** changes to "implemented and routable in principle, signal-only on the frozen window". Zero source lines, no blast radius, documentary reversal.
+- **B5 (zone-owned B) sketched, NOT recommended now:** premise gate (`origin` within zone ± 0.5×ATR), entry = POI proximal edge (FR-3.1 helper), completion = first close inside the body, stop rebased; it replaces B's trade definition (entry up to 175.11 deeper, stop reference changed for 4/5) and has no measured route count — it needs its own definition task and go/no-go.
+- **Bans honoured:** no `ZONE_REFINEMENT_ATR` widening, no C3 deletion/scope change, no B-only exemption, no fib retune, no tier change, no expectancy/PF, no D volume, no sub-bot architecture, no A/C/D/E reopen.
+- **NEXT = Architect accept B4 (or commission B5) → formal D OFF note + full-book scorecard.**
+
 ### 2026-11-28 - BRANCH C C1 IMPLEMENTED: REACHABLE, NOT LIVE IN THE WINDOW (`LOGIC_CHANGED: YES` — C expiry anchor only)
 
 - **What:** Architect accepted C1; Trigger C's §24 clock now starts at the terminal swing's **observability**: `anchor = terminal_index + N(confirm_tf)`, legal `anchor … anchor + TRIGGER_C_EXPIRY_EXTRA`, dead at `+4`. `TRIGGER_C_EXPIRY_EXTRA = 3` and `N_BAR_HTF = 5` unchanged; N via `Timeframe.n_bar_confirmation` (frozen §27). DAY/H1 legal terminal ages **5–8** instead of the arithmetically impossible `≤ 3`.
