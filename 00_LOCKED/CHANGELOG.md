@@ -1,10 +1,22 @@
 # CHANGELOG
 
 
-**Last Updated:** 2026-11-26
+**Last Updated:** 2026-11-28
 **Rules:** Every change to the project is recorded here. Format: date, session title, what was added/changed/fixed.
 
 ---
+
+### 2026-11-28 - BRANCH C DESIGN LOCK: OBSERVABILITY-ANCHORED WINDOW RECOMMENDED (`LOGIC_CHANGED: NO`, `CODE_CHANGED: NO`)
+
+- **What:** design note `06_RESEARCH/BRANCH_C_DESIGN_LOCK.md` selecting **one** disposition for Trigger C's unreachability (audited in `BRANCH_C_ROOT_CAUSE.md` / `BRANCH_C_E2E_REPORT.md`). **No production code, no test, no constant, no tier-table and no `04_SRC` edit** — the design-only default applied and no "IMPLEMENT Cx" instruction was present.
+- **Problem restated:** C's §24 clock starts at `Diagonal.terminal_index` (the §18 base candle of Wave 5) and allows 3 bars, while H1 structural swings do not exist until `N_BAR_HTF = 5` bars after their fractal. Required `bar ≤ terminal + 3`, achievable `bar ≥ terminal + 5`: the window closes before the pattern can be seen, and no calendar length, POI or price path can change that.
+- **Recommended: C1 — observability-anchored validity window.** `anchor = terminal_index + N(confirm_tf)`; legal `anchor … anchor + 3`, dead at `anchor + 4`; on DAY/H1 that is terminal ages **5–8**. `TRIGGER_C_EXPIRY_EXTRA = 3` and `N_BAR_HTF = 5` are **unchanged**; only the instant the clock starts is clarified. Equivalent arithmetic to **C4** (`N(tf) + 3`), preferred over it because it leaves the locked number alone and follows the repository's existing knowability convention (`COUPLING_POLICY_DESIGN.md:72`).
+- **Options table recorded (none implemented):** **C1** observability anchor (recommended) · **C2** confirm-TF change (edits the frozen tier table and changes the trade's timeframe) · **C3** product-OFF (the fallback if §24 is not amended — no code, no risk, loses a card-live branch) · **C4** formula expiry tied to N (same legal set as C1). Rejected on principle: raising the expiry to produce fills, lowering global `N_BAR_HTF`, widening EQH, a C-only C3/ATR exemption, force-routing, longer calendar windows.
+- **Normative rules:** R1 knowability anchor (+ R1a conservative bound: a §18-rule swing low can lose ≤1 bar of post-visibility life; only ever shortens C) · R2 frozen 3-bar life · R3 admission/tier unchanged · R4 sweep/`from_bar` gate unchanged · R5 zone band, entry, stop, first-reclaim unchanged · R6 completion semantics and C3 unchanged · R7 lookahead safety (index arithmetic only, can only delay expiry, prefix detection mandatory) · R8 nothing else moves · R9 `known_at` exported as report-only data · R10 card wording only after implementation.
+- **Non-goals honoured:** no EQH widening, no session change, no global N change, no confirmation-TF addition, no C3 loosening, no F-path/TP-age/stop change, no D volume proxy, no expectancy or PF criterion, no threshold fishing, no sub-bot architecture.
+- **Implement sketch (files only):** `trigger_expiry.py` (additive `ending_diagonal_anchor`), `trigger_c_ending_diagonal.py` (2-line seam + `known_at`), tests in `test_trigger_expiry.py` / `test_trigger_c_ending_diagonal.py` (real-`detect_swings` reachability, no-fire-before-knowability, finite window, N-source trap), `LOCKED_DECISIONS.md` §24/§24a dated block. `locked_constants.py`, `product_menu_mtf.py`, `structural_swing_detector.py`, `wave_structure.py` **not** edited.
+- **Team finding (recorded, not fixed):** `trigger_router.evaluate_at` never passes `execution_timeframe` (`trigger_router.py:123-129`), so `TriggerContext.execution_timeframe` is M5 even on an H1 series; N must be read from the confirmation swings' `Swing.timeframe`.
+- **Success metric:** engineering only — C completions `> 0` on the **same frozen window**, pre-registered **1–3**; routes/fills reported not required; no PF/edge claim. **NEXT = Architect accept C1 (or C3) → IMPLEMENT C task.**
 
 ### 2026-11-26 - BRANCH E E2E: PATTERN DARK UNDER THE FROZEN EQH RULE, NO CODE (`LOGIC_CHANGED: NO`, `CODE_CHANGED: NO`)
 
